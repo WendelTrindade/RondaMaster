@@ -1,0 +1,1808 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>RondaMaster</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --navy:#0B1D3A;--blue:#1A4FAF;--sky:#2E8BF7;
+  --amber:#F59E0B;--green:#10B981;--red:#EF4444;
+  --purple:#A855F7;--teal:#14B8A6;--orange:#F97316;
+  --slate:#1E293B;--slate2:#243447;--muted:#64748B;
+  --border:#2D3F55;--white:#FFFFFF;--card:#162032;
+}
+html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var(--navy);color:var(--white);overflow-x:hidden;}
+.hidden{display:none!important;}
+.flex{display:flex;}.items-center{align-items:center;}.justify-between{justify-content:space-between;}
+.gap-2{gap:8px;}.gap-3{gap:12px;}.w-full{width:100%;}.text-center{text-align:center;}
+.mt-1{margin-top:4px;}.mt-2{margin-top:8px;}.mt-3{margin-top:12px;}.mt-4{margin-top:16px;}
+.mb-2{margin-bottom:8px;}.mb-3{margin-bottom:12px;}.mb-4{margin-bottom:16px;}
+.text-muted{color:var(--muted);font-size:13px;}.text-sm{font-size:13px;}.text-xs{font-size:11px;}
+.font-bold{font-weight:700;}.p-3{padding:12px;}.p-4{padding:16px;}
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:999px;font-size:10px;font-weight:700;letter-spacing:.04em;}
+.badge-green{background:rgba(16,185,129,.2);color:#10B981;}
+.badge-amber{background:rgba(245,158,11,.2);color:#F59E0B;}
+.badge-red{background:rgba(239,68,68,.2);color:#EF4444;}
+.badge-blue{background:rgba(46,139,247,.2);color:#2E8BF7;}
+.badge-purple{background:rgba(168,85,247,.2);color:#A855F7;}
+.badge-teal{background:rgba(20,184,166,.2);color:#14B8A6;}
+.badge-gray{background:rgba(100,116,139,.2);color:#94A3B8;}
+#app{display:flex;flex-direction:column;min-height:100vh;}
+#topbar{background:var(--slate);border-bottom:1px solid var(--border);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;}
+#topbar .logo{font-size:17px;font-weight:900;}
+#topbar .logo span{color:var(--sky);}
+#topbar .user-info{font-size:12px;color:var(--muted);text-align:right;}
+#topbar .user-info strong{display:block;color:var(--white);font-size:13px;}
+#main{flex:1;padding:16px;max-width:800px;margin:0 auto;width:100%;}
+#bottom-nav{background:var(--slate);border-top:1px solid var(--border);display:flex;position:sticky;bottom:0;z-index:100;overflow-x:auto;}
+.nav-btn{flex:1;min-width:52px;padding:9px 2px 7px;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:7.5px;font-weight:600;text-transform:uppercase;color:var(--muted);border:none;background:transparent;cursor:pointer;transition:color .2s;white-space:nowrap;}
+.nav-btn .nav-icon{font-size:18px;}
+.nav-btn.active{color:var(--sky);}
+.screen{display:none;}.screen.active{display:block;}
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:12px;}
+.card-title{font-size:14px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:8px;}
+.stat-row{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:12px;}
+.stat-box{background:var(--slate2);border-radius:10px;padding:14px;text-align:center;}
+.stat-box .stat-val{font-size:22px;font-weight:900;line-height:1;}
+.stat-box .stat-lbl{font-size:10px;color:var(--muted);margin-top:4px;text-transform:uppercase;letter-spacing:.05em;}
+.field{margin-bottom:14px;}
+.field label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em;}
+.field input,.field select,.field textarea{width:100%;background:var(--slate2);border:1.5px solid var(--border);border-radius:8px;padding:11px 13px;color:var(--white);font-size:14px;outline:none;transition:border-color .2s;font-family:inherit;}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--sky);}
+.field select option{background:var(--slate);}
+.field textarea{resize:vertical;min-height:70px;}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:12px 20px;border-radius:10px;font-size:14px;font-weight:700;border:none;cursor:pointer;transition:all .2s;width:100%;}
+.btn-primary{background:var(--blue);color:#fff;}
+.btn-green{background:var(--green);color:#fff;}
+.btn-red{background:var(--red);color:#fff;}
+.btn-amber{background:var(--amber);color:#000;}
+.btn-purple{background:var(--purple);color:#fff;}
+.btn-teal{background:var(--teal);color:#fff;}
+.btn-outline{background:transparent;border:1.5px solid var(--border);color:var(--white);}
+.btn-sm{padding:7px 14px;font-size:12px;width:auto;border-radius:7px;}
+.btn-icon{width:34px;height:34px;padding:0;border-radius:7px;font-size:14px;}
+.list-item{background:var(--slate2);border-radius:10px;padding:13px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.list-item .li-main{flex:1;min-width:0;}
+.list-item .li-title{font-size:14px;font-weight:600;}
+.list-item .li-sub{font-size:12px;color:var(--muted);margin-top:2px;line-height:1.4;}
+.list-item .li-actions{display:flex;gap:6px;flex-shrink:0;}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:200;display:flex;align-items:flex-end;justify-content:center;}
+.modal-overlay.hidden{display:none;}
+.modal{background:var(--slate);border-radius:20px 20px 0 0;width:100%;max-width:800px;max-height:92vh;overflow-y:auto;padding:20px 16px 36px;}
+.modal-handle{width:40px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 16px;}
+.modal-title{font-size:16px;font-weight:800;margin-bottom:16px;}
+#login-screen{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;background:linear-gradient(160deg,var(--navy) 0%,var(--slate) 100%);}
+.login-logo{font-size:34px;font-weight:900;margin-bottom:4px;}
+.login-logo span{color:var(--sky);}
+.login-box{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:24px;width:100%;max-width:400px;}
+.login-box h2{font-size:18px;font-weight:800;margin-bottom:20px;text-align:center;}
+.ponto-btn{border-radius:16px;padding:22px;text-align:center;border:none;cursor:pointer;width:100%;font-weight:900;font-size:17px;transition:all .2s;margin-bottom:12px;}
+.ponto-btn.entrada{background:linear-gradient(135deg,#065f46,var(--green));color:#fff;}
+.ponto-btn.saida{background:linear-gradient(135deg,#7f1d1d,var(--red));color:#fff;}
+.ponto-btn .ponto-icon{font-size:36px;display:block;margin-bottom:6px;}
+.plantao-ativo-box{background:linear-gradient(135deg,rgba(16,185,129,.15),rgba(16,185,129,.05));border:2px solid var(--green);border-radius:14px;padding:14px;margin-bottom:16px;}
+.tab-bar{display:flex;background:var(--slate2);border-radius:10px;padding:3px;margin-bottom:16px;}
+.tab-item{flex:1;padding:8px;text-align:center;font-size:11px;font-weight:700;border-radius:8px;cursor:pointer;color:var(--muted);transition:all .2s;}
+.tab-item.active{background:var(--blue);color:#fff;}
+.foto-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px;}
+.foto-thumb{aspect-ratio:1;border-radius:8px;overflow:hidden;position:relative;background:var(--slate2);}
+.foto-thumb img{width:100%;height:100%;object-fit:cover;}
+.foto-thumb .foto-num{position:absolute;bottom:3px;right:3px;background:rgba(0,0,0,.78);color:#fff;font-size:9px;font-weight:700;padding:2px 5px;border-radius:3px;}
+.foto-thumb .foto-hora{position:absolute;top:3px;left:3px;background:rgba(0,0,0,.78);color:#fff;font-size:8px;padding:2px 4px;border-radius:3px;}
+.camera-btn{background:var(--slate2);border:2px dashed var(--border);border-radius:10px;padding:20px;text-align:center;cursor:pointer;width:100%;color:var(--muted);font-size:13px;transition:border-color .2s;}
+.camera-btn:hover{border-color:var(--sky);color:var(--sky);}
+.check-item{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);}
+.check-item:last-child{border-bottom:none;}
+.check-opt{padding:5px 12px;border-radius:6px;font-size:11px;font-weight:700;border:1.5px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;transition:all .2s;}
+.check-opt.ok{background:var(--green);border-color:var(--green);color:#fff;}
+.check-opt.nok{background:var(--red);border-color:var(--red);color:#fff;}
+.portaria-type-btns{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;}
+.type-btn{border-radius:12px;padding:16px;text-align:center;border:2px solid var(--border);background:var(--slate2);cursor:pointer;transition:all .2s;}
+.type-btn.selected{border-color:var(--sky);background:rgba(46,139,247,.1);}
+.type-btn .tb-icon{font-size:28px;margin-bottom:4px;}
+.type-btn .tb-label{font-size:13px;font-weight:700;}
+/* FINANCEIRO */
+.fin-group{margin-bottom:16px;}
+.fin-group-title{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;padding:6px 4px;border-bottom:1px solid var(--border);margin-bottom:8px;}
+.fin-row{display:flex;align-items:center;justify-content:space-between;padding:11px 13px;background:var(--slate2);border-radius:10px;margin-bottom:6px;}
+.fin-row .fr-info{flex:1;min-width:0;}
+.fin-row .fr-label{font-size:13px;font-weight:600;}
+.fin-row .fr-sub{font-size:11px;color:var(--muted);margin-top:2px;}
+.fin-row .fr-right{display:flex;align-items:center;gap:8px;flex-shrink:0;}
+.fr-val{font-size:14px;font-weight:800;}
+.fr-val.positivo{color:var(--green);}
+.fr-val.negativo{color:var(--red);}
+/* RELATÓRIOS */
+.relatorio-card{background:#fff;color:#1a1a1a;border-radius:14px;padding:20px;margin-bottom:12px;}
+.rel-header{border-bottom:2px solid #0B1D3A;padding-bottom:12px;margin-bottom:14px;}
+.rel-logo{font-size:17px;font-weight:900;color:#0B1D3A;}
+.rel-logo span{color:#1A4FAF;}
+.rel-section{margin-bottom:14px;}
+.rel-section h4{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#1A4FAF;margin-bottom:8px;}
+.rel-row{display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-bottom:1px solid #f0f0f0;}
+.rel-row:last-child{border-bottom:none;}
+.rel-lbl{color:#64748B;flex-shrink:0;}
+.rel-val{font-weight:600;text-align:right;margin-left:8px;}
+.status-ok{background:#D1FAE5;color:#065F46;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;}
+.status-nok{background:#FEE2E2;color:#7F1D1D;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;}
+/* ESCALA */
+.escala-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;background:var(--slate2);border-radius:10px;padding:10px 14px;}
+.escala-nav .mes-label{font-size:15px;font-weight:800;}
+.escala-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:16px;}
+.escala-dia-hdr{text-align:center;font-size:9px;font-weight:700;color:var(--muted);padding:4px 0;text-transform:uppercase;}
+.escala-dia{background:var(--slate2);border-radius:7px;padding:5px 3px;min-height:56px;cursor:pointer;border:1.5px solid transparent;transition:all .2s;}
+.escala-dia:hover{border-color:var(--sky);}
+.escala-dia.hoje{border-color:var(--sky);background:rgba(46,139,247,.1);}
+.escala-dia.vazio{opacity:.25;cursor:default;pointer-events:none;}
+.escala-dia.folga-dia{background:rgba(100,116,139,.08);}
+.escala-dia .dia-num{font-size:11px;font-weight:700;text-align:center;margin-bottom:2px;}
+.escala-dia .dia-num.fds{color:var(--amber);}
+.escala-dia .dia-evento{font-size:7px;border-radius:3px;padding:2px 3px;margin-bottom:2px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ev-normal{background:rgba(46,139,247,.3);color:#90c8ff;}
+.ev-subst{background:rgba(245,158,11,.3);color:#fcd34d;}
+.ev-pendente{background:rgba(168,85,247,.3);color:#d8b4fe;}
+.ev-folga{background:rgba(100,116,139,.3);color:#94A3B8;}
+/* FECHAMENTO */
+.fechamento-card{background:var(--slate2);border-radius:12px;padding:14px;margin-bottom:10px;border-left:3px solid var(--blue);}
+.fc-nome{font-size:14px;font-weight:700;margin-bottom:6px;}
+.fc-info{font-size:12px;color:var(--muted);margin-bottom:4px;}
+.fc-total{font-size:18px;font-weight:900;color:var(--green);margin-top:8px;}
+/* DATA GROUP */
+.date-group{margin-bottom:18px;}
+.date-group-header{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;padding:6px 8px;background:var(--slate2);border-radius:7px;margin-bottom:8px;display:flex;align-items:center;gap:6px;}
+/* GERENTE PERMS */
+.perm-item{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);}
+.perm-item:last-child{border-bottom:none;}
+.perm-label{font-size:13px;}
+.toggle{width:44px;height:24px;background:var(--border);border-radius:999px;position:relative;cursor:pointer;transition:background .2s;border:none;flex-shrink:0;}
+.toggle.on{background:var(--green);}
+.toggle::after{content:'';position:absolute;width:18px;height:18px;background:#fff;border-radius:50%;top:3px;left:3px;transition:transform .2s;}
+.toggle.on::after{transform:translateX(20px);}
+/* MISC */
+.divider{height:1px;background:var(--border);margin:12px 0;}
+.section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+.section-header h2{font-size:16px;font-weight:800;}
+#toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--slate);border:1px solid var(--border);border-radius:10px;padding:11px 18px;font-size:13px;font-weight:600;z-index:400;opacity:0;transition:all .3s;pointer-events:none;white-space:nowrap;max-width:90vw;}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+.empty-state{text-align:center;padding:36px 20px;color:var(--muted);}
+.empty-state .es-icon{font-size:44px;margin-bottom:10px;}
+@media print{#topbar,#bottom-nav,.btn,#toast{display:none!important;}body{background:#fff;color:#000;}}
+</style>
+</head>
+<body>
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="login-logo">🛡️ Ronda<span>Master</span></div>
+  <div style="color:var(--muted);font-size:14px;margin-bottom:32px;">Sistema de Vigilância e Portaria</div>
+  <div class="login-box">
+    <h2>Entrar no sistema</h2>
+    <div class="field"><label>E-mail</label><input type="email" id="login-email" placeholder="seu@email.com"></div>
+    <div class="field"><label>Senha</label><input type="password" id="login-senha" placeholder="••••••••"></div>
+    <button class="btn btn-primary" onclick="fazerLogin()">🔐 Entrar</button>
+    <div class="text-center mt-3 text-xs text-muted">Admin: admin@rm.com / 123456<br>Vigilante: joao@rm.com / 123456</div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app" class="hidden">
+  <div id="topbar">
+    <div class="logo">🛡️ Ronda<span>Master</span></div>
+    <div class="user-info"><strong id="tb-nome">—</strong><span id="tb-perfil">—</span></div>
+  </div>
+  <div id="main">
+
+    <!-- DASHBOARD -->
+    <div id="screen-dashboard" class="screen">
+      <div class="stat-row">
+        <div class="stat-box"><div class="stat-val" id="st-plantoes">0</div><div class="stat-lbl">Plantões Hoje</div></div>
+        <div class="stat-box"><div class="stat-val" id="st-vigilantes">0</div><div class="stat-lbl">Vigilantes</div></div>
+        <div class="stat-box"><div class="stat-val" id="st-relatorios">0</div><div class="stat-lbl">Relatórios</div></div>
+        <div class="stat-box"><div class="stat-val" id="st-saldo" style="font-size:16px;color:var(--green)">R$0</div><div class="stat-lbl">Saldo Mês</div></div>
+      </div>
+      <div class="card">
+        <div class="card-title">⚡ Ações rápidas</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <button class="btn btn-primary btn-sm" style="width:100%" onclick="irPara('screen-vigilantes')">👤 Vigilantes</button>
+          <button class="btn btn-amber btn-sm" style="width:100%;color:#000" onclick="irPara('screen-contratantes')">🏢 Contratantes</button>
+          <button class="btn btn-purple btn-sm" style="width:100%" onclick="irPara('screen-escala')">📅 Escala</button>
+          <button class="btn btn-outline btn-sm" style="width:100%" onclick="irPara('screen-financeiro')">💰 Financeiro</button>
+        </div>
+      </div>
+      <div class="section-header mt-3"><h2>📋 Plantões recentes</h2></div>
+      <div id="lista-plantoes-dash"></div>
+    </div>
+
+    <!-- VIGILANTES -->
+    <div id="screen-vigilantes" class="screen">
+      <div class="section-header"><h2>👤 Vigilantes</h2>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-outline btn-sm" onclick="limparVigilantes()" style="color:var(--red);border-color:var(--red);">🗑️ Limpar</button>
+          <button class="btn btn-primary btn-sm" onclick="abrirModalVigilante()">+ Novo</button>
+        </div>
+      </div>
+      <div id="lista-vigilantes"></div>
+    </div>
+
+    <!-- CONTRATANTES -->
+    <div id="screen-contratantes" class="screen">
+      <div class="section-header"><h2>🏢 Contratantes</h2>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-outline btn-sm" onclick="limparContratantes()" style="color:var(--red);border-color:var(--red);">🗑️ Limpar</button>
+          <button class="btn btn-primary btn-sm" onclick="abrirModalContratante()">+ Novo</button>
+        </div>
+      </div>
+      <div id="lista-contratantes"></div>
+    </div>
+
+    <!-- ESCALA -->
+    <div id="screen-escala" class="screen">
+      <div class="escala-nav">
+        <button class="btn btn-outline btn-sm btn-icon" onclick="navMes(-1)">‹</button>
+        <span class="mes-label" id="escala-mes-label">—</span>
+        <button class="btn btn-outline btn-sm btn-icon" onclick="navMes(1)">›</button>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;">
+        <button class="btn btn-primary btn-sm" onclick="abrirModalEscala()">+ Agendar</button>
+        <button class="btn btn-amber btn-sm" style="color:#000" onclick="abrirFechamento()">💰 Fechar Mês</button>
+        <button class="btn btn-outline btn-sm" onclick="limparEscala()" style="color:var(--red);border-color:var(--red);">🗑️ Limpar</button>
+      </div>
+      <div style="display:flex;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
+        <span style="font-size:10px;display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:rgba(46,139,247,.4);display:inline-block;"></span>Plantão</span>
+        <span style="font-size:10px;display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:rgba(245,158,11,.4);display:inline-block;"></span>Substituição</span>
+        <span style="font-size:10px;display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:rgba(168,85,247,.4);display:inline-block;"></span>Pendente</span>
+        <span style="font-size:10px;display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:rgba(100,116,139,.3);display:inline-block;"></span>Folga</span>
+      </div>
+      <div class="escala-grid" id="escala-grid"></div>
+      <div id="escala-lista-dia" class="hidden">
+        <div class="section-header">
+          <h2 id="escala-dia-title">Plantões do dia</h2>
+          <button class="btn btn-outline btn-sm" onclick="fecharListaDia()">✕</button>
+        </div>
+        <div id="escala-dia-conteudo"></div>
+      </div>
+    </div>
+
+    <!-- FINANCEIRO -->
+    <div id="screen-financeiro" class="screen">
+      <div class="section-header"><h2>💰 Financeiro</h2>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-outline btn-sm" onclick="limparLancamentos()" style="color:var(--red);border-color:var(--red);">🗑️ Limpar</button>
+          <button class="btn btn-primary btn-sm" onclick="abrirModalFinanceiro()">+ Lançar</button>
+        </div>
+      </div>
+      <div class="tab-bar">
+        <div class="tab-item active" onclick="abaFin('resumo',this)">📊 Resumo</div>
+        <div class="tab-item" onclick="abaFin('recebimentos',this)">💚 Entradas</div>
+        <div class="tab-item" onclick="abaFin('diarias',this)">💸 Saídas</div>
+      </div>
+      <div id="fin-resumo">
+        <div class="card">
+          <div class="stat-row">
+            <div class="stat-box"><div class="stat-val" style="color:var(--green);font-size:16px;" id="fin-recebido">R$ 0,00</div><div class="stat-lbl">Entradas</div></div>
+            <div class="stat-box"><div class="stat-val" style="color:var(--red);font-size:16px;" id="fin-pago">R$ 0,00</div><div class="stat-lbl">Saídas</div></div>
+          </div>
+          <div class="divider"></div>
+          <div class="flex items-center justify-between">
+            <span class="text-sm text-muted">Saldo do mês</span>
+            <span style="font-size:20px;font-weight:900;" id="fin-saldo">R$ 0,00</span>
+          </div>
+        </div>
+        <div class="card mt-2"><div class="card-title">💸 Diárias por vigilante (mês)</div><div id="fin-diarias-resumo"></div></div>
+      </div>
+      <div id="fin-recebimentos" class="hidden"><div id="lista-recebimentos"></div></div>
+      <div id="fin-diarias" class="hidden"><div id="lista-diarias"></div></div>
+    </div>
+
+    <!-- RELATÓRIOS ADMIN -->
+    <div id="screen-relatorios" class="screen">
+      <div class="section-header"><h2>📋 Relatórios</h2>
+        <button class="btn btn-outline btn-sm" onclick="limparRelatorios()" style="color:var(--red);border-color:var(--red);">🗑️ Limpar</button>
+      </div>
+      <div id="lista-relatorios-admin"></div>
+    </div>
+
+    <!-- CONFIGURAÇÕES (Admin) -->
+    <div id="screen-config" class="screen">
+      <div class="section-header"><h2>⚙️ Configurações</h2></div>
+
+      <!-- DADOS DA EMPRESA -->
+      <div class="card">
+        <div class="card-title">🏢 Dados da Empresa de Ronda</div>
+        <div class="field"><label>Nome / Razão Social</label><input type="text" id="emp-nome" placeholder="Ex: Segurança Total Ltda"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div class="field"><label>CPF / CNPJ</label><input type="text" id="emp-doc" placeholder="00.000.000/0001-00"></div>
+          <div class="field"><label>Telefone</label><input type="tel" id="emp-tel" placeholder="(00) 00000-0000"></div>
+        </div>
+        <div class="field"><label>Endereço</label><input type="text" id="emp-end" placeholder="Rua, número, bairro"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div class="field"><label>Cidade</label><input type="text" id="emp-cidade" placeholder="Cidade"></div>
+          <div class="field"><label>Estado</label><input type="text" id="emp-estado" placeholder="MG" maxlength="2"></div>
+        </div>
+        <div class="field"><label>E-mail da empresa</label><input type="email" id="emp-email" placeholder="contato@empresa.com"></div>
+        <button class="btn btn-primary" onclick="salvarEmpresa()">💾 Salvar dados da empresa</button>
+      </div>
+
+      <!-- CREDENCIAIS ADMIN -->
+      <div class="card mt-3">
+        <div class="card-title">🔐 Alterar Login do Administrador</div>
+        <div class="field"><label>Novo e-mail</label><input type="email" id="cfg-email" placeholder="admin@email.com"></div>
+        <div class="field"><label>Nova senha</label><input type="password" id="cfg-senha" placeholder="Nova senha"></div>
+        <div class="field"><label>Confirmar senha</label><input type="password" id="cfg-senha2" placeholder="Repita a senha"></div>
+        <button class="btn btn-primary" onclick="salvarCredenciaisAdmin()">💾 Salvar credenciais</button>
+      </div>
+
+      <!-- EQUIPAMENTOS CHECKLIST -->
+      <div class="card mt-3">
+        <div class="flex items-center justify-between mb-3">
+          <div class="card-title" style="margin-bottom:0">🔧 Equipamentos do Checklist</div>
+          <button class="btn btn-primary btn-sm" onclick="abrirModalNovoEquip()">+ Novo</button>
+        </div>
+        <div id="lista-equip-config"></div>
+      </div>
+
+      <!-- GERENTES -->
+      <div class="card mt-3">
+        <div class="card-title">👔 Gerentes cadastrados</div>
+        <div id="lista-gerentes"></div>
+        <button class="btn btn-purple mt-3" onclick="abrirModalGerente()">+ Novo Gerente</button>
+      </div>
+    </div>
+
+    <!-- PLANTÃO VIGILANTE/GERENTE -->
+    <div id="screen-plantao" class="screen">
+      <div id="plantao-sem-turno">
+        <div class="text-center mb-3">
+          <div style="font-size:44px;">🛡️</div>
+          <div style="font-size:18px;font-weight:900;margin-top:8px;" id="plantao-saudacao">Olá!</div>
+          <div class="text-muted mt-2" id="plantao-escala-info">Verificando escala...</div>
+        </div>
+        <div id="plantao-escala-card" class="hidden">
+          <div class="card" style="border-color:var(--green);">
+            <div class="card-title">📅 Seu plantão de hoje</div>
+            <div id="plantao-escala-detalhes"></div>
+          </div>
+        </div>
+        <div class="field mt-3"><label>Local de Ronda</label><select id="sel-local-plantao"><option value="">Selecione...</option></select></div>
+        <button class="ponto-btn entrada" onclick="iniciarPlantao()">
+          <span class="ponto-icon">🟢</span>INICIAR PLANTÃO
+          <div style="font-size:12px;font-weight:400;opacity:.8;margin-top:4px;" id="hora-atual-entrada"></div>
+        </button>
+      </div>
+      <div id="plantao-ativo-view" class="hidden">
+        <div class="plantao-ativo-box">
+          <div class="flex items-center justify-between mb-2">
+            <div>
+              <div style="font-size:10px;color:var(--muted);">PLANTÃO EM ANDAMENTO</div>
+              <div style="font-weight:700;" id="plantao-local-nome">—</div>
+            </div>
+            <span class="badge badge-green">● AO VIVO</span>
+          </div>
+          <div style="font-size:12px;color:var(--muted);">Entrada: <span id="hora-entrada-display">—</span> · Previsto sair: <span id="hora-saida-prevista" style="color:var(--amber);font-weight:700;">—</span></div>
+        </div>
+        <div class="tab-bar">
+          <div class="tab-item active" onclick="abaPlantao('ronda',this)">📷 Rondas</div>
+          <div class="tab-item" onclick="abaPlantao('portaria',this)">🚦 Portaria</div>
+          <div class="tab-item" onclick="abaPlantao('checklist',this)">🏍️ Veículo</div>
+        </div>
+        <!-- ABA RONDAS -->
+        <div id="aba-ronda">
+          <div class="section-header"><h2>📷 Rondas</h2><span class="badge badge-blue" id="foto-count">0 fotos</span></div>
+          <div class="foto-grid" id="fotos-grid"></div>
+          <div class="camera-btn mt-3" onclick="document.getElementById('camera-input').click()">
+            <div style="font-size:30px;">📷</div>
+            <div class="mt-2">Tirar foto de ronda</div>
+            <div class="text-xs mt-1" style="color:var(--muted);">Câmera abrirá automaticamente · GPS + horário registrados</div>
+          </div>
+          <input type="file" id="camera-input" accept="image/*" capture="environment" class="hidden" onchange="registrarFoto(this)">
+        </div>
+        <!-- ABA PORTARIA -->
+        <div id="aba-portaria" class="hidden">
+          <div class="section-header"><h2>🚦 Portaria</h2><button class="btn btn-primary btn-sm" onclick="abrirModalPortaria()">+ Registrar</button></div>
+          <div id="lista-portaria-plantao"></div>
+        </div>
+        <!-- ABA CHECKLIST -->
+        <div id="aba-checklist" class="hidden">
+          <div class="section-header">
+            <h2>🏍️ Checklist</h2>
+            <button class="btn btn-outline btn-sm" id="btn-editar-ck" onclick="toggleEditarChecklist()" style="display:none">✏️ Editar</button>
+          </div>
+          <div id="checklist-form">
+            <div class="field"><label>Tipo de veículo</label>
+              <select id="ck-veiculo"><option>🏍️ Moto</option><option>🚗 Carro</option><option>🚲 Bicicleta</option><option>🚶 A pé</option></select>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+              <div class="field"><label>KM Entrada</label><input type="number" id="ck-km-entrada" placeholder="Ex: 12500"></div>
+              <div class="field"><label>KM Saída</label><input type="number" id="ck-km-saida" placeholder="Ex: 12560"></div>
+            </div>
+            <div class="field"><label>Nível de gasolina</label>
+              <select id="ck-gasolina"><option>⛽ Cheio</option><option>3/4</option><option>Metade</option><option>1/4 ⚠️</option><option>Reserva 🔴</option></select>
+            </div>
+            <div class="field"><label>Nível de óleo</label>
+              <select id="ck-oleo"><option>✅ Adequado</option><option>⚠️ Baixo</option><option>🔴 Crítico</option></select>
+            </div>
+            <div class="card mt-2">
+              <div class="flex items-center justify-between mb-3">
+                <div class="card-title" style="margin-bottom:0">Equipamentos</div>
+                <button class="btn btn-primary btn-sm" id="btn-novo-equip" onclick="abrirModalNovoEquip()" style="display:none">+ Campo</button>
+              </div>
+              <div id="lista-equipamentos-ck"></div>
+            </div>
+            <div class="field mt-2"><label>Observações</label><textarea id="ck-obs" placeholder="Algum problema ou observação..."></textarea></div>
+            <button class="btn btn-green" onclick="salvarChecklist()">💾 Salvar Checklist</button>
+          </div>
+          <div id="checklist-salvo" class="hidden">
+            <div class="card" style="border-color:var(--green);">
+              <div class="card-title">✅ Checklist salvo</div>
+              <div id="checklist-salvo-detalhes"></div>
+            </div>
+          </div>
+        </div>
+        <div class="divider mt-3"></div>
+        <button class="ponto-btn saida" onclick="encerrarPlantao()">
+          <span class="ponto-icon">🔴</span>ENCERRAR PLANTÃO
+          <div style="font-size:12px;font-weight:400;opacity:.8;margin-top:4px;" id="hora-atual-saida"></div>
+        </button>
+      </div>
+    </div>
+
+    <!-- SUBSTITUIÇÕES VIGILANTE -->
+    <div id="screen-substituicoes" class="screen">
+      <div class="section-header"><h2>🔄 Substituições</h2></div>
+      <div id="lista-substituicoes-vig"></div>
+    </div>
+
+    <!-- MEUS RELATÓRIOS -->
+    <div id="screen-meus-relatorios" class="screen">
+      <div class="section-header"><h2>📋 Meus Relatórios</h2></div>
+      <div id="lista-meus-relatorios"></div>
+    </div>
+
+  </div><!-- /main -->
+  <div id="bottom-nav"></div>
+</div>
+
+<div id="toast"></div>
+
+<!-- ═══════ MODAIS ═══════ -->
+
+<!-- MODAL VIGILANTE -->
+<div class="modal-overlay hidden" id="modal-vigilante">
+  <div class="modal"><div class="modal-handle"></div>
+    <div class="modal-title" id="mv-title">Novo Vigilante</div>
+    <input type="hidden" id="mv-id">
+    <div class="field"><label>Nome completo</label><input type="text" id="mv-nome"></div>
+    <div class="field"><label>CPF</label><input type="text" id="mv-cpf" placeholder="000.000.000-00" maxlength="14"></div>
+    <div class="field"><label>E-mail (login)</label><input type="email" id="mv-email"></div>
+    <div class="field"><label>Senha</label><input type="password" id="mv-senha" placeholder="Mínimo 6 caracteres"></div>
+    <div class="field"><label>Chave Pix</label><input type="text" id="mv-pix"></div>
+    <div class="field"><label>Banco do Pix</label><input type="text" id="mv-banco" placeholder="Nubank, Bradesco..."></div>
+    <div class="field"><label>💰 Valor da Diária (R$)</label><input type="text" id="mv-diaria" placeholder="R$ 0,00" oninput="mascaraMoeda(this)"></div>
+    <div class="field"><label>⏱️ Horas do plantão padrão</label><input type="number" id="mv-horas" placeholder="Ex: 8" min="1" max="24"></div>
+    <div class="flex gap-3 mt-2">
+      <button class="btn btn-outline" onclick="fecharModal('modal-vigilante')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarVigilante()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CONTRATANTE -->
+<div class="modal-overlay hidden" id="modal-contratante">
+  <div class="modal"><div class="modal-handle"></div>
+    <div class="modal-title" id="mc-title">Novo Contratante</div>
+    <input type="hidden" id="mc-id">
+    <div class="field"><label>Nome / Empresa</label><input type="text" id="mc-nome"></div>
+    <div class="field"><label>Contato</label><input type="tel" id="mc-contato" placeholder="(00) 00000-0000"></div>
+    <div class="field"><label>Locais de ronda (um por linha)</label><textarea id="mc-locais" placeholder="Bloco A — Rua das Flores, 100&#10;Bloco B — Av. Central, 200"></textarea></div>
+    <div class="field"><label>Valor do contrato (R$/mês)</label><input type="text" id="mc-valor" placeholder="R$ 0,00" oninput="mascaraMoeda(this)"></div>
+    <div class="flex gap-3 mt-2">
+      <button class="btn btn-outline" onclick="fecharModal('modal-contratante')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarContratante()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL ESCALA -->
+<div class="modal-overlay hidden" id="modal-escala">
+  <div class="modal"><div class="modal-handle"></div>
+    <div class="modal-title">Agendar na Escala</div>
+    <div class="field"><label>Tipo</label>
+      <select id="me-tipo" onchange="tipoEscalaChange()">
+        <option value="plantao">🛡️ Plantão</option>
+        <option value="folga">😴 Folga</option>
+      </select>
+    </div>
+    <div class="field"><label>Vigilante</label><select id="me-vigilante"></select></div>
+    <div id="me-campos-plantao">
+      <div class="field"><label>Local</label><select id="me-local"></select></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="field"><label>Entrada</label><input type="time" id="me-entrada" value="20:00"></div>
+        <div class="field"><label>Saída prevista</label><input type="time" id="me-saida" value="04:00"></div>
+      </div>
+    </div>
+    <div class="field"><label>Data inicial</label><input type="date" id="me-data"></div>
+    <div class="field"><label>Repetição</label>
+      <select id="me-repetir">
+        <option value="nao">Não repetir (só esta data)</option>
+        <option value="diasim">Dia sim, dia não</option>
+        <option value="semana">Toda semana (mesmo dia)</option>
+        <option value="mes">Todo o mês restante</option>
+      </select>
+    </div>
+    <div class="field" id="me-campo-ate" style="display:none"><label>Repetir até</label><input type="date" id="me-ate"></div>
+    <div class="flex gap-3 mt-2">
+      <button class="btn btn-outline" onclick="fecharModal('modal-escala')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarEscala()">💾 Agendar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL SUBSTITUIÇÃO -->
+<div class="modal-overlay hidden" id="modal-substituicao">
+  <div class="modal"><div class="modal-handle"></div>
+    <div class="modal-title">🔄 Registrar Substituição</div>
+    <input type="hidden" id="ms-escala-id">
+    <div class="field"><label>Plantão original</label><div id="ms-plantao-info" style="background:var(--slate2);border-radius:8px;padding:10px;font-size:13px;color:var(--muted);"></div></div>
+    <div class="field"><label>Vigilante substituto</label><select id="ms-substituto"></select></div>
+    <div class="field"><label>Motivo</label><input type="text" id="ms-motivo" placeholder="Ex: Folga, emergência..."></div>
+    <div class="flex gap-3 mt-2">
+      <button class="btn btn-outline" onclick="fecharModal('modal-substituicao')">Cancelar</button>
+      <button class="btn btn-amber" style="color:#000" onclick="salvarSubstituicao()">🔄 Registrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL FINANCEIRO -->
+<div class="modal-overlay hidden" id="modal-financeiro">
+  <div class="modal"><div class="modal-handle"></div>
+    <div class="modal-title" id="mf-title">Novo Lançamento</div>
+    <input type="hidden" id="mf-id">
+    <div class="field"><label>Tipo</label>
+      <select id="mf-tipo" onchange="tipoFinChange()">
+        <option value="recebido">💚 Entrada — Recebido do contratante</option>
+        <option value="diaria">💸 Saída — Diária paga ao vigilante</option>
+        <option value="outro">📌 Saída — Outro gasto</option>
+      </select>
+    </div>
+    <div class="field" id="mf-campo-contratante"><label>Contratante</label><select id="mf-contratante"></select></div>
+    <div class="field" id="mf-campo-vigilante" style="display:none"><label>Vigilante</label><select id="mf-vigilante"></select></div>
+    <div class="field"><label>Valor (R$)</label><input type="text" id="mf-valor" placeholder="R$ 0,00" oninput="mascaraMoeda(this)"></div>
+    <div class="field"><label>Data</label><input type="date" id="mf-data"></div>
+    <div class="field"><label>Observação / Referência</label><input type="text" id="mf-obs" placeholder="Ex: Pagamento semana 1, mês junho..."></div>
+    <div class="flex gap-3 mt-2">
+      <button class="btn btn-outline" onclick="fecharModal('modal-financeiro')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarFinanceiro()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL FECHAMENTO -->
+<div class="modal-overlay hidden" id="modal-fechamento">
+  <div class="modal"><div class="modal-handle"></div>
+    <div class="modal-title">💰 Fechamento do Mês</div>
+    <div id="fechamento-conteudo"></div>
+    <div class="flex gap-3 mt-3">
+      <button class="btn btn-outline" onclick="fecharModal('modal-fechamento')">Fechar</button>
+      <button class="btn btn-green" onclick="confirmarPagamentos()">✅ Lançar Pagamentos</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL PORTARIA -->
+<div class="modal-overlay hidden" id="modal-portaria">
+  <div class="modal"><div class="modal-handle"></div>
+    <div class="modal-title">Registrar na Portaria</div>
+    <div class="portaria-type-btns">
+      <div class="type-btn selected" id="pt-btn-entrega" onclick="selTipo('entrega')"><div class="tb-icon">📦</div><div class="tb-label">Entrega</div><div class="text-xs text-muted mt-1">iFood, ML, etc.</div></div>
+      <div class="type-btn" id="pt-btn-visitante" onclick="selTipo('visitante')"><div class="tb-icon">🚗</div><div class="tb-label">Visitante</div><div class="text-xs text-muted mt-1">Morador / visita</div></div>
+    </div>
+    <div id="campos-entrega">
+      <div class="field"><label>Empresa</label><select id="pt-empresa"><option>🛵 iFood</option><option>📦 Mercado Livre</option><option>📫 Amazon</option><option>🛍️ Shopee</option><option>📮 Correios</option><option>Outro</option></select></div>
+      <div class="field"><label>Nome do entregador</label><input type="text" id="pt-entregador"></div>
+      <div class="field"><label>Placa</label><input type="text" id="pt-placa-e" style="text-transform:uppercase" maxlength="8"></div>
+      <div class="field"><label>Entrega para (morador/apto)</label><input type="text" id="pt-destino"></div>
+    </div>
+    <div id="campos-visitante" class="hidden">
+      <div class="field"><label>Nome do condutor</label><input type="text" id="pt-visitante"></div>
+      <div class="field"><label>Placa</label><input type="text" id="pt-placa-v" style="text-transform:uppercase" maxlength="8"></div>
+      <div class="field"><label>Visita para (morador/apto)</label><input type="text" id="pt-visita-dest"></div>
+    </div>
+    <div class="flex gap-3 mt-2">
+      <button class="btn btn-outline" onclick="fecharModal('modal-portaria')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarPortaria()">💾 Registrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL RELATÓRIO -->
+<div class="modal-overlay hidden" id="modal-relatorio">
+  <div class="modal"><div class="modal-handle"></div>
+    <div id="relatorio-conteudo"></div>
+    <div class="flex gap-3 mt-3">
+      <button class="btn btn-outline" onclick="fecharModal('modal-relatorio')">Fechar</button>
+      <button class="btn btn-primary" onclick="window.print()">🖨️ Imprimir</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL SAÍDA ANTECIPADA -->
+<div class="modal-overlay hidden" id="modal-saida-antecipada">
+  <div class="modal"><div class="modal-handle"></div>
+    <div class="modal-title">⚠️ Saída antes do horário</div>
+    <div id="saida-antecipada-info" style="background:rgba(245,158,11,.1);border:1px solid var(--amber);border-radius:10px;padding:14px;margin-bottom:16px;font-size:13px;"></div>
+    <div class="field"><label>Motivo da saída antecipada</label><textarea id="motivo-saida" placeholder="Descreva o motivo..."></textarea></div>
+    <div class="flex gap-3 mt-2">
+      <button class="btn btn-outline" onclick="fecharModal('modal-saida-antecipada')">Cancelar</button>
+      <button class="btn btn-amber" style="color:#000" onclick="confirmarSaidaAntecipada()">⚠️ Confirmar Saída</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL NOVO EQUIPAMENTO -->
+<div class="modal-overlay hidden" id="modal-novo-equip">
+  <div class="modal"><div class="modal-handle"></div>
+    <div class="modal-title" id="meq-title">Novo Campo de Equipamento</div>
+    <input type="hidden" id="meq-id">
+    <div class="field"><label>Nome do equipamento</label><input type="text" id="meq-nome" placeholder="Ex: Câmera, Colete, Algema..."></div>
+    <div class="flex gap-3 mt-2">
+      <button class="btn btn-outline" onclick="fecharModal('modal-novo-equip')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarEquip()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL GERENTE -->
+<div class="modal-overlay hidden" id="modal-gerente">
+  <div class="modal"><div class="modal-handle"></div>
+    <div class="modal-title" id="mg-title">Novo Gerente</div>
+    <input type="hidden" id="mg-id">
+    <div class="field"><label>Nome completo</label><input type="text" id="mg-nome"></div>
+    <div class="field"><label>E-mail (login)</label><input type="email" id="mg-email"></div>
+    <div class="field"><label>Senha</label><input type="password" id="mg-senha" placeholder="Mínimo 6 caracteres"></div>
+    <div class="card mt-2">
+      <div class="card-title">Permissões de acesso</div>
+      <div class="perm-item"><span class="perm-label">📊 Ver Dashboard</span><button class="toggle on" id="perm-dashboard" onclick="togglePerm(this)"></button></div>
+      <div class="perm-item"><span class="perm-label">📅 Ver Escala</span><button class="toggle on" id="perm-escala" onclick="togglePerm(this)"></button></div>
+      <div class="perm-item"><span class="perm-label">📋 Ver Relatórios</span><button class="toggle on" id="perm-relatorios" onclick="togglePerm(this)"></button></div>
+      <div class="perm-item"><span class="perm-label">💰 Ver Financeiro</span><button class="toggle" id="perm-financeiro" onclick="togglePerm(this)"></button></div>
+      <div class="perm-item"><span class="perm-label">👤 Ver Vigilantes</span><button class="toggle" id="perm-vigilantes" onclick="togglePerm(this)"></button></div>
+      <div class="perm-item"><span class="perm-label">🏢 Ver Contratantes</span><button class="toggle" id="perm-contratantes" onclick="togglePerm(this)"></button></div>
+    </div>
+    <div class="flex gap-3 mt-2">
+      <button class="btn btn-outline" onclick="fecharModal('modal-gerente')">Cancelar</button>
+      <button class="btn btn-purple" onclick="salvarGerente()">💾 Salvar Gerente</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════
+// DB
+// ═══════════════════════════════════════════
+const DB={
+  get(k){try{return JSON.parse(localStorage.getItem('rm_'+k))||[];}catch{return[];}},
+  set(k,v){localStorage.setItem('rm_'+k,JSON.stringify(v));},
+};
+
+// ═══════════════════════════════════════════
+// DEMO
+// ═══════════════════════════════════════════
+function initDemo(){
+  if(localStorage.getItem('rm_v5'))return;
+  DB.set('usuarios',[
+    {id:'u1',nome:'Administrador',email:'admin@rm.com',senha:'123456',perfil:'admin'},
+    {id:'u2',nome:'João da Silva',email:'joao@rm.com',senha:'123456',perfil:'vigilante'},
+    {id:'u3',nome:'Carlos Souza',email:'carlos@rm.com',senha:'123456',perfil:'vigilante'}
+  ]);
+  DB.set('vigilantes',[
+    {id:'u2',nome:'João da Silva',email:'joao@rm.com',senha:'123456',cpf:'111.222.333-44',pix:'joao@rm.com',banco:'Nubank',diaria:120,horas:8,ativo:true},
+    {id:'u3',nome:'Carlos Souza',email:'carlos@rm.com',senha:'123456',cpf:'555.666.777-88',pix:'carlos@rm.com',banco:'Bradesco',diaria:110,horas:8,ativo:true}
+  ]);
+  DB.set('contratantes',[{id:'c1',nome:'Condomínio Verde',contato:'(31) 99999-1111',locais:'Bloco A — Rua das Flores, 100\nBloco B — Av. Central, 200',valor:3000}]);
+  DB.set('equipamentos',[
+    {id:'eq1',nome:'🔦 Lanterna'},
+    {id:'eq2',nome:'🔧 Ferramentas'},
+    {id:'eq3',nome:'📡 Rádio / Comunicação'},
+    {id:'eq4',nome:'🦺 Colete / EPI'}
+  ]);
+  const hoje=new Date();
+  const esc=[];
+  for(let i=0;i<6;i++){
+    const d=new Date(hoje);d.setDate(d.getDate()+i);
+    esc.push({id:'e'+i,tipo:'plantao',vigilanteId:'u2',vigilanteNome:'João da Silva',localNome:'Bloco A — Rua das Flores, 100',contratanteNome:'Condomínio Verde',data:d.toISOString().split('T')[0],entrada:'20:00',saida:'04:00',status:'agendado',substituto:null,substitutoId:null,motivo:null});
+  }
+  DB.set('escala',esc);
+  localStorage.setItem('rm_v5','1');
+}
+
+// ═══════════════════════════════════════════
+// ESTADO
+// ═══════════════════════════════════════════
+let U=null,plantaoAtivo=null,timerHora=null;
+let fotosP=[],portariaP=[],ckState={};
+let tipoPortaria='entrega';
+let escalaMes=new Date();
+let escalaDiaSel=null;
+let checklistSalvo=false;
+
+// ═══════════════════════════════════════════
+// UTILS
+// ═══════════════════════════════════════════
+const MESES=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+function pad(n){return String(n).padStart(2,'0');}
+function fmtH(iso){if(!iso)return'—';const d=new Date(iso);return pad(d.getHours())+':'+pad(d.getMinutes());}
+function fmtData(iso){if(!iso)return'—';const d=new Date(iso);return pad(d.getDate())+'/'+pad(d.getMonth()+1)+'/'+d.getFullYear();}
+function fmtDataStr(s){if(!s)return'—';const[y,m,d]=s.split('-');return`${d}/${m}/${y}`;}
+function fmtMoeda(v){return'R$ '+Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
+function parseMoeda(s){return parseFloat((s||'0').replace(/[R$\s.]/g,'').replace(',','.'))||0;}
+function mascaraMoeda(el){
+  let v=el.value.replace(/\D/g,'');
+  if(!v){el.value='';return;}
+  v=(parseInt(v)/100).toFixed(2);
+  el.value='R$ '+parseFloat(v).toLocaleString('pt-BR',{minimumFractionDigits:2});
+}
+function agruparPorData(lista,campoData){
+  const grupos={};
+  lista.forEach(item=>{
+    const chave=fmtData(item[campoData]);
+    if(!grupos[chave])grupos[chave]=[];
+    grupos[chave].push(item);
+  });
+  return grupos;
+}
+
+// ═══════════════════════════════════════════
+// LOGIN
+// ═══════════════════════════════════════════
+function fazerLogin(){
+  const email=document.getElementById('login-email').value.trim();
+  const senha=document.getElementById('login-senha').value;
+  const u=DB.get('usuarios').find(x=>x.email===email&&x.senha===senha);
+  if(!u){toast('❌ E-mail ou senha incorretos');return;}
+  U=u;
+  document.getElementById('login-screen').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+  document.getElementById('tb-nome').textContent=u.nome;
+  const perfilLabel={admin:'👔 Admin',gerente:'📊 Gerente',vigilante:'🦺 Vigilante'}[u.perfil]||u.perfil;
+  document.getElementById('tb-perfil').textContent=perfilLabel;
+  montarNav();
+  if(u.perfil==='admin') irPara('screen-dashboard');
+  else if(u.perfil==='gerente') irPara('screen-dashboard');
+  else{
+    document.getElementById('plantao-saudacao').textContent='Olá, '+u.nome.split(' ')[0]+'!';
+    popularLocais();verificarPlantaoAtivo();iniciarRelogioEntrada();
+    irPara('screen-plantao');verificarEscalaVigilante();
+  }
+}
+function sair(){
+  if(timerHora)clearInterval(timerHora);
+  U=null;plantaoAtivo=null;
+  document.getElementById('app').classList.add('hidden');
+  document.getElementById('login-screen').classList.remove('hidden');
+  document.getElementById('login-email').value='';document.getElementById('login-senha').value='';
+}
+
+// ═══════════════════════════════════════════
+// NAVBAR
+// ═══════════════════════════════════════════
+function montarNav(){
+  const nav=document.getElementById('bottom-nav');
+  let itens=[];
+  if(U.perfil==='admin'){
+    itens=[
+      {id:'screen-dashboard',icon:'📊',label:'Início'},
+      {id:'screen-vigilantes',icon:'👤',label:'Vigilantes'},
+      {id:'screen-escala',icon:'📅',label:'Escala'},
+      {id:'screen-financeiro',icon:'💰',label:'Financeiro'},
+      {id:'screen-relatorios',icon:'📋',label:'Relatórios'},
+      {id:'screen-config',icon:'⚙️',label:'Config'},
+    ];
+  } else if(U.perfil==='gerente'){
+    const perms=U.perms||{};
+    if(perms.dashboard!==false)itens.push({id:'screen-dashboard',icon:'📊',label:'Início'});
+    if(perms.escala!==false)itens.push({id:'screen-escala',icon:'📅',label:'Escala'});
+    if(perms.relatorios!==false)itens.push({id:'screen-relatorios',icon:'📋',label:'Relatórios'});
+    if(perms.financeiro)itens.push({id:'screen-financeiro',icon:'💰',label:'Financeiro'});
+    if(perms.vigilantes)itens.push({id:'screen-vigilantes',icon:'👤',label:'Vigilantes'});
+    if(perms.contratantes)itens.push({id:'screen-contratantes',icon:'🏢',label:'Contratantes'});
+  } else {
+    itens=[
+      {id:'screen-plantao',icon:'🛡️',label:'Plantão'},
+      {id:'screen-substituicoes',icon:'🔄',label:'Substit.'},
+      {id:'screen-meus-relatorios',icon:'📋',label:'Relatórios'},
+    ];
+  }
+  nav.innerHTML=itens.map(i=>`<button class="nav-btn" id="nav-${i.id}" onclick="irPara('${i.id}')"><span class="nav-icon">${i.icon}</span>${i.label}</button>`).join('');
+  nav.innerHTML+=`<button class="nav-btn" onclick="sair()"><span class="nav-icon">🚪</span>Sair</button>`;
+}
+function irPara(s){
+  document.querySelectorAll('.screen').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(x=>x.classList.remove('active'));
+  document.getElementById(s).classList.add('active');
+  const nb=document.getElementById('nav-'+s);if(nb)nb.classList.add('active');
+  if(s==='screen-dashboard')atualizarDashboard();
+  if(s==='screen-vigilantes')renderVigilantes();
+  if(s==='screen-contratantes')renderContratantes();
+  if(s==='screen-escala')renderEscala();
+  if(s==='screen-financeiro'){renderFinanceiro();abaFin('resumo',null);}
+  if(s==='screen-relatorios')renderRelatoriosAdmin();
+  if(s==='screen-meus-relatorios')renderMeusRelatorios();
+  if(s==='screen-substituicoes')renderSubstVig();
+  if(s==='screen-config')renderConfig();
+  window.scrollTo(0,0);
+}
+
+// ═══════════════════════════════════════════
+// DASHBOARD
+// ═══════════════════════════════════════════
+function atualizarDashboard(){
+  const plantoes=DB.get('plantoes');
+  const hoje=new Date().toDateString();
+  const fin=DB.get('financeiro');const mes=new Date().getMonth();
+  const rec=fin.filter(f=>f.tipo==='recebido'&&new Date(f.data).getMonth()===mes).reduce((a,b)=>a+parseMoeda(b.valor),0);
+  const pago=fin.filter(f=>f.tipo!=='recebido'&&new Date(f.data).getMonth()===mes).reduce((a,b)=>a+parseMoeda(b.valor),0);
+  document.getElementById('st-plantoes').textContent=plantoes.filter(p=>new Date(p.inicio).toDateString()===hoje).length;
+  document.getElementById('st-vigilantes').textContent=DB.get('vigilantes').filter(v=>v.ativo!==false).length;
+  document.getElementById('st-relatorios').textContent=plantoes.filter(p=>p.fim).length;
+  const saldo=rec-pago;
+  document.getElementById('st-saldo').textContent=fmtMoeda(saldo);
+  // Plantões por data
+  const recentes=[...plantoes].reverse().slice(0,10);
+  const div=document.getElementById('lista-plantoes-dash');
+  if(!recentes.length){div.innerHTML='<div class="empty-state"><div class="es-icon">📋</div><div>Nenhum plantão ainda</div></div>';return;}
+  const grupos=agruparPorData(recentes,'inicio');
+  div.innerHTML=Object.entries(grupos).map(([data,items])=>`
+    <div class="date-group">
+      <div class="date-group-header">📅 ${data}</div>
+      ${items.map(p=>{
+        const s=statusPlantao(p);
+        return`<div class="list-item">
+          <div class="li-main">
+            <div class="li-title">${p.vigilanteNome||'—'}</div>
+            <div class="li-sub">${p.localNome||'—'} · Entrada: ${fmtH(p.inicio)}${p.fim?' · Saída: '+fmtH(p.fim):''}</div>
+            <div class="mt-1">${s.badge}</div>
+          </div>
+          ${p.fim?`<button class="btn btn-primary btn-sm" onclick="verRelatorio('${p.id}')">Ver</button>`:'<span class="badge badge-green">Ativo</span>'}
+        </div>`;
+      }).join('')}
+    </div>`).join('');
+}
+
+// ═══════════════════════════════════════════
+// VIGILANTES
+// ═══════════════════════════════════════════
+function renderVigilantes(){
+  const lista=DB.get('vigilantes');
+  const div=document.getElementById('lista-vigilantes');
+  if(!lista.length){div.innerHTML='<div class="empty-state"><div class="es-icon">👤</div><div>Nenhum vigilante</div></div>';return;}
+  div.innerHTML=lista.map(v=>`
+    <div class="list-item">
+      <div class="li-main">
+        <div class="li-title">${v.nome}</div>
+        <div class="li-sub">CPF: ${v.cpf||'—'} · Pix: ${v.pix||'—'} (${v.banco||'—'})</div>
+        <div class="li-sub">Diária: ${fmtMoeda(v.diaria)} · Plantão: ${v.horas||8}h · ${v.email}</div>
+      </div>
+      <button class="btn btn-outline btn-sm btn-icon" onclick="editarVigilante('${v.id}')">✏️</button>
+    </div>`).join('');
+}
+function abrirModalVigilante(){
+  ['mv-id','mv-nome','mv-cpf','mv-email','mv-senha','mv-pix','mv-banco','mv-diaria','mv-horas'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('mv-title').textContent='Novo Vigilante';abrirModal('modal-vigilante');
+}
+function editarVigilante(id){
+  const v=DB.get('vigilantes').find(x=>x.id===id);if(!v)return;
+  document.getElementById('mv-id').value=v.id;document.getElementById('mv-nome').value=v.nome;
+  document.getElementById('mv-cpf').value=v.cpf||'';document.getElementById('mv-email').value=v.email;
+  document.getElementById('mv-senha').value=v.senha||'';document.getElementById('mv-pix').value=v.pix||'';
+  document.getElementById('mv-banco').value=v.banco||'';
+  document.getElementById('mv-diaria').value=v.diaria?'R$ '+Number(v.diaria).toLocaleString('pt-BR',{minimumFractionDigits:2}):'';
+  document.getElementById('mv-horas').value=v.horas||8;
+  document.getElementById('mv-title').textContent='Editar Vigilante';abrirModal('modal-vigilante');
+}
+function salvarVigilante(){
+  const id=document.getElementById('mv-id').value||'v'+Date.now();
+  const nome=document.getElementById('mv-nome').value.trim();
+  const email=document.getElementById('mv-email').value.trim();
+  const senha=document.getElementById('mv-senha').value;
+  if(!nome||!email||!senha){toast('⚠️ Preencha nome, e-mail e senha');return;}
+  const vigs=DB.get('vigilantes').filter(x=>x.id!==id);
+  vigs.push({id,nome,email,senha,cpf:document.getElementById('mv-cpf').value,pix:document.getElementById('mv-pix').value,banco:document.getElementById('mv-banco').value,diaria:parseMoeda(document.getElementById('mv-diaria').value),horas:Number(document.getElementById('mv-horas').value)||8,ativo:true});
+  DB.set('vigilantes',vigs);
+  const us=DB.get('usuarios').filter(x=>x.id!==id);
+  us.push({id,nome,email,senha,perfil:'vigilante'});DB.set('usuarios',us);
+  fecharModal('modal-vigilante');renderVigilantes();toast('✅ Vigilante salvo!');
+}
+
+// ═══════════════════════════════════════════
+// CONTRATANTES
+// ═══════════════════════════════════════════
+function renderContratantes(){
+  const lista=DB.get('contratantes');
+  const div=document.getElementById('lista-contratantes');
+  if(!lista.length){div.innerHTML='<div class="empty-state"><div class="es-icon">🏢</div><div>Nenhum contratante</div></div>';return;}
+  div.innerHTML=lista.map(c=>`
+    <div class="list-item" style="align-items:flex-start">
+      <div class="li-main">
+        <div class="li-title">${c.nome}</div>
+        <div class="li-sub">📞 ${c.contato||'—'} · ${fmtMoeda(c.valor)}/mês</div>
+        <div class="li-sub mt-2" style="white-space:pre-line;line-height:1.6">📍 ${c.locais||'—'}</div>
+      </div>
+      <button class="btn btn-outline btn-sm btn-icon" onclick="editarContratante('${c.id}')">✏️</button>
+    </div>`).join('');
+}
+function abrirModalContratante(){
+  ['mc-id','mc-nome','mc-contato','mc-locais','mc-valor'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('mc-title').textContent='Novo Contratante';abrirModal('modal-contratante');
+}
+function editarContratante(id){
+  const c=DB.get('contratantes').find(x=>x.id===id);if(!c)return;
+  document.getElementById('mc-id').value=c.id;document.getElementById('mc-nome').value=c.nome;
+  document.getElementById('mc-contato').value=c.contato||'';document.getElementById('mc-locais').value=c.locais||'';
+  document.getElementById('mc-valor').value=c.valor?'R$ '+Number(c.valor).toLocaleString('pt-BR',{minimumFractionDigits:2}):'';
+  document.getElementById('mc-title').textContent='Editar Contratante';abrirModal('modal-contratante');
+}
+function salvarContratante(){
+  const id=document.getElementById('mc-id').value||'c'+Date.now();
+  const nome=document.getElementById('mc-nome').value.trim();
+  if(!nome){toast('⚠️ Informe o nome');return;}
+  const lista=DB.get('contratantes').filter(x=>x.id!==id);
+  lista.push({id,nome,contato:document.getElementById('mc-contato').value,locais:document.getElementById('mc-locais').value,valor:parseMoeda(document.getElementById('mc-valor').value)});
+  DB.set('contratantes',lista);fecharModal('modal-contratante');renderContratantes();popularLocais();toast('✅ Contratante salvo!');
+}
+
+// ═══════════════════════════════════════════
+// ESCALA
+// ═══════════════════════════════════════════
+function renderEscala(){
+  const ano=escalaMes.getFullYear(),mes=escalaMes.getMonth();
+  document.getElementById('escala-mes-label').textContent=MESES[mes]+' '+ano;
+  const prim=new Date(ano,mes,1).getDay();
+  const dias=new Date(ano,mes+1,0).getDate();
+  const hoje=new Date();
+  const escala=DB.get('escala');
+  const grid=document.getElementById('escala-grid');
+  const hdrs=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+  let html=hdrs.map(d=>`<div class="escala-dia-hdr">${d}</div>`).join('');
+  for(let i=0;i<prim;i++)html+=`<div class="escala-dia vazio"></div>`;
+  for(let d=1;d<=dias;d++){
+    const ds=`${ano}-${pad(mes+1)}-${pad(d)}`;
+    const ehHoje=hoje.getFullYear()===ano&&hoje.getMonth()===mes&&hoje.getDate()===d;
+    const dow=(prim+d-1)%7;
+    const evs=escala.filter(e=>e.data===ds);
+    const temFolga=evs.some(e=>e.tipo==='folga');
+    let evHtml=evs.slice(0,2).map(e=>{
+      if(e.tipo==='folga')return`<div class="dia-evento ev-folga">😴 ${(e.vigilanteNome||'').split(' ')[0]}</div>`;
+      const cls=e.status==='substituicao'?'ev-subst':e.status==='pendente'?'ev-pendente':'ev-normal';
+      const nm=(e.status==='substituicao'?e.substituto:e.vigilanteNome)||'';
+      return`<div class="dia-evento ${cls}">${nm.split(' ')[0]}</div>`;
+    }).join('');
+    if(evs.length>2)evHtml+=`<div style="font-size:7px;color:var(--muted);padding:1px 2px;">+${evs.length-2}</div>`;
+    html+=`<div class="escala-dia${ehHoje?' hoje':''}${temFolga?' folga-dia':''}" onclick="verDia('${ds}')">
+      <div class="dia-num${dow===0||dow===6?' fds':''}">${d}</div>${evHtml}
+    </div>`;
+  }
+  grid.innerHTML=html;
+}
+function navMes(dir){escalaMes=new Date(escalaMes.getFullYear(),escalaMes.getMonth()+dir,1);renderEscala();fecharListaDia();}
+function verDia(ds){
+  escalaDiaSel=ds;
+  const evs=DB.get('escala').filter(e=>e.data===ds);
+  document.getElementById('escala-dia-title').textContent='Plantões — '+fmtDataStr(ds);
+  const div=document.getElementById('escala-dia-conteudo');
+  if(!evs.length){div.innerHTML='<div class="empty-state"><div class="es-icon">📅</div><div>Nenhum plantão agendado</div></div>';}
+  else{
+    div.innerHTML=evs.map(e=>{
+      if(e.tipo==='folga') return`<div class="list-item">
+        <div class="li-main"><div class="li-title">😴 Folga — ${e.vigilanteNome}</div></div>
+        <button class="btn btn-red btn-sm" onclick="removerEscala('${e.id}')">🗑️</button>
+      </div>`;
+      const sb=e.status==='substituicao'?'<span class="badge badge-amber">🔄 Substituição</span>':e.status==='pendente'?'<span class="badge badge-purple">⏳ Pendente</span>':'<span class="badge badge-blue">📅 Agendado</span>';
+      const vn=e.status==='substituicao'?`${e.substituto} <span style="color:var(--muted);font-size:11px;">(subst. ${e.vigilanteNome})</span>`:e.vigilanteNome;
+      return`<div class="list-item" style="flex-direction:column;align-items:flex-start;gap:8px;">
+        <div class="flex items-center justify-between w-full"><div class="li-title">${vn}</div>${sb}</div>
+        <div class="li-sub">📍 ${e.localNome} · ⏰ ${e.entrada}–${e.saida}</div>
+        ${e.motivo?`<div class="li-sub">📝 ${e.motivo}</div>`:''}
+        <div class="flex gap-2 w-full">
+          <button class="btn btn-outline btn-sm" onclick="abrirSubst('${e.id}')">🔄 Substituir</button>
+          <button class="btn btn-red btn-sm" onclick="removerEscala('${e.id}')">🗑️</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+  document.getElementById('escala-lista-dia').classList.remove('hidden');
+  document.getElementById('escala-lista-dia').scrollIntoView({behavior:'smooth'});
+}
+function fecharListaDia(){document.getElementById('escala-lista-dia').classList.add('hidden');}
+function tipoEscalaChange(){
+  const tipo=document.getElementById('me-tipo').value;
+  document.getElementById('me-campos-plantao').style.display=tipo==='plantao'?'':'none';
+}
+function abrirModalEscala(){
+  const vigs=DB.get('vigilantes');
+  document.getElementById('me-vigilante').innerHTML=vigs.map(v=>`<option value="${v.id}|${v.nome}">${v.nome}</option>`).join('');
+  const locais=[];
+  DB.get('contratantes').forEach(c=>(c.locais||'').split('\n').filter(l=>l.trim()).forEach(l=>locais.push(`<option value="${c.id}|${l.trim()}">${c.nome} — ${l.trim()}</option>`)));
+  document.getElementById('me-local').innerHTML=locais.join('');
+  document.getElementById('me-data').value=escalaDiaSel||new Date().toISOString().split('T')[0];
+  document.getElementById('me-tipo').value='plantao';
+  document.getElementById('me-campos-plantao').style.display='';
+  document.getElementById('me-repetir').value='nao';
+  document.getElementById('me-campo-ate').style.display='none';
+  abrirModal('modal-escala');
+}
+document.addEventListener('DOMContentLoaded',()=>{
+  document.getElementById('me-repetir').addEventListener('change',function(){
+    const v=this.value;
+    document.getElementById('me-campo-ate').style.display=(v==='diasim'||v==='semana')?'':'none';
+  });
+});
+function salvarEscala(){
+  const tipo=document.getElementById('me-tipo').value;
+  const[vigId,vigNome]=document.getElementById('me-vigilante').value.split('|');
+  const data=document.getElementById('me-data').value;
+  const repetir=document.getElementById('me-repetir').value;
+  const ate=document.getElementById('me-ate').value;
+  if(!vigId||!data){toast('⚠️ Preencha todos os campos');return;}
+  let entrada='',saida='',localNome='',contNome='';
+  if(tipo==='plantao'){
+    entrada=document.getElementById('me-entrada').value;
+    saida=document.getElementById('me-saida').value;
+    const localVal=document.getElementById('me-local').value;
+    const pi=localVal.indexOf('|');
+    const contId=localVal.slice(0,pi);
+    localNome=localVal.slice(pi+1);
+    const cont=DB.get('contratantes').find(c=>c.id===contId);
+    contNome=cont?cont.nome:'—';
+    if(!entrada||!saida||!localNome){toast('⚠️ Preencha horário e local');return;}
+  }
+  const escala=DB.get('escala');
+  const novoItem=(d)=>({
+    id:'e'+Date.now()+Math.random().toString(36).slice(2,5),
+    tipo,vigilanteId:vigId,vigilanteNome:vigNome,
+    localNome,contratanteNome:contNome,
+    data:d,entrada,saida,status:'agendado',substituto:null,substitutoId:null,motivo:null
+  });
+  const datas=[];
+  const dataBase=new Date(data+'T12:00:00');
+  if(repetir==='nao'){datas.push(data);}
+  else if(repetir==='diasim'){
+    const fim=ate?new Date(ate+'T12:00:00'):new Date(dataBase.getFullYear(),dataBase.getMonth()+1,0);
+    let cur=new Date(dataBase);
+    while(cur<=fim){datas.push(cur.toISOString().split('T')[0]);cur.setDate(cur.getDate()+2);}
+  } else if(repetir==='semana'){
+    const fim=ate?new Date(ate+'T12:00:00'):new Date(dataBase.getFullYear(),dataBase.getMonth()+2,0);
+    let cur=new Date(dataBase);
+    while(cur<=fim){datas.push(cur.toISOString().split('T')[0]);cur.setDate(cur.getDate()+7);}
+  } else if(repetir==='mes'){
+    const[y,m]=data.split('-');const dm=new Date(y,m,0).getDate();
+    const ini=parseInt(data.split('-')[2]);
+    for(let i=ini;i<=dm;i++)datas.push(`${y}-${m}-${pad(i)}`);
+  }
+  datas.forEach(d=>escala.push(novoItem(d)));
+  DB.set('escala',escala);fecharModal('modal-escala');renderEscala();
+  if(escalaDiaSel)verDia(escalaDiaSel);toast(`✅ ${datas.length} dia(s) agendado(s)!`);
+}
+function removerEscala(id){
+  if(!confirm('Remover este item da escala?'))return;
+  DB.set('escala',DB.get('escala').filter(e=>e.id!==id));
+  renderEscala();if(escalaDiaSel)verDia(escalaDiaSel);toast('🗑️ Removido!');
+}
+function abrirSubst(escalaId){
+  const e=DB.get('escala').find(x=>x.id===escalaId);if(!e)return;
+  document.getElementById('ms-escala-id').value=escalaId;
+  document.getElementById('ms-plantao-info').textContent=`${e.vigilanteNome} · ${e.localNome} · ${fmtDataStr(e.data)} ${e.entrada}–${e.saida}`;
+  document.getElementById('ms-substituto').innerHTML=DB.get('vigilantes').filter(v=>v.id!==e.vigilanteId).map(v=>`<option value="${v.id}|${v.nome}">${v.nome}</option>`).join('');
+  document.getElementById('ms-motivo').value='';
+  abrirModal('modal-substituicao');
+}
+function salvarSubstituicao(){
+  const id=document.getElementById('ms-escala-id').value;
+  const[subId,subNome]=document.getElementById('ms-substituto').value.split('|');
+  if(!subId){toast('⚠️ Selecione o substituto');return;}
+  DB.set('escala',DB.get('escala').map(e=>e.id===id?{...e,status:'pendente',substitutoId:subId,substituto:subNome,motivo:document.getElementById('ms-motivo').value}:e));
+  fecharModal('modal-substituicao');renderEscala();if(escalaDiaSel)verDia(escalaDiaSel);
+  toast('⏳ Aguardando confirmação do vigilante.');
+}
+function renderSubstVig(){
+  const pend=DB.get('escala').filter(e=>e.substitutoId===U.id&&e.status==='pendente');
+  const div=document.getElementById('lista-substituicoes-vig');
+  if(!pend.length){div.innerHTML='<div class="empty-state"><div class="es-icon">🔄</div><div>Nenhuma substituição pendente</div></div>';return;}
+  div.innerHTML=pend.map(e=>`<div class="list-item" style="flex-direction:column;align-items:flex-start;gap:10px;">
+    <div><div class="li-title">Substituição de ${e.vigilanteNome}</div>
+    <div class="li-sub">📍 ${e.localNome} · 📅 ${fmtDataStr(e.data)} · ⏰ ${e.entrada}–${e.saida}</div>
+    ${e.motivo?`<div class="li-sub">📝 ${e.motivo}</div>`:''}</div>
+    <div class="flex gap-2 w-full">
+      <button class="btn btn-green btn-sm" onclick="confSubst('${e.id}')">✅ Aceitar</button>
+      <button class="btn btn-red btn-sm" onclick="recSubst('${e.id}')">❌ Recusar</button>
+    </div>
+  </div>`).join('');
+}
+function confSubst(id){DB.set('escala',DB.get('escala').map(e=>e.id===id?{...e,status:'substituicao'}:e));renderSubstVig();toast('✅ Substituição confirmada!');}
+function recSubst(id){DB.set('escala',DB.get('escala').map(e=>e.id===id?{...e,status:'agendado',substitutoId:null,substituto:null,motivo:null}:e));renderSubstVig();toast('❌ Substituição recusada.');}
+function abrirFechamento(){
+  const ano=escalaMes.getFullYear(),mes=escalaMes.getMonth();
+  const escala=DB.get('escala').filter(e=>{const d=new Date(e.data+'T12:00');return e.tipo==='plantao'&&d.getFullYear()===ano&&d.getMonth()===mes;});
+  let html=`<div style="font-size:13px;color:var(--muted);margin-bottom:14px;">Referência: <strong>${MESES[mes]} ${ano}</strong></div>`;
+  DB.get('vigilantes').forEach(v=>{
+    const qtd=escala.filter(e=>(e.vigilanteId===v.id&&e.status!=='substituicao')||(e.substitutoId===v.id&&e.status==='substituicao')).length;
+    const total=qtd*Number(v.diaria||0);
+    html+=`<div class="fechamento-card"><div class="fc-nome">👤 ${v.nome}</div><div class="fc-info">Plantões: <strong>${qtd}</strong> · Diária: ${fmtMoeda(v.diaria)}</div><div class="fc-info">Pix: ${v.pix||'—'} · ${v.banco||'—'}</div><div class="fc-total">Total: ${fmtMoeda(total)}</div></div>`;
+  });
+  document.getElementById('fechamento-conteudo').innerHTML=html;abrirModal('modal-fechamento');
+}
+function confirmarPagamentos(){
+  const ano=escalaMes.getFullYear(),mes=escalaMes.getMonth();
+  const escala=DB.get('escala').filter(e=>{const d=new Date(e.data+'T12:00');return e.tipo==='plantao'&&d.getFullYear()===ano&&d.getMonth()===mes;});
+  const fin=DB.get('financeiro');const hoje=new Date().toISOString().split('T')[0];
+  DB.get('vigilantes').forEach(v=>{
+    const qtd=escala.filter(e=>(e.vigilanteId===v.id&&e.status!=='substituicao')||(e.substitutoId===v.id&&e.status==='substituicao')).length;
+    if(!qtd)return;
+    const total=qtd*Number(v.diaria||0);
+    fin.push({id:'f'+Date.now()+Math.random().toString(36).slice(2,5),tipo:'diaria',vigilanteId:v.id,ref:v.nome,valor:total.toFixed(2),data:hoje,obs:`Fechamento ${MESES[mes]}/${ano} — ${qtd} plantões`});
+  });
+  DB.set('financeiro',fin);fecharModal('modal-fechamento');toast('✅ Pagamentos lançados!');
+}
+
+// ═══════════════════════════════════════════
+// FINANCEIRO
+// ═══════════════════════════════════════════
+function abaFin(aba,el){
+  ['resumo','recebimentos','diarias'].forEach(a=>document.getElementById('fin-'+a).classList.toggle('hidden',a!==aba));
+  document.querySelectorAll('#screen-financeiro .tab-item').forEach(t=>t.classList.remove('active'));
+  if(el)el.classList.add('active');
+  else{const tabs=document.querySelectorAll('#screen-financeiro .tab-item');if(tabs[0])tabs[0].classList.add('active');}
+  if(aba==='recebimentos')renderRecebimentos();
+  if(aba==='diarias')renderDiarias();
+}
+function renderFinanceiro(){
+  const fin=DB.get('financeiro');const mes=new Date().getMonth();
+  const rec=fin.filter(f=>f.tipo==='recebido'&&new Date(f.data).getMonth()===mes).reduce((a,b)=>a+parseMoeda(b.valor),0);
+  const pago=fin.filter(f=>f.tipo!=='recebido'&&new Date(f.data).getMonth()===mes).reduce((a,b)=>a+parseMoeda(b.valor),0);
+  document.getElementById('fin-recebido').textContent=fmtMoeda(rec);
+  document.getElementById('fin-pago').textContent=fmtMoeda(pago);
+  const saldo=rec-pago;const el=document.getElementById('fin-saldo');
+  el.textContent=fmtMoeda(saldo);el.style.color=saldo>=0?'var(--green)':'var(--red)';
+  document.getElementById('fin-diarias-resumo').innerHTML=DB.get('vigilantes').map(v=>{
+    const total=fin.filter(f=>f.tipo==='diaria'&&f.vigilanteId===v.id&&new Date(f.data).getMonth()===mes).reduce((a,b)=>a+parseMoeda(b.valor),0);
+    return`<div class="fin-row"><div class="fr-info"><div class="fr-label">${v.nome}</div><div class="fr-sub">Pix: ${v.pix||'—'}</div></div><div class="fr-val negativo">${fmtMoeda(total)}</div></div>`;
+  }).join('');
+}
+function renderListaFin(lista,tipo){
+  const grupoPorMes={};
+  [...lista].reverse().forEach(f=>{
+    const d=new Date(f.data);
+    const chave=MESES[d.getMonth()]+' '+d.getFullYear();
+    if(!grupoPorMes[chave])grupoPorMes[chave]=[];
+    grupoPorMes[chave].push(f);
+  });
+  return Object.entries(grupoPorMes).map(([mes,items])=>`
+    <div class="fin-group">
+      <div class="fin-group-title">📅 ${mes}</div>
+      ${items.map(f=>`<div class="fin-row">
+        <div class="fr-info">
+          <div class="fr-label">${f.ref}</div>
+          <div class="fr-sub">${fmtData(f.data)}${f.obs?' · '+f.obs:''}</div>
+        </div>
+        <div class="fr-right">
+          <div class="fr-val ${tipo==='entrada'?'positivo':'negativo'}">${tipo==='entrada'?'+':'-'}${fmtMoeda(f.valor)}</div>
+          <button class="btn btn-outline btn-sm btn-icon" onclick="editarLancamento('${f.id}')">✏️</button>
+          <button class="btn btn-red btn-sm btn-icon" onclick="excluirLancamento('${f.id}')">🗑️</button>
+        </div>
+      </div>`).join('')}
+    </div>`).join('');
+}
+function renderRecebimentos(){
+  const lista=DB.get('financeiro').filter(f=>f.tipo==='recebido');
+  document.getElementById('lista-recebimentos').innerHTML=lista.length?renderListaFin(lista,'entrada'):'<div class="empty-state"><div class="es-icon">💚</div><div>Nenhuma entrada registrada</div></div>';
+}
+function renderDiarias(){
+  const lista=DB.get('financeiro').filter(f=>f.tipo!=='recebido');
+  document.getElementById('lista-diarias').innerHTML=lista.length?renderListaFin(lista,'saida'):'<div class="empty-state"><div class="es-icon">💸</div><div>Nenhuma saída registrada</div></div>';
+}
+function abrirModalFinanceiro(){
+  document.getElementById('mf-id').value='';document.getElementById('mf-title').textContent='Novo Lançamento';
+  document.getElementById('mf-data').value=new Date().toISOString().split('T')[0];
+  document.getElementById('mf-valor').value='';document.getElementById('mf-obs').value='';
+  document.getElementById('mf-contratante').innerHTML=DB.get('contratantes').map(c=>`<option value="${c.id}|${c.nome}">${c.nome}</option>`).join('');
+  document.getElementById('mf-vigilante').innerHTML=DB.get('vigilantes').map(v=>`<option value="${v.id}|${v.nome}">${v.nome}</option>`).join('');
+  document.getElementById('mf-tipo').value='recebido';tipoFinChange();abrirModal('modal-financeiro');
+}
+function editarLancamento(id){
+  const f=DB.get('financeiro').find(x=>x.id===id);if(!f)return;
+  document.getElementById('mf-id').value=f.id;document.getElementById('mf-title').textContent='Editar Lançamento';
+  document.getElementById('mf-tipo').value=f.tipo;
+  document.getElementById('mf-contratante').innerHTML=DB.get('contratantes').map(c=>`<option value="${c.id}|${c.nome}">${c.nome}</option>`).join('');
+  document.getElementById('mf-vigilante').innerHTML=DB.get('vigilantes').map(v=>`<option value="${v.id}|${v.nome}">${v.nome}</option>`).join('');
+  document.getElementById('mf-valor').value='R$ '+Number(parseMoeda(f.valor)).toLocaleString('pt-BR',{minimumFractionDigits:2});
+  document.getElementById('mf-data').value=f.data;document.getElementById('mf-obs').value=f.obs||'';
+  tipoFinChange();abrirModal('modal-financeiro');
+}
+function excluirLancamento(id){
+  if(!confirm('Excluir este lançamento?'))return;
+  DB.set('financeiro',DB.get('financeiro').filter(f=>f.id!==id));
+  renderFinanceiro();renderRecebimentos();renderDiarias();toast('🗑️ Lançamento excluído!');
+}
+function tipoFinChange(){
+  const tipo=document.getElementById('mf-tipo').value;
+  document.getElementById('mf-campo-contratante').style.display=tipo==='recebido'?'':'none';
+  document.getElementById('mf-campo-vigilante').style.display=tipo==='diaria'?'':'none';
+}
+function salvarFinanceiro(){
+  const id=document.getElementById('mf-id').value||'f'+Date.now();
+  const tipo=document.getElementById('mf-tipo').value;
+  const valor=document.getElementById('mf-valor').value;
+  const data=document.getElementById('mf-data').value;
+  if(!valor||!data){toast('⚠️ Preencha valor e data');return;}
+  let ref='',vid=null;
+  if(tipo==='recebido'){const v=document.getElementById('mf-contratante').value.split('|');ref=v[1]||'Contratante';}
+  else if(tipo==='diaria'){const v=document.getElementById('mf-vigilante').value.split('|');ref=v[1]||'Vigilante';vid=v[0];}
+  else ref='Outro gasto';
+  const fin=DB.get('financeiro').filter(f=>f.id!==id);
+  fin.push({id,tipo,ref,vigilanteId:vid,valor:parseMoeda(valor).toFixed(2),data,obs:document.getElementById('mf-obs').value});
+  DB.set('financeiro',fin);fecharModal('modal-financeiro');renderFinanceiro();toast('✅ Lançamento salvo!');
+}
+
+// ═══════════════════════════════════════════
+// CONFIG / ADMIN
+// ═══════════════════════════════════════════
+function renderConfig(){
+  const u=DB.get('usuarios').find(x=>x.perfil==='admin');
+  if(u){document.getElementById('cfg-email').value=u.email;}
+  carregarEmpresa();
+  renderEquipConfig();
+  renderGerentes();
+}
+function salvarCredenciaisAdmin(){
+  const email=document.getElementById('cfg-email').value.trim();
+  const s1=document.getElementById('cfg-senha').value;
+  const s2=document.getElementById('cfg-senha2').value;
+  if(!email){toast('⚠️ Informe o e-mail');return;}
+  if(s1&&s1!==s2){toast('⚠️ Senhas não conferem');return;}
+  const us=DB.get('usuarios').map(u=>{
+    if(u.perfil==='admin') return{...u,email,senha:s1||u.senha};
+    return u;
+  });
+  DB.set('usuarios',us);
+  if(U.perfil==='admin'){U.email=email;if(s1)U.senha=s1;}
+  toast('✅ Credenciais atualizadas!');
+}
+// GERENTES
+function renderGerentes(){
+  const gers=DB.get('usuarios').filter(u=>u.perfil==='gerente');
+  const div=document.getElementById('lista-gerentes');
+  if(!gers.length){div.innerHTML='<div class="empty-state" style="padding:20px"><div class="es-icon">📊</div><div>Nenhum gerente cadastrado</div></div>';return;}
+  div.innerHTML=gers.map(g=>`<div class="list-item">
+    <div class="li-main"><div class="li-title">${g.nome}</div><div class="li-sub">${g.email}</div></div>
+    <div class="li-actions">
+      <button class="btn btn-outline btn-sm btn-icon" onclick="editarGerente('${g.id}')">✏️</button>
+      <button class="btn btn-red btn-sm btn-icon" onclick="excluirGerente('${g.id}')">🗑️</button>
+    </div>
+  </div>`).join('');
+}
+function abrirModalGerente(){
+  ['mg-id','mg-nome','mg-email','mg-senha'].forEach(id=>document.getElementById(id).value='');
+  ['dashboard','escala','relatorios'].forEach(p=>document.getElementById('perm-'+p).classList.add('on'));
+  ['financeiro','vigilantes','contratantes'].forEach(p=>document.getElementById('perm-'+p).classList.remove('on'));
+  document.getElementById('mg-title').textContent='Novo Gerente';abrirModal('modal-gerente');
+}
+function editarGerente(id){
+  const g=DB.get('usuarios').find(x=>x.id===id);if(!g)return;
+  document.getElementById('mg-id').value=g.id;document.getElementById('mg-nome').value=g.nome;
+  document.getElementById('mg-email').value=g.email;document.getElementById('mg-senha').value=g.senha||'';
+  const perms=g.perms||{};
+  ['dashboard','escala','relatorios','financeiro','vigilantes','contratantes'].forEach(p=>{
+    document.getElementById('perm-'+p).classList.toggle('on',perms[p]!==false&&(perms[p]===true||['dashboard','escala','relatorios'].includes(p)));
+  });
+  document.getElementById('mg-title').textContent='Editar Gerente';abrirModal('modal-gerente');
+}
+function excluirGerente(id){
+  if(!confirm('Excluir este gerente?'))return;
+  DB.set('usuarios',DB.get('usuarios').filter(u=>u.id!==id));renderGerentes();toast('🗑️ Gerente excluído!');
+}
+function togglePerm(el){el.classList.toggle('on');}
+function salvarGerente(){
+  const id=document.getElementById('mg-id').value||'g'+Date.now();
+  const nome=document.getElementById('mg-nome').value.trim();
+  const email=document.getElementById('mg-email').value.trim();
+  const senha=document.getElementById('mg-senha').value;
+  if(!nome||!email||!senha){toast('⚠️ Preencha nome, e-mail e senha');return;}
+  const perms={};
+  ['dashboard','escala','relatorios','financeiro','vigilantes','contratantes'].forEach(p=>{perms[p]=document.getElementById('perm-'+p).classList.contains('on');});
+  const us=DB.get('usuarios').filter(x=>x.id!==id);
+  us.push({id,nome,email,senha,perfil:'gerente',perms});
+  DB.set('usuarios',us);fecharModal('modal-gerente');renderGerentes();toast('✅ Gerente salvo!');
+}
+
+// ═══════════════════════════════════════════
+// EQUIPAMENTOS CHECKLIST
+// ═══════════════════════════════════════════
+function renderEquipamentosChecklist(){
+  const equips=DB.get('equipamentos');
+  const isAdmin=U&&U.perfil==='admin';
+  const div=document.getElementById('lista-equipamentos-ck');
+  // Mostrar botão + Campo só para admin
+  const btnNovo=document.getElementById('btn-novo-equip');
+  if(btnNovo)btnNovo.style.display=isAdmin?'':'none';
+  if(!equips.length){div.innerHTML='<div class="text-muted text-sm">Nenhum equipamento cadastrado</div>';return;}
+  div.innerHTML=equips.map(eq=>`
+    <div class="check-item" id="ck-row-${eq.id}">
+      <span>${eq.nome}</span>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <button class="check-opt ok" onclick="ckSet('${eq.id}','ok',this)">OK</button>
+        <button class="check-opt" onclick="ckSet('${eq.id}','nok',this)">FALTA</button>
+        ${isAdmin?`<button class="btn btn-outline btn-sm btn-icon" onclick="editarEquip('${eq.id}')" title="Editar">✏️</button>
+        <button class="btn btn-red btn-sm btn-icon" onclick="excluirEquip('${eq.id}')" title="Excluir">🗑️</button>`:''}
+      </div>
+    </div>`).join('');
+  // Restaurar estado
+  Object.entries(ckState).forEach(([id,val])=>{
+    const row=document.getElementById('ck-row-'+id);
+    if(row){
+      row.querySelectorAll('.check-opt').forEach(b=>b.classList.remove('ok','nok'));
+      const btns=row.querySelectorAll('.check-opt');
+      if(val==='ok')btns[0].classList.add('ok');
+      else if(val==='nok')btns[1].classList.add('nok');
+    }
+  });
+}
+function abrirModalNovoEquip(){
+  document.getElementById('meq-id').value='';document.getElementById('meq-nome').value='';
+  document.getElementById('meq-title').textContent='Novo Equipamento';abrirModal('modal-novo-equip');
+}
+function editarEquip(id){
+  const eq=DB.get('equipamentos').find(x=>x.id===id);if(!eq)return;
+  document.getElementById('meq-id').value=eq.id;document.getElementById('meq-nome').value=eq.nome;
+  document.getElementById('meq-title').textContent='Editar Equipamento';abrirModal('modal-novo-equip');
+}
+function excluirEquip(id){
+  if(!confirm('Excluir este equipamento?'))return;
+  DB.set('equipamentos',DB.get('equipamentos').filter(e=>e.id!==id));
+  delete ckState[id];
+  renderEquipamentosChecklist();
+  renderEquipConfig();
+  toast('🗑️ Equipamento removido!');
+}
+function salvarEquip(){
+  const id=document.getElementById('meq-id').value||'eq'+Date.now();
+  const nome=document.getElementById('meq-nome').value.trim();
+  if(!nome){toast('⚠️ Informe o nome');return;}
+  const lista=DB.get('equipamentos').filter(x=>x.id!==id);
+  lista.push({id,nome});DB.set('equipamentos',lista);
+  fecharModal('modal-novo-equip');
+  renderEquipamentosChecklist();
+  renderEquipConfig();
+  toast('✅ Equipamento salvo!');
+}
+function ckSet(id,val,el){
+  ckState[id]=val;
+  el.parentElement.querySelectorAll('.check-opt').forEach(b=>b.classList.remove('ok','nok'));
+  el.classList.add(val);
+}
+
+// ═══════════════════════════════════════════
+// PLANTÃO
+// ═══════════════════════════════════════════
+function verificarEscalaVigilante(){
+  const hoje=new Date().toISOString().split('T')[0];
+  const e=DB.get('escala').find(x=>x.data===hoje&&x.tipo==='plantao'&&(x.vigilanteId===U.id||(x.substitutoId===U.id&&x.status==='substituicao')));
+  const info=document.getElementById('plantao-escala-info');
+  const card=document.getElementById('plantao-escala-card');
+  if(!e){info.textContent='Nenhum plantão agendado para hoje.';return;}
+  info.textContent='Você tem plantão agendado hoje!';
+  document.getElementById('plantao-escala-detalhes').innerHTML=`
+    <div class="rel-row"><span class="rel-lbl">Local</span><span style="font-weight:600">${e.localNome}</span></div>
+    <div class="rel-row"><span class="rel-lbl">Horário</span><span style="font-weight:600">${e.entrada} às ${e.saida}</span></div>
+    ${e.status==='substituicao'?`<div class="rel-row"><span class="rel-lbl">Obs.</span><span style="font-weight:600;color:var(--amber)">Substituindo ${e.vigilanteNome}</span></div>`:''}`;
+  card.classList.remove('hidden');
+  setTimeout(()=>{
+    const sel=document.getElementById('sel-local-plantao');
+    const opt=Array.from(sel.options).find(o=>o.text.includes(e.localNome)||o.value.includes(e.localNome));
+    if(opt)sel.value=opt.value;
+  },400);
+}
+function popularLocais(){
+  const sel=document.getElementById('sel-local-plantao');
+  let opts='<option value="">Selecione o local...</option>';
+  DB.get('contratantes').forEach(c=>(c.locais||'').split('\n').filter(l=>l.trim()).forEach(l=>{opts+=`<option value="${c.id}|${l.trim()}">${c.nome} — ${l.trim()}</option>`;}));
+  sel.innerHTML=opts;
+}
+function verificarPlantaoAtivo(){
+  const p=DB.get('plantoes').find(x=>x.vigilanteId===U.id&&!x.fim);
+  if(p){plantaoAtivo=p;fotosP=p.fotos||[];portariaP=p.portaria||[];ckState=p.ckState||{};mostrarAtivo();}
+}
+function iniciarPlantao(){
+  const sel=document.getElementById('sel-local-plantao');
+  if(!sel.value){toast('⚠️ Selecione um local');return;}
+  const pi=sel.value.indexOf('|');
+  const contId=sel.value.slice(0,pi);const localNome=sel.value.slice(pi+1);
+  const cont=DB.get('contratantes').find(c=>c.id===contId);
+  const vig=DB.get('vigilantes').find(v=>v.id===U.id);
+  const hoje=new Date().toISOString().split('T')[0];
+  const escalaHoje=DB.get('escala').find(e=>e.data===hoje&&e.tipo==='plantao'&&(e.vigilanteId===U.id||(e.substitutoId===U.id&&e.status==='substituicao')));
+  // Limpar checklist
+  ckState={};checklistSalvo=false;
+  document.getElementById('btn-editar-ck').style.display='none';
+  document.getElementById('checklist-form').classList.remove('hidden');
+  document.getElementById('checklist-salvo').classList.add('hidden');
+  document.getElementById('ck-km-entrada').value='';document.getElementById('ck-km-saida').value='';
+  document.getElementById('ck-obs').value='';
+  document.getElementById('ck-veiculo').selectedIndex=0;
+  document.getElementById('ck-gasolina').selectedIndex=0;
+  document.getElementById('ck-oleo').selectedIndex=0;
+  plantaoAtivo={
+    id:'p'+Date.now(),vigilanteId:U.id,vigilanteNome:U.nome,
+    contratanteId:contId,contratanteNome:cont?cont.nome:'—',localNome,
+    inicio:new Date().toISOString(),fim:null,fotos:[],portaria:[],checklist:null,ckState:{},
+    horaPrevistaSaida:escalaHoje?escalaHoje.saida:null,
+    duracaoPrevistaH:vig?Number(vig.horas||8):8,
+    saidaAntecipada:false,motivoSaida:null
+  };
+  fotosP=[];portariaP=[];
+  DB.get('plantoes').push(plantaoAtivo);DB.set('plantoes',[...DB.get('plantoes').filter(p=>p.id!==plantaoAtivo.id),plantaoAtivo]);
+  mostrarAtivo();iniciarRelogioSaida();renderEquipamentosChecklist();toast('🟢 Plantão iniciado!');
+}
+function mostrarAtivo(){
+  document.getElementById('plantao-sem-turno').classList.add('hidden');
+  document.getElementById('plantao-ativo-view').classList.remove('hidden');
+  document.getElementById('plantao-local-nome').textContent=plantaoAtivo.localNome;
+  document.getElementById('hora-entrada-display').textContent=fmtH(plantaoAtivo.inicio);
+  document.getElementById('hora-saida-prevista').textContent=plantaoAtivo.horaPrevistaSaida||'Não definido';
+  if(plantaoAtivo.checklist){
+    checklistSalvo=true;
+    document.getElementById('btn-editar-ck').style.display='';
+    renderChecklistSalvo(plantaoAtivo.checklist);
+  }
+  renderEquipamentosChecklist();renderFotos();renderPortariaPlantao();
+}
+function iniciarRelogioEntrada(){
+  setInterval(()=>{const el=document.getElementById('hora-atual-entrada');if(el)el.textContent='Agora: '+fmtH(new Date().toISOString());},1000);
+}
+function iniciarRelogioSaida(){
+  if(timerHora)clearInterval(timerHora);
+  timerHora=setInterval(()=>{const el=document.getElementById('hora-atual-saida');if(el)el.textContent='Agora: '+fmtH(new Date().toISOString());},1000);
+}
+function abaPlantao(aba,el){
+  ['ronda','portaria','checklist'].forEach(a=>document.getElementById('aba-'+a).classList.toggle('hidden',a!==aba));
+  document.querySelectorAll('#screen-plantao .tab-item').forEach(t=>t.classList.remove('active'));el.classList.add('active');
+}
+function encerrarPlantao(){
+  const agora=new Date();
+  if(plantaoAtivo.horaPrevistaSaida){
+    const[hP,mP]=plantaoAtivo.horaPrevistaSaida.split(':').map(Number);
+    const entrada=new Date(plantaoAtivo.inicio);
+    let prev=new Date(entrada);prev.setHours(hP,mP,0,0);
+    if(prev<=entrada)prev.setDate(prev.getDate()+1);
+    if(agora<prev){
+      const diff=Math.round((prev-agora)/60000);
+      document.getElementById('saida-antecipada-info').innerHTML=`⚠️ Você está saindo <strong>${diff} minuto(s) antes</strong> do horário previsto (${plantaoAtivo.horaPrevistaSaida}).<br><br>Informe o motivo para continuar.`;
+      abrirModal('modal-saida-antecipada');return;
+    }
+  }
+  finalizarPlantao(false,null);
+}
+function confirmarSaidaAntecipada(){
+  const motivo=document.getElementById('motivo-saida').value.trim();
+  if(!motivo){toast('⚠️ Informe o motivo');return;}
+  fecharModal('modal-saida-antecipada');finalizarPlantao(true,motivo);
+}
+function finalizarPlantao(antecipado,motivo){
+  plantaoAtivo.fim=new Date().toISOString();plantaoAtivo.saidaAntecipada=antecipado;plantaoAtivo.motivoSaida=motivo;
+  plantaoAtivo.fotos=fotosP;plantaoAtivo.portaria=portariaP;plantaoAtivo.ckState=ckState;
+  DB.set('plantoes',DB.get('plantoes').map(p=>p.id===plantaoAtivo.id?plantaoAtivo:p));
+  clearInterval(timerHora);plantaoAtivo=null;fotosP=[];portariaP=[];ckState={};checklistSalvo=false;
+  document.getElementById('plantao-ativo-view').classList.add('hidden');
+  document.getElementById('plantao-sem-turno').classList.remove('hidden');
+  toast(antecipado?'⚠️ Saída antecipada registrada.':'🔴 Plantão encerrado!');
+  setTimeout(()=>irPara('screen-meus-relatorios'),1200);
+}
+
+// ═══════════════════════════════════════════
+// FOTOS
+// ═══════════════════════════════════════════
+function registrarFoto(input){
+  if(!input.files[0])return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const foto={id:'f'+Date.now(),num:fotosP.length+1,data:e.target.result,hora:fmtH(new Date().toISOString()),dataCompleta:new Date().toLocaleDateString('pt-BR')+' '+fmtH(new Date().toISOString()),dataHora:new Date().toISOString(),lat:null,lng:null};
+    const capturarGPS=()=>{
+      if(navigator.geolocation){
+        navigator.geolocation.getCurrentPosition(p=>{foto.lat=p.coords.latitude.toFixed(6);foto.lng=p.coords.longitude.toFixed(6);salvarFoto(foto);},()=>salvarFoto(foto),{timeout:8000,enableHighAccuracy:true});
+      } else salvarFoto(foto);
+    };
+    capturarGPS();
+  };
+  reader.readAsDataURL(input.files[0]);input.value='';
+}
+function salvarFoto(foto){fotosP.push(foto);atualizarStorage();renderFotos();toast(`📷 Foto #${foto.num} registrada!${foto.lat?' GPS ✓':''}`);}
+function renderFotos(){
+  document.getElementById('foto-count').textContent=fotosP.length+' foto'+(fotosP.length!==1?'s':'');
+  document.getElementById('fotos-grid').innerHTML=fotosP.map(f=>`
+    <div class="foto-thumb">
+      <img src="${f.data}" alt="Ronda #${f.num}">
+      <div class="foto-hora">${f.hora}${f.lat?' 📍':''}</div>
+      <div class="foto-num">#${String(f.num).padStart(3,'0')}</div>
+    </div>`).join('');
+}
+
+// ═══════════════════════════════════════════
+// PORTARIA
+// ═══════════════════════════════════════════
+function abrirModalPortaria(){
+  selTipo('entrega');
+  ['pt-entregador','pt-placa-e','pt-destino','pt-visitante','pt-placa-v','pt-visita-dest'].forEach(id=>document.getElementById(id).value='');
+  abrirModal('modal-portaria');
+}
+function selTipo(tipo){
+  tipoPortaria=tipo;
+  document.getElementById('campos-entrega').classList.toggle('hidden',tipo!=='entrega');
+  document.getElementById('campos-visitante').classList.toggle('hidden',tipo!=='visitante');
+  document.getElementById('pt-btn-entrega').classList.toggle('selected',tipo==='entrega');
+  document.getElementById('pt-btn-visitante').classList.toggle('selected',tipo==='visitante');
+}
+function salvarPortaria(){
+  let reg={id:'pt'+Date.now(),tipo:tipoPortaria,hora:fmtH(new Date().toISOString()),dataHora:new Date().toISOString()};
+  if(tipoPortaria==='entrega'){
+    const nome=document.getElementById('pt-entregador').value.trim();
+    const placa=document.getElementById('pt-placa-e').value.trim().toUpperCase();
+    const dest=document.getElementById('pt-destino').value.trim();
+    if(!nome||!placa||!dest){toast('⚠️ Preencha todos os campos');return;}
+    reg={...reg,empresa:document.getElementById('pt-empresa').value,entregador:nome,placa,destino:dest};
+  } else {
+    const nome=document.getElementById('pt-visitante').value.trim();
+    const placa=document.getElementById('pt-placa-v').value.trim().toUpperCase();
+    const dest=document.getElementById('pt-visita-dest').value.trim();
+    if(!nome||!placa||!dest){toast('⚠️ Preencha todos os campos');return;}
+    reg={...reg,visitante:nome,placa,destino:dest,horaSaida:null};
+  }
+  portariaP.push(reg);atualizarStorage();fecharModal('modal-portaria');renderPortariaPlantao();toast('✅ Portaria registrada!');
+}
+function registrarSaidaVisitante(id){
+  const r=portariaP.find(p=>p.id===id);if(r)r.horaSaida=fmtH(new Date().toISOString());
+  atualizarStorage();renderPortariaPlantao();toast('🚗 Saída registrada!');
+}
+function renderPortariaPlantao(){
+  const div=document.getElementById('lista-portaria-plantao');
+  if(!portariaP.length){div.innerHTML='<div class="empty-state"><div class="es-icon">🚦</div><div>Nenhum registro</div></div>';return;}
+  div.innerHTML=[...portariaP].reverse().map(r=>{
+    if(r.tipo==='entrega')return`<div class="list-item"><div class="li-main"><div class="li-title">📦 ${r.empresa} — ${r.entregador}</div><div class="li-sub">🚗 ${r.placa} · Para: ${r.destino} · ${r.hora}</div></div><span class="badge badge-purple">Entrega</span></div>`;
+    return`<div class="list-item"><div class="li-main"><div class="li-title">🚗 ${r.visitante}</div><div class="li-sub">${r.placa} · ${r.destino} · Entrada: ${r.hora}${r.horaSaida?' · Saída: '+r.horaSaida:''}</div></div>${!r.horaSaida?`<button class="btn btn-teal btn-sm" onclick="registrarSaidaVisitante('${r.id}')">Saída</button>`:'<span class="badge badge-teal">Saiu</span>'}</div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════
+// CHECKLIST
+// ═══════════════════════════════════════════
+function salvarChecklist(){
+  if(!plantaoAtivo){toast('⚠️ Nenhum plantão ativo');return;}
+  const ck={
+    veiculo:document.getElementById('ck-veiculo').value,
+    gasolina:document.getElementById('ck-gasolina').value,
+    oleo:document.getElementById('ck-oleo').value,
+    kmEntrada:document.getElementById('ck-km-entrada').value,
+    kmSaida:document.getElementById('ck-km-saida').value,
+    equipamentos:{...ckState},
+    obs:document.getElementById('ck-obs').value
+  };
+  plantaoAtivo.checklist=ck;plantaoAtivo.ckState=ckState;
+  atualizarStorage();checklistSalvo=true;
+  document.getElementById('btn-editar-ck').style.display='';
+  document.getElementById('checklist-form').classList.add('hidden');
+  renderChecklistSalvo(ck);toast('✅ Checklist salvo!');
+}
+function toggleEditarChecklist(){
+  checklistSalvo=!checklistSalvo;
+  document.getElementById('checklist-form').classList.toggle('hidden',checklistSalvo);
+  document.getElementById('checklist-salvo').classList.toggle('hidden',!checklistSalvo);
+  document.getElementById('btn-editar-ck').textContent=checklistSalvo?'✏️ Editar':'💾 Fechar edição';
+}
+function renderChecklistSalvo(ck){
+  const equips=DB.get('equipamentos');
+  const eqHtml=equips.map(eq=>{
+    const v=ck.equipamentos?ck.equipamentos[eq.id]:'ok';
+    return`<div class="rel-row"><span class="rel-lbl">${eq.nome}</span><span class="rel-val"><span class="${v==='ok'?'status-ok':'status-nok'}">${v==='ok'?'✓ OK':'✗ FALTA'}</span></span></div>`;
+  }).join('');
+  document.getElementById('checklist-salvo-detalhes').innerHTML=`
+    <div class="rel-row"><span class="rel-lbl">Veículo</span><span class="rel-val">${ck.veiculo||'—'}</span></div>
+    <div class="rel-row"><span class="rel-lbl">KM Entrada</span><span class="rel-val">${ck.kmEntrada||'—'}</span></div>
+    <div class="rel-row"><span class="rel-lbl">KM Saída</span><span class="rel-val">${ck.kmSaida||'—'}</span></div>
+    <div class="rel-row"><span class="rel-lbl">Gasolina</span><span class="rel-val">${ck.gasolina||'—'}</span></div>
+    <div class="rel-row"><span class="rel-lbl">Óleo</span><span class="rel-val">${ck.oleo||'—'}</span></div>
+    ${eqHtml}
+    ${ck.obs?`<div class="rel-row"><span class="rel-lbl">Obs.</span><span class="rel-val">${ck.obs}</span></div>`:''}`;
+  document.getElementById('checklist-salvo').classList.remove('hidden');
+}
+function atualizarStorage(){
+  if(!plantaoAtivo)return;
+  plantaoAtivo.fotos=fotosP;plantaoAtivo.portaria=portariaP;plantaoAtivo.ckState=ckState;
+  DB.set('plantoes',DB.get('plantoes').map(p=>p.id===plantaoAtivo.id?plantaoAtivo:p));
+}
+
+// ═══════════════════════════════════════════
+// RELATÓRIOS
+// ═══════════════════════════════════════════
+function statusPlantao(p){
+  if(!p.fim||!p.horaPrevistaSaida)return{badge:'',label:'normal'};
+  const[hP,mP]=p.horaPrevistaSaida.split(':').map(Number);
+  const entrada=new Date(p.inicio);
+  let prev=new Date(entrada);prev.setHours(hP,mP,0,0);
+  if(prev<=entrada)prev.setDate(prev.getDate()+1);
+  const diff=Math.round((new Date(p.fim)-prev)/60000);
+  if(p.saidaAntecipada||diff<-5)return{badge:'<span class="badge badge-amber">⚠️ Saída antecipada</span>',label:'antes'};
+  if(diff>10)return{badge:'<span class="badge badge-blue">🔵 Hora extra</span>',label:'depois'};
+  return{badge:'<span class="badge badge-green">✅ No horário</span>',label:'normal'};
+}
+function renderRelatoriosPorData(plantoes,divId){
+  const div=document.getElementById(divId);
+  if(!plantoes.length){div.innerHTML='<div class="empty-state"><div class="es-icon">📋</div><div>Nenhum relatório</div></div>';return;}
+  const grupos=agruparPorData([...plantoes].reverse(),'fim'||'inicio');
+  div.innerHTML=Object.entries(grupos).map(([data,items])=>`
+    <div class="date-group">
+      <div class="date-group-header">📅 ${data}</div>
+      ${items.map(p=>{
+        const s=statusPlantao(p);
+        return`<div class="list-item">
+          <div class="li-main">
+            <div class="li-title">${p.vigilanteNome||p.localNome}</div>
+            <div class="li-sub">${divId==='lista-relatorios-admin'?(p.localNome+' · '):''}Entrada: ${fmtH(p.inicio)} · Saída: ${fmtH(p.fim)}${p.horaPrevistaSaida?' · Prev: '+p.horaPrevistaSaida:''}</div>
+            <div class="mt-1">${s.badge}</div>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="verRelatorio('${p.id}')">Ver</button>
+        </div>`;
+      }).join('')}
+    </div>`).join('');
+}
+function renderRelatoriosAdmin(){renderRelatoriosPorData(DB.get('plantoes').filter(p=>p.fim),'lista-relatorios-admin');}
+function renderMeusRelatorios(){renderRelatoriosPorData(DB.get('plantoes').filter(p=>p.fim&&p.vigilanteId===U.id),'lista-meus-relatorios');}
+function verRelatorio(id){
+  const p=DB.get('plantoes').find(x=>x.id===id);if(!p)return;
+  const ck=p.checklist||{};const fotos=p.fotos||[];const portaria=p.portaria||[];
+  const entregas=portaria.filter(x=>x.tipo==='entrega');const visitantes=portaria.filter(x=>x.tipo==='visitante');
+  const s=statusPlantao(p);
+  let emp={};try{emp=JSON.parse(localStorage.getItem('rm_empresa')||'{}');}catch(e){}
+  let statusHtml='';
+  if(s.label==='antes')statusHtml=`<div style="background:#FEF3C7;border:1px solid #F59E0B;border-radius:6px;padding:8px 12px;font-size:12px;color:#92400E;margin-bottom:10px;">⚠️ <strong>Saída antecipada</strong>${p.motivoSaida?' — '+p.motivoSaida:''}</div>`;
+  else if(s.label==='depois')statusHtml=`<div style="background:#EFF6FF;border:1px solid #2E8BF7;border-radius:6px;padding:8px 12px;font-size:12px;color:#1e40af;margin-bottom:10px;">🔵 <strong>Hora extra registrada</strong></div>`;
+  else if(p.fim)statusHtml=`<div style="background:#D1FAE5;border:1px solid #10B981;border-radius:6px;padding:8px 12px;font-size:12px;color:#065F46;margin-bottom:10px;">✅ <strong>Encerrado no horário</strong></div>`;
+  const equips=DB.get('equipamentos');
+  const eqHtml=ck.equipamentos?equips.map(eq=>{
+    const v=ck.equipamentos[eq.id]||'ok';
+    return`<div class="rel-row"><span class="rel-lbl">${eq.nome}</span><span class="rel-val"><span class="${v==='ok'?'status-ok':'status-nok'}">${v==='ok'?'✓ OK':'✗ FALTA'}</span></span></div>`;
+  }).join(''):'';
+  let html=`<div class="relatorio-card">
+    <div class="rel-header">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div>
+          <div class="rel-logo">🛡️ Ronda<span>Master</span></div>
+          ${emp.nome?`<div style="font-size:12px;font-weight:700;color:#1a1a1a;margin-top:4px;">${emp.nome}</div>`:''}
+          ${emp.doc?`<div style="font-size:11px;color:#64748B;">CPF/CNPJ: ${emp.doc}</div>`:''}
+          ${emp.tel?`<div style="font-size:11px;color:#64748B;">Tel: ${emp.tel}</div>`:''}
+          ${emp.end?`<div style="font-size:11px;color:#64748B;">${emp.end}${emp.cidade?', '+emp.cidade:''}${emp.estado?' - '+emp.estado:''}</div>`:''}
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:11px;color:#64748B;">Nº ${id.slice(-4).toUpperCase()}</div>
+          <div style="font-size:11px;color:#64748B;">${fmtData(p.inicio)}</div>
+        </div>
+      </div>
+      <div style="font-size:11px;color:#64748B;margin-top:6px;padding-top:6px;border-top:1px solid #e2e8f0;">Relatório Diário de Vigilância</div>
+    </div>
+    ${statusHtml}
+    <div class="rel-section"><h4>🏢 Contratante / Local</h4>
+      <div class="rel-row"><span class="rel-lbl">Contratante</span><span class="rel-val">${p.contratanteNome||'—'}</span></div>
+      <div class="rel-row"><span class="rel-lbl">Local</span><span class="rel-val">${p.localNome||'—'}</span></div>
+    </div>
+    <div class="rel-section"><h4>🦺 Vigilante</h4>
+      <div class="rel-row"><span class="rel-lbl">Nome</span><span class="rel-val">${p.vigilanteNome||'—'}</span></div>
+    </div>
+    <div class="rel-section"><h4>⏱️ Jornada</h4>
+      <div class="rel-row"><span class="rel-lbl">Entrada</span><span class="rel-val">${fmtH(p.inicio)}</span></div>
+      <div class="rel-row"><span class="rel-lbl">Saída</span><span class="rel-val">${p.fim?fmtH(p.fim):'Em andamento'}</span></div>
+      ${p.horaPrevistaSaida?`<div class="rel-row"><span class="rel-lbl">Saída prevista</span><span class="rel-val">${p.horaPrevistaSaida}</span></div>`:''}
+    </div>`;
+  if(fotos.length){
+    html+=`<div class="rel-section"><h4>📷 Rondas (${fotos.length} fotos)</h4>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">${fotos.map(f=>`<div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:6px;padding:5px 9px;font-size:10px;color:#1e40af;font-weight:600;">#${String(f.num).padStart(3,'0')} · ${f.hora}${f.lat?' · GPS: '+f.lat+', '+f.lng:''}</div>`).join('')}</div></div>`;
+  }
+  if(ck.veiculo){
+    html+=`<div class="rel-section"><h4>🏍️ Checklist do Veículo</h4>
+    <div class="rel-row"><span class="rel-lbl">Veículo</span><span class="rel-val">${ck.veiculo}</span></div>
+    <div class="rel-row"><span class="rel-lbl">KM Entrada</span><span class="rel-val">${ck.kmEntrada||'—'}</span></div>
+    <div class="rel-row"><span class="rel-lbl">KM Saída</span><span class="rel-val">${ck.kmSaida||'—'}</span></div>
+    <div class="rel-row"><span class="rel-lbl">Gasolina</span><span class="rel-val">${ck.gasolina}</span></div>
+    <div class="rel-row"><span class="rel-lbl">Óleo</span><span class="rel-val">${ck.oleo}</span></div>
+    ${eqHtml}
+    ${ck.obs?`<div class="rel-row"><span class="rel-lbl">Obs.</span><span class="rel-val">${ck.obs}</span></div>`:''}
+    </div>`;
+  }
+  if(entregas.length){
+    html+=`<div class="rel-section"><h4>📦 Entregas (${entregas.length})</h4>
+    ${entregas.map(e=>`<div class="rel-row"><span class="rel-lbl">${e.empresa} · ${e.entregador}</span><span class="rel-val">${e.placa} · ${e.destino} · ${e.hora}</span></div>`).join('')}</div>`;
+  }
+  if(visitantes.length){
+    html+=`<div class="rel-section"><h4>🚗 Visitantes (${visitantes.length})</h4>
+    ${visitantes.map(v=>`<div class="rel-row"><span class="rel-lbl">${v.visitante}</span><span class="rel-val">${v.placa} · ${v.destino} · ${v.hora}${v.horaSaida?' → '+v.horaSaida:''}</span></div>`).join('')}</div>`;
+  }
+  html+=`<div style="border-top:1px solid #e2e8f0;padding-top:10px;text-align:center;font-size:10px;color:#94A3B8;margin-top:10px;">RondaMaster · Gerado automaticamente · ID: ${id}</div></div>`;
+  document.getElementById('relatorio-conteudo').innerHTML=html;abrirModal('modal-relatorio');
+}
+
+// ═══════════════════════════════════════════
+// MODAIS
+// ═══════════════════════════════════════════
+function limparLancamentos(){
+  if(!confirm('⚠️ Apagar TODOS os lançamentos financeiros? Esta ação não pode ser desfeita.'))return;
+  DB.set('financeiro',[]);renderFinanceiro();renderRecebimentos();renderDiarias();
+  toast('🗑️ Lançamentos apagados.');
+}
+function limparVigilantes(){
+  if(!confirm('⚠️ Apagar TODOS os vigilantes? Os logins também serão removidos.'))return;
+  const us=DB.get('usuarios').filter(u=>u.perfil!=='vigilante');
+  DB.set('usuarios',us);DB.set('vigilantes',[]);renderVigilantes();
+  toast('🗑️ Vigilantes apagados.');
+}
+function limparContratantes(){
+  if(!confirm('⚠️ Apagar TODOS os contratantes e locais?'))return;
+  DB.set('contratantes',[]);renderContratantes();popularLocais();
+  toast('🗑️ Contratantes apagados.');
+}
+function limparRelatorios(){
+  if(!confirm('⚠️ Apagar TODOS os relatórios e plantões encerrados?'))return;
+  DB.set('plantoes',DB.get('plantoes').filter(p=>!p.fim));renderRelatoriosAdmin();
+  toast('🗑️ Relatórios apagados.');
+}
+function limparEscala(){
+  if(!confirm('⚠️ Apagar TODA a escala do mês atual?'))return;
+  const ano=escalaMes.getFullYear(),mes=escalaMes.getMonth();
+  DB.set('escala',DB.get('escala').filter(e=>{const d=new Date(e.data+'T12:00');return!(d.getFullYear()===ano&&d.getMonth()===mes);}));
+  renderEscala();fecharListaDia();toast('🗑️ Escala do mês apagada.');
+}
+// EMPRESA
+function salvarEmpresa(){
+  const emp={
+    nome:document.getElementById('emp-nome').value.trim(),
+    doc:document.getElementById('emp-doc').value.trim(),
+    tel:document.getElementById('emp-tel').value.trim(),
+    end:document.getElementById('emp-end').value.trim(),
+    cidade:document.getElementById('emp-cidade').value.trim(),
+    estado:document.getElementById('emp-estado').value.trim().toUpperCase(),
+    email:document.getElementById('emp-email').value.trim()
+  };
+  localStorage.setItem('rm_empresa',JSON.stringify(emp));
+  toast('✅ Dados da empresa salvos!');
+}
+function carregarEmpresa(){
+  try{
+    const emp=JSON.parse(localStorage.getItem('rm_empresa')||'{}');
+    if(emp.nome)document.getElementById('emp-nome').value=emp.nome;
+    if(emp.doc)document.getElementById('emp-doc').value=emp.doc;
+    if(emp.tel)document.getElementById('emp-tel').value=emp.tel;
+    if(emp.end)document.getElementById('emp-end').value=emp.end;
+    if(emp.cidade)document.getElementById('emp-cidade').value=emp.cidade;
+    if(emp.estado)document.getElementById('emp-estado').value=emp.estado;
+    if(emp.email)document.getElementById('emp-email').value=emp.email;
+  }catch(e){}
+}
+// EQUIPAMENTOS NA CONFIG
+function renderEquipConfig(){
+  const equips=DB.get('equipamentos');
+  const div=document.getElementById('lista-equip-config');
+  if(!div)return;
+  if(!equips.length){div.innerHTML='<div class="empty-state" style="padding:20px"><div class="es-icon">🔧</div><div>Nenhum equipamento cadastrado</div></div>';return;}
+  div.innerHTML=equips.map(eq=>`
+    <div class="list-item">
+      <div class="li-main"><div class="li-title">${eq.nome}</div></div>
+      <div class="li-actions">
+        <button class="btn btn-outline btn-sm btn-icon" onclick="editarEquip('${eq.id}')">✏️</button>
+        <button class="btn btn-red btn-sm btn-icon" onclick="excluirEquip('${eq.id}')">🗑️</button>
+      </div>
+    </div>`).join('');
+}
+function abrirModal(id){document.getElementById(id).classList.remove('hidden');}
+function fecharModal(id){document.getElementById(id).classList.add('hidden');}
+document.querySelectorAll('.modal-overlay').forEach(el=>{el.addEventListener('click',e=>{if(e.target===el)el.classList.add('hidden');});});
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2600);}
+
+initDemo();
+</script>
+</body>
+</html>
