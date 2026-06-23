@@ -172,6 +172,15 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var
 </style>
 </head>
 <body>
+<!-- CARREGANDO -->
+<div id="loading-screen" style="position:fixed;inset:0;background:linear-gradient(160deg,#0B1D3A,#1E293B);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:999;">
+  <div style="font-size:48px;margin-bottom:16px;">🛡️</div>
+  <div style="font-size:22px;font-weight:900;color:#fff;margin-bottom:8px;">Ronda<span style="color:#2E8BF7">Master</span></div>
+  <div style="color:#64748B;font-size:14px;margin-bottom:28px;">Conectando ao banco de dados...</div>
+  <div style="width:48px;height:48px;border:4px solid #2D3F55;border-top-color:#2E8BF7;border-radius:50%;animation:spin .8s linear infinite;"></div>
+</div>
+<style>@keyframes spin{to{transform:rotate(360deg);}}</style>
+
 <!-- LOGIN -->
 <div id="login-screen">
   <div class="login-logo">🛡️ Ronda<span>Master</span></div>
@@ -676,44 +685,89 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var
   </div>
 </div>
 
-<script>
+<script type="module">
 // ═══════════════════════════════════════════
-// DB
+// FIREBASE CONFIG
 // ═══════════════════════════════════════════
+import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import{getFirestore,doc,getDoc,setDoc,collection,getDocs,deleteDoc,query,where}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const firebaseConfig={
+  apiKey:"AIzaSyBz-pYpbL0wM7iWJHmwgIs3JA-fIUeYy0Y",
+  authDomain:"rondamaster-57b7e.firebaseapp.com",
+  projectId:"rondamaster-57b7e",
+  storageBucket:"rondamaster-57b7e.firebasestorage.app",
+  messagingSenderId:"646242137421",
+  appId:"1:646242137421:web:c94e6f018a0ed1d3b8f304"
+};
+const fireApp=initializeApp(firebaseConfig);
+const db=getFirestore(fireApp);
+
+// ═══════════════════════════════════════════
+// DB — cache local + sincronização Firebase
+// ═══════════════════════════════════════════
+const CACHE={};
+
 const DB={
-  get(k){try{return JSON.parse(localStorage.getItem('rm_'+k))||[];}catch{return[];}},
-  set(k,v){localStorage.setItem('rm_'+k,JSON.stringify(v));},
+  get(k){
+    if(CACHE[k]!==undefined)return CACHE[k];
+    try{const v=localStorage.getItem('rm_'+k);return v?JSON.parse(v):[];}catch{return[];}
+  },
+  set(k,v){
+    CACHE[k]=v;
+    localStorage.setItem('rm_'+k,JSON.stringify(v));
+    // Salvar no Firebase de forma assíncrona (não bloqueia a UI)
+    setDoc(doc(db,'rondamaster',k),{dados:JSON.stringify(v)}).catch(()=>{});
+  },
+  async load(k){
+    try{
+      const snap=await getDoc(doc(db,'rondamaster',k));
+      if(snap.exists()){
+        const v=JSON.parse(snap.data().dados||'[]');
+        CACHE[k]=v;
+        localStorage.setItem('rm_'+k,JSON.stringify(v));
+        return v;
+      }
+    }catch(e){}
+    return DB.get(k);
+  },
+  async loadAll(){
+    mostrarCarregando(true);
+    const cols=['usuarios','vigilantes','contratantes','escala','plantoes','financeiro','equipamentos'];
+    await Promise.all(cols.map(k=>DB.load(k)));
+    // Empresa
+    try{
+      const snap=await getDoc(doc(db,'rondamaster','empresa'));
+      if(snap.exists()) localStorage.setItem('rm_empresa',snap.data().json||'{}');
+    }catch(e){}
+    mostrarCarregando(false);
+  }
+};
+
+// Sobreescrever salvarEmpresa para Firebase também
+window._salvarEmpresaExtra=function(json){
+  setDoc(doc(db,'rondamaster','empresa'),{json}).catch(()=>{});
 };
 
 // ═══════════════════════════════════════════
-// DEMO
+// INIT — carregar dados do Firebase
 // ═══════════════════════════════════════════
-function initDemo(){
-  if(localStorage.getItem('rm_v5'))return;
-  DB.set('usuarios',[
-    {id:'u1',nome:'Administrador',email:'admin@rm.com',senha:'123456',perfil:'admin'},
-    {id:'u2',nome:'João da Silva',email:'joao@rm.com',senha:'123456',perfil:'vigilante'},
-    {id:'u3',nome:'Carlos Souza',email:'carlos@rm.com',senha:'123456',perfil:'vigilante'}
-  ]);
-  DB.set('vigilantes',[
-    {id:'u2',nome:'João da Silva',email:'joao@rm.com',senha:'123456',cpf:'111.222.333-44',pix:'joao@rm.com',banco:'Nubank',diaria:120,horas:8,ativo:true},
-    {id:'u3',nome:'Carlos Souza',email:'carlos@rm.com',senha:'123456',cpf:'555.666.777-88',pix:'carlos@rm.com',banco:'Bradesco',diaria:110,horas:8,ativo:true}
-  ]);
-  DB.set('contratantes',[{id:'c1',nome:'Condomínio Verde',contato:'(31) 99999-1111',locais:'Bloco A — Rua das Flores, 100\nBloco B — Av. Central, 200',valor:3000}]);
-  DB.set('equipamentos',[
-    {id:'eq1',nome:'🔦 Lanterna'},
-    {id:'eq2',nome:'🔧 Ferramentas'},
-    {id:'eq3',nome:'📡 Rádio / Comunicação'},
-    {id:'eq4',nome:'🦺 Colete / EPI'}
-  ]);
-  const hoje=new Date();
-  const esc=[];
-  for(let i=0;i<6;i++){
-    const d=new Date(hoje);d.setDate(d.getDate()+i);
-    esc.push({id:'e'+i,tipo:'plantao',vigilanteId:'u2',vigilanteNome:'João da Silva',localNome:'Bloco A — Rua das Flores, 100',contratanteNome:'Condomínio Verde',data:d.toISOString().split('T')[0],entrada:'20:00',saida:'04:00',status:'agendado',substituto:null,substitutoId:null,motivo:null});
+async function initDemo(){
+  await DB.loadAll();
+  // Se não há usuários ainda, criar admin padrão
+  const usuarios=DB.get('usuarios');
+  if(!usuarios.length){
+    DB.set('usuarios',[
+      {id:'u1',nome:'Administrador',email:'admin@rm.com',senha:'123456',perfil:'admin'}
+    ]);
+    DB.set('equipamentos',[
+      {id:'eq1',nome:'🔦 Lanterna'},
+      {id:'eq2',nome:'🔧 Ferramentas'},
+      {id:'eq3',nome:'📡 Rádio / Comunicação'},
+      {id:'eq4',nome:'🦺 Colete / EPI'}
+    ]);
+    toast('👋 Bem-vindo ao RondaMaster! Dados sincronizados com Firebase.');
   }
-  DB.set('escala',esc);
-  localStorage.setItem('rm_v5','1');
 }
 
 // ═══════════════════════════════════════════
@@ -1799,7 +1853,10 @@ function salvarEmpresa(){
     estado:document.getElementById('emp-estado').value.trim().toUpperCase(),
     email:document.getElementById('emp-email').value.trim()
   };
-  localStorage.setItem('rm_empresa',JSON.stringify(emp));
+  const json=JSON.stringify(emp);
+  localStorage.setItem('rm_empresa',json);
+  // Sincronizar com Firebase
+  if(window._salvarEmpresaExtra) window._salvarEmpresaExtra(json);
   toast('✅ Dados da empresa salvos!');
 }
 function carregarEmpresa(){
@@ -1833,6 +1890,11 @@ function abrirModal(id){document.getElementById(id).classList.remove('hidden');}
 function fecharModal(id){document.getElementById(id).classList.add('hidden');}
 document.querySelectorAll('.modal-overlay').forEach(el=>{el.addEventListener('click',e=>{if(e.target===el)el.classList.add('hidden');});});
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2600);}
+
+function mostrarCarregando(sim){
+  const el=document.getElementById('loading-screen');
+  if(el) el.style.display=sim?'flex':'none';
+}
 
 initDemo();
 </script>
