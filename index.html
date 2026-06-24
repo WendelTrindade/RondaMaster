@@ -4,6 +4,45 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>RondaMaster</title>
+<!-- Firebase compat (funciona sem type=module) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+(function(){
+  try{
+    const cfg={
+      apiKey:"AIzaSyBz-pYpbL0wM7iWJHmwgIs3JA-fIUeYy0Y",
+      authDomain:"rondamaster-57b7e.firebaseapp.com",
+      projectId:"rondamaster-57b7e",
+      storageBucket:"rondamaster-57b7e.firebasestorage.app",
+      messagingSenderId:"646242137421",
+      appId:"1:646242137421:web:c94e6f018a0ed1d3b8f304"
+    };
+    firebase.initializeApp(cfg);
+    const db=firebase.firestore();
+    // Expor funções de acesso ao Firebase
+    window._fbSet=function(k,v){
+      db.collection('rondamaster').doc(k).set({dados:JSON.stringify(v)}).catch(()=>{});
+    };
+    window._fbGet=async function(k){
+      const snap=await db.collection('rondamaster').doc(k).get();
+      if(snap.exists){const d=snap.data();return d&&d.dados?JSON.parse(d.dados):null;}
+      return null;
+    };
+    window._fbGetEmpresa=async function(){
+      const snap=await db.collection('rondamaster').doc('empresa').get();
+      if(snap.exists){const d=snap.data();return d&&d.json?d.json:null;}
+      return null;
+    };
+    window._salvarEmpresaExtra=function(json){
+      db.collection('rondamaster').doc('empresa').set({json}).catch(()=>{});
+    };
+    console.log('✅ Firebase conectado!');
+  }catch(e){
+    console.warn('⚠️ Firebase não disponível, usando modo offline:',e.message);
+  }
+})();
+</script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 :root{
@@ -685,29 +724,11 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var
   </div>
 </div>
 
-<script type="module">
+<script>
 // ═══════════════════════════════════════════
-// FIREBASE CONFIG
-// ═══════════════════════════════════════════
-import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import{getFirestore,doc,getDoc,setDoc,collection,getDocs,deleteDoc,query,where}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-
-const firebaseConfig={
-  apiKey:"AIzaSyBz-pYpbL0wM7iWJHmwgIs3JA-fIUeYy0Y",
-  authDomain:"rondamaster-57b7e.firebaseapp.com",
-  projectId:"rondamaster-57b7e",
-  storageBucket:"rondamaster-57b7e.firebasestorage.app",
-  messagingSenderId:"646242137421",
-  appId:"1:646242137421:web:c94e6f018a0ed1d3b8f304"
-};
-const fireApp=initializeApp(firebaseConfig);
-const db=getFirestore(fireApp);
-
-// ═══════════════════════════════════════════
-// DB — cache local + sincronização Firebase
+// DB LOCAL (funciona offline e como cache)
 // ═══════════════════════════════════════════
 const CACHE={};
-
 const DB={
   get(k){
     if(CACHE[k]!==undefined)return CACHE[k];
@@ -716,57 +737,41 @@ const DB={
   set(k,v){
     CACHE[k]=v;
     localStorage.setItem('rm_'+k,JSON.stringify(v));
-    // Salvar no Firebase de forma assíncrona (não bloqueia a UI)
-    setDoc(doc(db,'rondamaster',k),{dados:JSON.stringify(v)}).catch(()=>{});
+    // Salvar no Firebase se disponível
+    if(window._fbSet) window._fbSet(k,v);
   },
   async load(k){
-    try{
-      const snap=await getDoc(doc(db,'rondamaster',k));
-      if(snap.exists()){
-        const v=JSON.parse(snap.data().dados||'[]');
-        CACHE[k]=v;
-        localStorage.setItem('rm_'+k,JSON.stringify(v));
-        return v;
-      }
-    }catch(e){}
+    if(window._fbGet){
+      try{
+        const v=await window._fbGet(k);
+        if(v!==null){CACHE[k]=v;localStorage.setItem('rm_'+k,JSON.stringify(v));return v;}
+      }catch(e){}
+    }
     return DB.get(k);
   },
   async loadAll(){
     mostrarCarregando(true);
     const cols=['usuarios','vigilantes','contratantes','escala','plantoes','financeiro','equipamentos'];
     await Promise.all(cols.map(k=>DB.load(k)));
-    // Empresa
-    try{
-      const snap=await getDoc(doc(db,'rondamaster','empresa'));
-      if(snap.exists()) localStorage.setItem('rm_empresa',snap.data().json||'{}');
-    }catch(e){}
+    if(window._fbGetEmpresa){
+      try{const j=await window._fbGetEmpresa();if(j)localStorage.setItem('rm_empresa',j);}catch(e){}
+    }
     mostrarCarregando(false);
   }
 };
 
-// Sobreescrever salvarEmpresa para Firebase também
-window._salvarEmpresaExtra=function(json){
-  setDoc(doc(db,'rondamaster','empresa'),{json}).catch(()=>{});
-};
-
 // ═══════════════════════════════════════════
-// INIT — carregar dados do Firebase
+// INIT
 // ═══════════════════════════════════════════
 async function initDemo(){
   await DB.loadAll();
-  // Se não há usuários ainda, criar admin padrão
   const usuarios=DB.get('usuarios');
   if(!usuarios.length){
-    DB.set('usuarios',[
-      {id:'u1',nome:'Administrador',email:'admin@rm.com',senha:'123456',perfil:'admin'}
-    ]);
+    DB.set('usuarios',[{id:'u1',nome:'Administrador',email:'admin@rm.com',senha:'123456',perfil:'admin'}]);
     DB.set('equipamentos',[
-      {id:'eq1',nome:'🔦 Lanterna'},
-      {id:'eq2',nome:'🔧 Ferramentas'},
-      {id:'eq3',nome:'📡 Rádio / Comunicação'},
-      {id:'eq4',nome:'🦺 Colete / EPI'}
+      {id:'eq1',nome:'🔦 Lanterna'},{id:'eq2',nome:'🔧 Ferramentas'},
+      {id:'eq3',nome:'📡 Rádio / Comunicação'},{id:'eq4',nome:'🦺 Colete / EPI'}
     ]);
-    toast('👋 Bem-vindo ao RondaMaster! Dados sincronizados com Firebase.');
   }
 }
 
@@ -789,7 +794,12 @@ function fmtH(iso){if(!iso)return'—';const d=new Date(iso);return pad(d.getHou
 function fmtData(iso){if(!iso)return'—';const d=new Date(iso);return pad(d.getDate())+'/'+pad(d.getMonth()+1)+'/'+d.getFullYear();}
 function fmtDataStr(s){if(!s)return'—';const[y,m,d]=s.split('-');return`${d}/${m}/${y}`;}
 function fmtMoeda(v){return'R$ '+Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
-function parseMoeda(s){return parseFloat((s||'0').replace(/[R$\s.]/g,'').replace(',','.'))||0;}
+function parseMoeda(s){
+  if(!s)return 0;
+  // Remove R$, espaços, e pontos de milhar, substitui vírgula por ponto decimal
+  const limpo=String(s).replace(/R\$\s*/g,'').replace(/\./g,'').replace(',','.').trim();
+  return parseFloat(limpo)||0;
+}
 function mascaraMoeda(el){
   let v=el.value.replace(/\D/g,'');
   if(!v){el.value='';return;}
@@ -1472,7 +1482,25 @@ function popularLocais(){
 }
 function verificarPlantaoAtivo(){
   const p=DB.get('plantoes').find(x=>x.vigilanteId===U.id&&!x.fim);
-  if(p){plantaoAtivo=p;fotosP=p.fotos||[];portariaP=p.portaria||[];ckState=p.ckState||{};mostrarAtivo();}
+  if(p){
+    plantaoAtivo=p;
+    // Recuperar fotos do rascunho salvo localmente (caso app tenha fechado)
+    try{
+      const rascunho=localStorage.getItem('rm_fotos_rascunho_'+p.id);
+      if(rascunho){
+        const fotosRascunho=JSON.parse(rascunho);
+        // Usar o que tiver mais fotos (rascunho local ou o que estava no plantão)
+        fotosP = fotosRascunho.length >= (p.fotos||[]).length ? fotosRascunho : (p.fotos||[]);
+      } else {
+        fotosP=p.fotos||[];
+      }
+    }catch(e){fotosP=p.fotos||[];}
+    portariaP=p.portaria||[];
+    ckState=p.ckState||{};
+    mostrarAtivo();
+    iniciarRelogioSaida();
+    if(fotosP.length) toast(`📷 ${fotosP.length} foto(s) recuperada(s) do plantão anterior.`);
+  }
 }
 function iniciarPlantao(){
   const sel=document.getElementById('sel-local-plantao');
@@ -1553,6 +1581,8 @@ function finalizarPlantao(antecipado,motivo){
   plantaoAtivo.fim=new Date().toISOString();plantaoAtivo.saidaAntecipada=antecipado;plantaoAtivo.motivoSaida=motivo;
   plantaoAtivo.fotos=fotosP;plantaoAtivo.portaria=portariaP;plantaoAtivo.ckState=ckState;
   DB.set('plantoes',DB.get('plantoes').map(p=>p.id===plantaoAtivo.id?plantaoAtivo:p));
+  // Limpar rascunho local de fotos após finalizar
+  try{localStorage.removeItem('rm_fotos_rascunho_'+plantaoAtivo.id);}catch(e){}
   clearInterval(timerHora);plantaoAtivo=null;fotosP=[];portariaP=[];ckState={};checklistSalvo=false;
   document.getElementById('plantao-ativo-view').classList.add('hidden');
   document.getElementById('plantao-sem-turno').classList.remove('hidden');
@@ -1577,8 +1607,17 @@ function registrarFoto(input){
   };
   reader.readAsDataURL(input.files[0]);input.value='';
 }
-function salvarFoto(foto){fotosP.push(foto);atualizarStorage();renderFotos();toast(`📷 Foto #${foto.num} registrada!${foto.lat?' GPS ✓':''}`);}
-function renderFotos(){
+function salvarFoto(foto){
+  fotosP.push(foto);
+  // Persistir fotos no localStorage imediatamente (proteção contra fechamento do app)
+  try{
+    const plantaoId=plantaoAtivo?plantaoAtivo.id:'rascunho';
+    localStorage.setItem('rm_fotos_rascunho_'+plantaoId, JSON.stringify(fotosP));
+  }catch(e){}
+  atualizarStorage();
+  renderFotos();
+  toast(`📷 Foto #${foto.num} registrada!${foto.lat?' GPS ✓':''}`);
+}function renderFotos(){
   document.getElementById('foto-count').textContent=fotosP.length+' foto'+(fotosP.length!==1?'s':'');
   document.getElementById('fotos-grid').innerHTML=fotosP.map(f=>`
     <div class="foto-thumb">
