@@ -243,6 +243,9 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var
     <div class="field"><label>Senha</label><input type="password" id="login-senha" placeholder="••••••••"></div>
     <button class="btn btn-primary" onclick="fazerLogin()">🔐 Entrar</button>
     <div class="text-center mt-3 text-xs text-muted">Admin: admin@rm.com / 123456<br>Vigilante: joao@rm.com / 123456</div>
+    <div id="aviso-plantao-aberto" class="hidden" style="margin-top:12px;background:rgba(16,185,129,.15);border:1.5px solid #10B981;border-radius:8px;padding:10px;font-size:12px;color:#10B981;text-align:center;">
+      🛡️ <strong>Você tem um plantão em andamento!</strong><br>Faça login para retomar de onde parou.
+    </div>
   </div>
 </div>
 
@@ -881,39 +884,89 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var
 const CACHE={};
 const DB={
   get(k){
+    // Sempre priorizar CACHE (já populado do localStorage ou Firebase)
     if(CACHE[k]!==undefined)return CACHE[k];
-    try{const v=localStorage.getItem('rm_'+k);return v?JSON.parse(v):[];}catch{return[];}
+    try{
+      const v=localStorage.getItem('rm_'+k);
+      const parsed=v?JSON.parse(v):[];
+      CACHE[k]=parsed;
+      return parsed;
+    }catch{return[];}
   },
   set(k,v){
     CACHE[k]=v;
-    try{localStorage.setItem('rm_'+k,JSON.stringify(v));}catch(e){}
-    // Firebase: salvar de forma assíncrona sem bloquear UI
+    // Salvar no localStorage IMEDIATAMENTE (nunca falha)
+    try{localStorage.setItem('rm_'+k,JSON.stringify(v));}catch(e){
+      console.warn('localStorage cheio, limpando fotos antigas...');
+      // Se localStorage cheio, tentar limpar rascunhos antigos
+      Object.keys(localStorage).filter(k=>k.startsWith('rm_fotos_rascunho_')).forEach(k=>localStorage.removeItem(k));
+      try{localStorage.setItem('rm_'+k,JSON.stringify(v));}catch(e2){}
+    }
+    // Firebase: salvar de forma assíncrona (não bloqueia UI, falha silenciosa)
     if(window._fbSet){
       try{window._fbSet(k,v);}catch(e){}
     }
   },
   async load(k){
+    // 1. Carregar localStorage primeiro (imediato, sempre funciona)
+    try{
+      const v=localStorage.getItem('rm_'+k);
+      if(v){const parsed=JSON.parse(v);CACHE[k]=parsed;}
+    }catch(e){}
+    // 2. Tentar Firebase em paralelo (atualiza se tiver dado mais recente)
     if(window._fbGet){
       try{
         const v=await Promise.race([
           window._fbGet(k),
-          new Promise(r=>setTimeout(()=>r(null),5000)) // timeout 5s
+          new Promise(r=>setTimeout(()=>r(null),4000))
         ]);
-        if(v!==null){CACHE[k]=v;localStorage.setItem('rm_'+k,JSON.stringify(v));return v;}
-      }catch(e){console.warn('Firebase load erro ('+k+'):',e.message);}
+        if(v!==null){
+          // Comparar: usar Firebase só se tiver mais dados que o local
+          const local=CACHE[k]||[];
+          const usarFB=Array.isArray(v)?(v.length>=local.length):true;
+          if(usarFB){
+            CACHE[k]=v;
+            localStorage.setItem('rm_'+k,JSON.stringify(v));
+          }
+        }
+      }catch(e){console.warn('Firebase ('+k+') indisponível, usando local.');}
     }
-    return DB.get(k);
+    return CACHE[k]||[];
   },
   async loadAll(){
     _mostrarLoading(true);
-    try{
-      const cols=['usuarios','vigilantes','contratantes','escala','plantoes','financeiro','equipamentos','itens_veiculo'];
-      await Promise.all(cols.map(k=>DB.load(k)));
+    // Fase 1: carregar tudo do localStorage imediatamente
+    const cols=['usuarios','vigilantes','contratantes','escala','plantoes','financeiro','equipamentos','itens_veiculo'];
+    cols.forEach(k=>{
+      try{
+        const v=localStorage.getItem('rm_'+k);
+        if(v)CACHE[k]=JSON.parse(v);
+      }catch(e){}
+    });
+    // Esconder loading após localStorage (rápido)
+    _mostrarLoading(false);
+    // Fase 2: tentar sincronizar com Firebase em segundo plano
+    if(window._fbGet){
+      cols.forEach(async k=>{
+        try{
+          const v=await Promise.race([
+            window._fbGet(k),
+            new Promise(r=>setTimeout(()=>r(null),4000))
+          ]);
+          if(v!==null){
+            const local=CACHE[k]||[];
+            const usarFB=Array.isArray(v)?(v.length>=local.length):true;
+            if(usarFB){
+              CACHE[k]=v;
+              localStorage.setItem('rm_'+k,JSON.stringify(v));
+            }
+          }
+        }catch(e){}
+      });
       if(window._fbGetEmpresa){
         try{const j=await window._fbGetEmpresa();if(j)localStorage.setItem('rm_empresa',j);}catch(e){}
       }
-    }catch(e){console.warn('loadAll erro:',e);}
-    _mostrarLoading(false);
+    }
   }
 };
 function _mostrarLoading(sim){
@@ -945,6 +998,13 @@ async function initDemo(){
     console.log('✅ Dados iniciais criados');
   }
   console.log('✅ Sistema iniciado. Usuários:',DB.get('usuarios').length);
+  // Verificar se há plantão aberto (para mostrar aviso na tela de login)
+  const plantoes=DB.get('plantoes');
+  const aberto=plantoes.find(p=>!p.fim);
+  if(aberto){
+    const el=document.getElementById('aviso-plantao-aberto');
+    if(el)el.classList.remove('hidden');
+  }
 }
 
 // ═══════════════════════════════════════════
@@ -1006,6 +1066,14 @@ function agruparPorData(lista,campoData){
 function fazerLogin(){
   const email=document.getElementById('login-email').value.trim();
   const senha=document.getElementById('login-senha').value;
+
+  // Garantir que os dados do localStorage estão no CACHE antes de validar
+  ['usuarios','vigilantes','contratantes','escala','plantoes','financeiro','equipamentos','itens_veiculo'].forEach(k=>{
+    if(CACHE[k]===undefined){
+      try{const v=localStorage.getItem('rm_'+k);if(v)CACHE[k]=JSON.parse(v);}catch(e){}
+    }
+  });
+
   const u=DB.get('usuarios').find(x=>x.email===email&&x.senha===senha);
   if(!u){toast('❌ E-mail ou senha incorretos');return;}
   U=u;
@@ -1015,9 +1083,9 @@ function fazerLogin(){
   const perfilLabel={admin:'👔 Admin',gerente:'📊 Gerente',vigilante:'🦺 Vigilante'}[u.perfil]||u.perfil;
   document.getElementById('tb-perfil').textContent=perfilLabel;
   montarNav();
+
   if(u.perfil==='admin') irPara('screen-dashboard');
   else if(u.perfil==='gerente'){
-    // Redirecionar para primeira tela que o gerente tem acesso (nunca financeiro por padrão)
     const perms=u.perms||{};
     if(perms.dashboard!==false) irPara('screen-dashboard');
     else if(perms.escala!==false) irPara('screen-escala');
@@ -1027,9 +1095,28 @@ function fazerLogin(){
     else irPara('screen-relatorios');
   }
   else{
+    // VIGILANTE
     document.getElementById('plantao-saudacao').textContent='Olá, '+u.nome.split(' ')[0]+'!';
-    popularLocais();verificarPlantaoAtivo();iniciarRelogioEntrada();
-    irPara('screen-plantao');verificarEscalaVigilante();
+    popularLocais();
+    iniciarRelogioEntrada();
+    irPara('screen-plantao');
+
+    // Verificar plantão aberto DIRETAMENTE do localStorage (sem depender do CACHE)
+    let plantaoAberto=null;
+    try{
+      const plantoes=JSON.parse(localStorage.getItem('rm_plantoes')||'[]');
+      plantaoAberto=plantoes.find(p=>p.vigilanteId===u.id&&!p.fim)||null;
+      // Atualizar CACHE com dados frescos
+      if(plantoes.length) CACHE['plantoes']=plantoes;
+    }catch(e){}
+
+    if(plantaoAberto){
+      // Retomar plantão sem pedir foto novamente
+      verificarPlantaoAtivo();
+      setTimeout(()=>toast('🔄 Plantão retomado! Bem-vindo de volta, '+u.nome.split(' ')[0]+'.'),400);
+    } else {
+      verificarEscalaVigilante();
+    }
   }
 }
 function sair(){
@@ -1741,26 +1828,55 @@ function popularLocais(){
   sel.innerHTML=opts;
 }
 function verificarPlantaoAtivo(){
-  const p=DB.get('plantoes').find(x=>x.vigilanteId===U.id&&!x.fim);
-  if(p){
-    plantaoAtivo=p;
-    // Recuperar fotos do rascunho salvo localmente (caso app tenha fechado)
-    try{
-      const rascunho=localStorage.getItem('rm_fotos_rascunho_'+p.id);
-      if(rascunho){
-        const fotosRascunho=JSON.parse(rascunho);
-        // Usar o que tiver mais fotos (rascunho local ou o que estava no plantão)
-        fotosP = fotosRascunho.length >= (p.fotos||[]).length ? fotosRascunho : (p.fotos||[]);
-      } else {
-        fotosP=p.fotos||[];
-      }
-    }catch(e){fotosP=p.fotos||[];}
-    portariaP=p.portaria||[];
-    ckState=p.ckState||{};
-    mostrarAtivo();
-    iniciarRelogioSaida();
-    if(fotosP.length) toast(`📷 ${fotosP.length} foto(s) recuperada(s) do plantão anterior.`);
-  }
+  // Ler SEMPRE direto do localStorage — garante dados frescos mesmo se CACHE estiver vazio
+  let plantoes=[];
+  try{
+    const raw=localStorage.getItem('rm_plantoes');
+    if(raw) plantoes=JSON.parse(raw);
+    CACHE['plantoes']=plantoes;
+  }catch(e){plantoes=[];}
+
+  const p=plantoes.find(x=>x.vigilanteId===U.id&&!x.fim);
+  if(!p) return;
+
+  plantaoAtivo=p;
+
+  // Recuperar fotos (rascunho local ou plantão, o maior)
+  try{
+    const rascunho=localStorage.getItem('rm_fotos_rascunho_'+p.id);
+    if(rascunho){
+      const fr=JSON.parse(rascunho);
+      fotosP=fr.length>=(p.fotos||[]).length?fr:(p.fotos||[]);
+    } else {
+      fotosP=p.fotos||[];
+    }
+  }catch(e){fotosP=p.fotos||[];}
+
+  portariaP=p.portaria||[];
+  ckState=p.ckState||{};
+  rondasAtivas=p.rondas||[];
+  fotosCk=p.fotosCk||[];
+  checklistSalvo=p.checklistSalvo||false;
+
+  // Recuperar ronda em andamento da sessão
+  try{
+    const sessao=JSON.parse(localStorage.getItem('rm_sessao_ativa')||'{}');
+    if(sessao.plantaoId===p.id){
+      rondaAtualIdx=sessao.rondasAtivasIdx;
+      if(sessao.fotosCk&&sessao.fotosCk.length>fotosCk.length) fotosCk=sessao.fotosCk;
+    }
+  }catch(e){}
+
+  mostrarAtivo();
+  iniciarRelogioSaida();
+
+  // Feedback
+  const msgs=[];
+  if(fotosP.length) msgs.push(fotosP.length+' foto(s)');
+  if(portariaP.length) msgs.push(portariaP.length+' portaria');
+  if(rondasAtivas.filter(r=>r.fim).length) msgs.push(rondasAtivas.filter(r=>r.fim).length+' ronda(s)');
+  if(rondaAtualIdx!==null) msgs.push('ronda em andamento');
+  setTimeout(()=>toast(msgs.length?('✅ Retomando: '+msgs.join(', ')+' recuperados!'):'✅ Plantão retomado!'),300);
 }
 function iniciarPlantao(){
   const sel=document.getElementById('sel-local-plantao');
@@ -1827,8 +1943,21 @@ function mostrarAtivo(){
     renderChecklistSalvo(plantaoAtivo.checklist);
   }
   renderItensVeiculo();renderEquipamentosChecklist();renderFotos();renderPortariaPlantao();
-  // Restaurar estado visual do checklist do veículo
-  setTimeout(restaurarEstadoChecklistVisual, 100);
+  // Restaurar estado visual do checklist e rondas
+  setTimeout(()=>{
+    restaurarEstadoChecklistVisual();
+    atualizarContadorRondas();
+    // Se havia ronda em andamento, mostrar painel de ronda ativa
+    if(rondaAtualIdx!==null && rondasAtivas[rondaAtualIdx] && !rondasAtivas[rondaAtualIdx].fim){
+      const r=rondasAtivas[rondaAtualIdx];
+      document.getElementById('btn-iniciar-ronda').classList.add('hidden');
+      document.getElementById('ronda-ativa-info').classList.remove('hidden');
+      document.getElementById('ronda-num-label').textContent='Ronda #'+r.num;
+      document.getElementById('ronda-inicio-label').textContent='Iniciada às '+fmtH(r.inicio);
+    }
+    // Restaurar fotos do checklist
+    renderFotosCk();
+  }, 150);
 }
 function iniciarRelogioEntrada(){
   setInterval(()=>{const el=document.getElementById('hora-atual-entrada');if(el)el.textContent='Agora: '+fmtH(new Date().toISOString());},1000);
@@ -1912,9 +2041,14 @@ function finalizarPlantao(antecipado,motivo){
   plantaoAtivo.fim=new Date().toISOString();plantaoAtivo.saidaAntecipada=antecipado;plantaoAtivo.motivoSaida=motivo;
   plantaoAtivo.fotos=fotosP;plantaoAtivo.portaria=portariaP;plantaoAtivo.ckState=ckState;
   DB.set('plantoes',DB.get('plantoes').map(p=>p.id===plantaoAtivo.id?plantaoAtivo:p));
-  // Limpar rascunho local de fotos após finalizar
-  try{localStorage.removeItem('rm_fotos_rascunho_'+plantaoAtivo.id);}catch(e){}
-  clearInterval(timerHora);plantaoAtivo=null;fotosP=[];portariaP=[];ckState={};checklistSalvo=false;
+  // Limpar todos os dados de sessão após finalizar
+  try{
+    localStorage.removeItem('rm_fotos_rascunho_'+plantaoAtivo.id);
+    localStorage.removeItem('rm_sessao_ativa');
+  }catch(e){}
+  clearInterval(timerHora);
+  plantaoAtivo=null;fotosP=[];portariaP=[];ckState={};
+  checklistSalvo=false;fotosCk=[];rondasAtivas=[];rondaAtualIdx=null;
   document.getElementById('plantao-ativo-view').classList.add('hidden');
   document.getElementById('plantao-sem-turno').classList.remove('hidden');
   toast(antecipado?'⚠️ Saída antecipada registrada.':'🔴 Plantão encerrado!');
@@ -2036,8 +2170,8 @@ function salvarChecklist(){
     obs:document.getElementById('ck-obs').value,
     fotosCk:[...fotosCk]
   };
-  plantaoAtivo.checklist=ck;plantaoAtivo.ckState=ckState;
-  atualizarStorage();checklistSalvo=true;
+  plantaoAtivo.checklist=ck;plantaoAtivo.ckState=ckState;plantaoAtivo.fotosCk=fotosCk;
+  checklistSalvo=true;atualizarStorage();
   document.getElementById('btn-editar-ck').style.display='';
   document.getElementById('checklist-form').classList.add('hidden');
   renderChecklistSalvo(ck);toast('✅ Checklist salvo!');
@@ -2066,8 +2200,27 @@ function renderChecklistSalvo(ck){
 }
 function atualizarStorage(){
   if(!plantaoAtivo)return;
-  plantaoAtivo.fotos=fotosP;plantaoAtivo.portaria=portariaP;plantaoAtivo.ckState=ckState;
-  DB.set('plantoes',DB.get('plantoes').map(p=>p.id===plantaoAtivo.id?plantaoAtivo:p));
+  // Sincronizar arrays em memória com o objeto do plantão
+  plantaoAtivo.fotos=fotosP;
+  plantaoAtivo.portaria=portariaP;
+  plantaoAtivo.ckState=ckState;
+  plantaoAtivo.rondas=rondasAtivas;
+  plantaoAtivo.fotosCk=fotosCk;
+  plantaoAtivo.checklistSalvo=checklistSalvo;
+  // Salvar no banco (localStorage + Firebase)
+  const plantoes=DB.get('plantoes').map(p=>p.id===plantaoAtivo.id?plantaoAtivo:p);
+  DB.set('plantoes',plantoes);
+  // Salvar estado da sessão separadamente para recuperação rápida
+  try{
+    localStorage.setItem('rm_sessao_ativa', JSON.stringify({
+      plantaoId: plantaoAtivo.id,
+      vigilanteId: U?U.id:null,
+      ckState,
+      checklistSalvo,
+      rondasAtivasIdx: rondaAtualIdx,
+      fotosCk
+    }));
+  }catch(e){}
 }
 
 // ═══════════════════════════════════════════
@@ -2616,6 +2769,7 @@ function iniciarRonda(){
   document.getElementById('ronda-ativa-info').classList.remove('hidden');
   document.getElementById('ronda-num-label').textContent='Ronda #'+nova.num;
   document.getElementById('ronda-inicio-label').textContent='Iniciada às '+fmtH(nova.inicio);
+  atualizarStorage();
   atualizarContadorRondas();
   toast('🚶 Ronda #'+nova.num+' iniciada!');
 }
