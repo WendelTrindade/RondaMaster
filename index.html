@@ -6,7 +6,7 @@
 <title>RondaMaster</title>
 <!-- html2pdf para geração de PDF sem corte -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-<!-- Firebase compat (funciona sem type=module) -->
+<!-- Firebase compat -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script>
@@ -22,26 +22,84 @@
     };
     firebase.initializeApp(cfg);
     const db=firebase.firestore();
-    // Expor funções de acesso ao Firebase
+
+    // Remove fotos base64 antes de salvar (Firestore tem limite 1MB)
+    function limparParaFB(k,v){
+      if(k==='plantoes'){
+        return v.map(p=>({...p,
+          fotos:(p.fotos||[]).map(f=>({id:f.id,num:f.num,hora:f.hora,dataHora:f.dataHora,lat:f.lat,lng:f.lng})),
+          fotoRostoEntrada:null, fotoRostoSaida:null,
+          fotosCk:(p.fotosCk||[]).map(f=>({id:f.id,hora:f.hora}))
+        }));
+      }
+      return v;
+    }
+
+    // Mescla dados do Firebase com fotos do localStorage local
+    function mesclar(k,fb,local){
+      if(k==='plantoes'&&Array.isArray(fb)){
+        return fb.map(pFB=>{
+          const pL=(local||[]).find(p=>p.id===pFB.id);
+          if(!pL) return pFB;
+          return{...pFB,
+            fotos:(pL.fotos||[]).length?(pL.fotos):(pFB.fotos||[]),
+            fotoRostoEntrada:pL.fotoRostoEntrada||null,
+            fotoRostoSaida:pL.fotoRostoSaida||null,
+            fotosCk:(pL.fotosCk||[]).length?(pL.fotosCk):(pFB.fotosCk||[]),
+            portaria:pL.portaria||pFB.portaria||[],
+            rondas:pL.rondas||pFB.rondas||[],
+            checklist:pL.checklist||pFB.checklist||null,
+            ckState:pL.ckState||pFB.ckState||{}
+          };
+        });
+      }
+      return fb;
+    }
+
     window._fbSet=function(k,v){
-      db.collection('rondamaster').doc(k).set({dados:JSON.stringify(v)}).catch(()=>{});
+      try{
+        const dados=limparParaFB(k,v);
+        const json=JSON.stringify(dados);
+        if(json.length>900000){console.warn('Dado muito grande para Firebase:',k);return;}
+        db.collection('rondamaster').doc(k).set({
+          dados:json,
+          ts:firebase.firestore.FieldValue.serverTimestamp()
+        }).catch(e=>console.warn('fbSet erro:',e.message));
+      }catch(e){console.warn('fbSet erro:',e.message);}
     };
+
     window._fbGet=async function(k){
-      const snap=await db.collection('rondamaster').doc(k).get();
-      if(snap.exists){const d=snap.data();return d&&d.dados?JSON.parse(d.dados):null;}
+      try{
+        const snap=await db.collection('rondamaster').doc(k).get();
+        if(snap.exists){
+          const d=snap.data();
+          if(d&&d.dados){
+            const fb=JSON.parse(d.dados);
+            try{
+              const loc=JSON.parse(localStorage.getItem('rm_'+k)||'[]');
+              return mesclar(k,fb,loc);
+            }catch(e){return fb;}
+          }
+        }
+      }catch(e){console.warn('fbGet erro ('+k+'):',e.message);}
       return null;
     };
+
     window._fbGetEmpresa=async function(){
-      const snap=await db.collection('rondamaster').doc('empresa').get();
-      if(snap.exists){const d=snap.data();return d&&d.json?d.json:null;}
+      try{
+        const snap=await db.collection('rondamaster').doc('empresa').get();
+        if(snap.exists){const d=snap.data();return d&&d.json?d.json:null;}
+      }catch(e){}
       return null;
     };
+
     window._salvarEmpresaExtra=function(json){
       db.collection('rondamaster').doc('empresa').set({json}).catch(()=>{});
     };
+
     console.log('✅ Firebase conectado!');
   }catch(e){
-    console.warn('⚠️ Firebase não disponível, usando modo offline:',e.message);
+    console.warn('⚠️ Firebase offline:',e.message);
   }
 })();
 </script>
@@ -472,26 +530,19 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var
         <!-- ABA RONDAS -->
         <div id="aba-ronda">
           <div class="section-header">
-            <h2>📷 Rondas</h2>
-            <div style="display:flex;gap:6px;align-items:center;">
-              <span class="badge badge-blue" id="foto-count">0 fotos</span>
-              <span class="badge badge-green" id="ronda-count">0 rondas</span>
-            </div>
+            <h2>🚶 Rondas</h2>
+            <span class="badge badge-green" id="ronda-count">0 rondas</span>
           </div>
-          <div id="ronda-ativa-info" class="hidden" style="background:rgba(16,185,129,.1);border:1.5px solid var(--green);border-radius:10px;padding:12px;margin-bottom:10px;">
-            <div style="font-size:10px;color:var(--muted);">RONDA EM ANDAMENTO</div>
-            <div style="font-weight:700;font-size:15px;" id="ronda-num-label">Ronda #1</div>
-            <div style="font-size:12px;color:var(--muted);" id="ronda-inicio-label">—</div>
-            <button class="btn btn-red mt-2" onclick="finalizarRonda()">🏁 Finalizar Ronda</button>
+          <div id="ronda-ativa-info" class="hidden" style="background:rgba(16,185,129,.1);border:1.5px solid var(--green);border-radius:10px;padding:14px;margin-bottom:12px;">
+            <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">RONDA EM ANDAMENTO</div>
+            <div style="font-weight:700;font-size:16px;margin-top:4px;" id="ronda-num-label">Ronda #1</div>
+            <div style="font-size:12px;color:var(--muted);margin-top:4px;" id="ronda-inicio-label">—</div>
+            <div style="font-size:12px;color:var(--teal);margin-top:4px;" id="ronda-local-label">📍 Aguardando GPS...</div>
+            <button class="btn btn-red mt-3" onclick="finalizarRonda()">🏁 Finalizar Ronda</button>
           </div>
           <button class="btn btn-green mb-3" onclick="iniciarRonda()" id="btn-iniciar-ronda">🚶 Iniciar Ronda</button>
-          <div class="foto-grid" id="fotos-grid"></div>
-          <div class="camera-btn mt-3" onclick="document.getElementById('camera-input').click()">
-            <div style="font-size:30px;">📷</div>
-            <div class="mt-2">Tirar foto de ronda</div>
-            <div class="text-xs mt-1" style="color:var(--muted);">Câmera abrirá automaticamente · GPS + horário registrados</div>
-          </div>
-          <input type="file" id="camera-input" accept="image/*" class="hidden" onchange="registrarFoto(this)">
+          <!-- Lista de rondas já realizadas -->
+          <div id="lista-rondas-realizadas"></div>
         </div>
         <!-- ABA PORTARIA -->
         <div id="aba-portaria" class="hidden">
@@ -533,18 +584,15 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var
               </div>
               <div id="lista-checks-veiculo"></div>
             </div>
-            <div class="field mt-2"><label>Observações / Ocorrências</label>
-              <textarea id="ck-obs" placeholder="Algum problema ou observação..."></textarea>
-            </div>
-            <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px;">
-              <div class="camera-btn" style="padding:12px;flex:0 0 auto;width:120px;" onclick="document.getElementById('camera-ck').click()">
-                <div style="font-size:22px;">📷</div>
-                <div style="font-size:10px;margin-top:2px;">Foto ocorrência</div>
+            <div class="card mt-2" style="border-color:var(--amber);">
+              <div class="card-title">📝 Observações / Ocorrências</div>
+              <div id="lista-obs-ck" style="margin-bottom:12px;"></div>
+              <div class="field" style="margin-bottom:8px;">
+                <textarea id="ck-obs-nova" placeholder="Digite uma observação e clique em Adicionar..." style="min-height:60px;"></textarea>
               </div>
-              <input type="file" id="camera-ck" accept="image/*" capture="environment" class="hidden" onchange="registrarFotoCk(this)">
-              <div id="fotos-ck-preview" style="display:flex;gap:6px;flex-wrap:wrap;flex:1;"></div>
+              <button class="btn btn-amber" style="color:#000;" onclick="adicionarObsCk()">+ Adicionar Observação</button>
             </div>
-            <button class="btn btn-green" onclick="salvarChecklist()">💾 Salvar Checklist</button>
+            <button class="btn btn-green mt-2" onclick="salvarChecklist()">💾 Salvar Checklist</button>
           </div>
           <div id="checklist-salvo" class="hidden">
             <div class="card" style="border-color:var(--green);">
@@ -1856,6 +1904,7 @@ function verificarPlantaoAtivo(){
   ckState=p.ckState||{};
   rondasAtivas=p.rondas||[];
   fotosCk=p.fotosCk||[];
+  obsCkLista=Array.isArray(p.checklist&&p.checklist.obs)?p.checklist.obs:[];
   checklistSalvo=p.checklistSalvo||false;
 
   // Recuperar ronda em andamento da sessão
@@ -1894,7 +1943,7 @@ function iniciarPlantao(){
     ckState={};
     DB.get('itens_veiculo').forEach(iv=>{ckState[iv.id]='ok';});
     DB.get('equipamentos').forEach(eq=>{ckState[eq.id]='ok';});
-    checklistSalvo=false;fotosCk=[];rondasAtivas=[];rondaAtualIdx=null;
+    checklistSalvo=false;fotosCk=[];rondasAtivas=[];rondaAtualIdx=null;obsCkLista=[];
     document.getElementById('btn-editar-ck').style.display='none';
     document.getElementById('checklist-form').classList.remove('hidden');
     document.getElementById('checklist-salvo').classList.add('hidden');
@@ -1942,7 +1991,7 @@ function mostrarAtivo(){
     document.getElementById('btn-editar-ck').style.display='';
     renderChecklistSalvo(plantaoAtivo.checklist);
   }
-  renderItensVeiculo();renderEquipamentosChecklist();renderFotos();renderPortariaPlantao();
+  renderItensVeiculo();renderEquipamentosChecklist();renderPortariaPlantao();renderListaRondas();renderObsCk();
   // Restaurar estado visual do checklist e rondas
   setTimeout(()=>{
     restaurarEstadoChecklistVisual();
@@ -2167,7 +2216,7 @@ function salvarChecklist(){
     kmEntrada:document.getElementById('ck-km-entrada').value,
     kmSaida:document.getElementById('ck-km-saida').value,
     equipamentos:{...ckState},
-    obs:document.getElementById('ck-obs').value,
+    obs:[...obsCkLista],
     fotosCk:[...fotosCk]
   };
   plantaoAtivo.checklist=ck;plantaoAtivo.ckState=ckState;plantaoAtivo.fotosCk=fotosCk;
@@ -2309,9 +2358,11 @@ function gerarHtmlRelatorio(p, opcoes){
   // Rondas com hora inicial e final
   const rondasHtml = (p.rondas && p.rondas.length) ? `
     <div class="rel-section"><h4>🚶 Rondas Realizadas (${p.rondas.filter(r=>r.fim).length})</h4>
-      ${p.rondas.map(r => `<div class="rel-row">
-        <span class="rel-lbl">Ronda #${r.num}</span>
-        <span class="rel-val">${fmtH(r.inicio)} → ${r.fim ? fmtH(r.fim) : 'Em andamento'}</span>
+      ${p.rondas.map(r => `<div style="background:#f8fafc;border-radius:6px;padding:8px;margin-bottom:6px;border-left:3px solid #10B981;">
+        <div style="font-weight:700;font-size:12px;">Ronda #${r.num}</div>
+        <div style="font-size:11px;color:#64748B;">📅 ${r.data||''} · ⏰ ${r.hora||fmtH(r.inicio)} → ${r.horaFim||fmtH(r.fim)}</div>
+        ${r.lat?`<div style="font-size:10px;color:#14B8A6;">📍 Início: ${r.lat}, ${r.lng}</div>`:''}
+        ${r.latFim?`<div style="font-size:10px;color:#14B8A6;">📍 Fim: ${r.latFim}, ${r.lngFim}</div>`:''}
       </div>`).join('')}
     </div>` : '';
 
@@ -2331,26 +2382,10 @@ function gerarHtmlRelatorio(p, opcoes){
     </div>` : '';
 
   // Fotos de ronda
-  const fotosRondaHtml = fotos.length ? `
-    <div class="rel-section"><h4>📷 Fotos de Ronda (${fotos.length})</h4>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:6px;">
-        ${fotos.map(f => `<div style="text-align:center;page-break-inside:avoid;">
-          <img src="${f.data}" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;border:1px solid #e2e8f0;print-color-adjust:exact;">
-          <div style="font-size:9px;color:#64748B;margin-top:2px;">#${String(f.num).padStart(3,'0')} · ${f.hora}</div>
-        </div>`).join('')}
-      </div>
-    </div>` : '';
+  const fotosRondaHtml = ''; // Fotos removidas — dados salvos só localmente
 
   // Fotos do checklist
-  const fotosCkHtml = (ck.fotosCk && ck.fotosCk.length) ? `
-    <div class="rel-section"><h4>📷 Fotos de Ocorrência do Checklist (${ck.fotosCk.length})</h4>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:6px;">
-        ${ck.fotosCk.map(f => `<div style="text-align:center;page-break-inside:avoid;">
-          <img src="${f.data}" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;border:1px solid #FEE2E2;print-color-adjust:exact;">
-          <div style="font-size:9px;color:#64748B;margin-top:2px;">${f.hora}</div>
-        </div>`).join('')}
-      </div>
-    </div>` : '';
+  const fotosCkHtml = ''; // Fotos do checklist removidas
 
   // Checklist veículo
   const ckVeiculoHtml = ck.veiculo ? `
@@ -2362,7 +2397,7 @@ function gerarHtmlRelatorio(p, opcoes){
       <div class="rel-row"><span class="rel-lbl">Óleo</span><span class="rel-val">${ck.oleo||'—'}</span></div>
       ${veiHtml}
       ${eqHtml}
-      ${ck.obs ? `<div class="rel-row"><span class="rel-lbl">Obs.</span><span class="rel-val">${ck.obs}</span></div>` : ''}
+      ${Array.isArray(ck.obs)&&ck.obs.length?`<div style="margin-top:6px;"><div style="font-size:10px;font-weight:700;color:#F59E0B;margin-bottom:4px;">📝 OBSERVAÇÕES</div>${ck.obs.map((o,i)=>`<div style="background:#FEF3C7;border-radius:4px;padding:6px 8px;margin-bottom:4px;font-size:11px;"><strong>#${i+1}</strong> ${o.texto} <span style="color:#64748B;">· ${o.data} ${o.hora}</span></div>`).join('')}</div>`:''}
     </div>
     ${fotosCkHtml}` : '';
 
@@ -2760,53 +2795,128 @@ let rondaAtualIdx=null;
 function iniciarRonda(){
   if(!plantaoAtivo){toast('⚠️ Nenhum plantão ativo');return;}
   const agora=new Date();
-  const nova={id:'r'+Date.now(),num:rondasAtivas.length+1,inicio:agora.toISOString(),fim:null};
+  const nova={
+    id:'r'+Date.now(),
+    num:rondasAtivas.length+1,
+    inicio:agora.toISOString(),
+    data:agora.toLocaleDateString('pt-BR'),
+    hora:fmtH(agora.toISOString()),
+    fim:null,
+    lat:null,lng:null
+  };
   rondaAtualIdx=rondasAtivas.length;
   rondasAtivas.push(nova);
-  plantaoAtivo.rondas=rondasAtivas;
-  atualizarStorage();
   document.getElementById('btn-iniciar-ronda').classList.add('hidden');
   document.getElementById('ronda-ativa-info').classList.remove('hidden');
   document.getElementById('ronda-num-label').textContent='Ronda #'+nova.num;
-  document.getElementById('ronda-inicio-label').textContent='Iniciada às '+fmtH(nova.inicio);
+  document.getElementById('ronda-inicio-label').textContent=nova.data+' às '+nova.hora;
+  document.getElementById('ronda-local-label').textContent='📍 Obtendo localização...';
+  // Capturar GPS
+  if(navigator.geolocation){
+    navigator.geolocation.getCurrentPosition(
+      pos=>{
+        nova.lat=pos.coords.latitude.toFixed(5);
+        nova.lng=pos.coords.longitude.toFixed(5);
+        document.getElementById('ronda-local-label').textContent='📍 '+nova.lat+', '+nova.lng;
+        plantaoAtivo.rondas=rondasAtivas;
+        atualizarStorage();
+      },
+      ()=>{
+        document.getElementById('ronda-local-label').textContent='📍 GPS não disponível';
+        plantaoAtivo.rondas=rondasAtivas;
+        atualizarStorage();
+      },
+      {timeout:8000,enableHighAccuracy:true}
+    );
+  } else {
+    document.getElementById('ronda-local-label').textContent='📍 GPS não suportado';
+  }
+  plantaoAtivo.rondas=rondasAtivas;
   atualizarStorage();
   atualizarContadorRondas();
+  renderListaRondas();
   toast('🚶 Ronda #'+nova.num+' iniciada!');
 }
 function finalizarRonda(){
   if(rondaAtualIdx===null)return;
-  rondasAtivas[rondaAtualIdx].fim=new Date().toISOString();
+  const agora=new Date();
+  rondasAtivas[rondaAtualIdx].fim=agora.toISOString();
+  rondasAtivas[rondaAtualIdx].horaFim=fmtH(agora.toISOString());
+  const idxFim=rondaAtualIdx;
+  // GPS de saída
+  if(navigator.geolocation){
+    navigator.geolocation.getCurrentPosition(
+      pos=>{
+        rondasAtivas[idxFim].latFim=pos.coords.latitude.toFixed(5);
+        rondasAtivas[idxFim].lngFim=pos.coords.longitude.toFixed(5);
+        plantaoAtivo.rondas=rondasAtivas;
+        atualizarStorage();renderListaRondas();
+      },
+      ()=>{plantaoAtivo.rondas=rondasAtivas;atualizarStorage();renderListaRondas();},
+      {timeout:5000,enableHighAccuracy:true}
+    );
+  }
   plantaoAtivo.rondas=rondasAtivas;
-  atualizarStorage();
   rondaAtualIdx=null;
+  atualizarStorage();
   document.getElementById('btn-iniciar-ronda').classList.remove('hidden');
   document.getElementById('ronda-ativa-info').classList.add('hidden');
   atualizarContadorRondas();
-  toast('🏁 Ronda finalizada! Total: '+rondasAtivas.filter(r=>r.fim).length);
+  renderListaRondas();
+  toast('🏁 Ronda #'+rondasAtivas.filter(r=>r.fim).length+' finalizada!');
 }
 function atualizarContadorRondas(){
   const el=document.getElementById('ronda-count');
   if(el)el.textContent=rondasAtivas.filter(r=>r.fim).length+' ronda(s)';
 }
+function renderListaRondas(){
+  const div=document.getElementById('lista-rondas-realizadas');
+  if(!div)return;
+  const concluidas=rondasAtivas.filter(r=>r.fim);
+  if(!concluidas.length){div.innerHTML='';return;}
+  div.innerHTML=concluidas.map(r=>`
+    <div style="background:var(--slate2);border-radius:10px;padding:12px;margin-bottom:8px;border-left:3px solid var(--green);">
+      <div style="font-weight:700;font-size:13px;">🚶 Ronda #${r.num}</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:4px;">
+        📅 ${r.data||fmtData(r.inicio)} · ⏰ ${r.hora||fmtH(r.inicio)} → ${r.horaFim||fmtH(r.fim)}
+      </div>
+      ${r.lat?`<div style="font-size:11px;color:var(--teal);margin-top:2px;">📍 Início: ${r.lat}, ${r.lng}</div>`:''}
+      ${r.latFim?`<div style="font-size:11px;color:var(--teal);margin-top:2px;">📍 Fim: ${r.latFim}, ${r.lngFim}</div>`:''}
+    </div>`).join('');
+}
+window.renderListaRondas=renderListaRondas;
 
 // ═══════════════════════════════════════════
-// FOTO CHECKLIST (ocorrência)
+// OBSERVAÇÕES DO CHECKLIST (tópicos)
 // ═══════════════════════════════════════════
-let fotosCk=[];
-function registrarFotoCk(input){
-  if(!input.files[0])return;
-  const reader=new FileReader();
-  reader.onload=e=>{
-    fotosCk.push({id:'ck'+Date.now(),data:e.target.result,hora:fmtH(new Date().toISOString())});
-    renderFotosCk();toast('📷 Foto de ocorrência registrada!');
-  };
-  reader.readAsDataURL(input.files[0]);input.value='';
+let fotosCk=[];// mantido por compatibilidade
+let obsCkLista=[];
+function adicionarObsCk(){
+  const txt=document.getElementById('ck-obs-nova').value.trim();
+  if(!txt){toast('⚠️ Digite uma observação');return;}
+  obsCkLista.push({id:'obs'+Date.now(),texto:txt,hora:fmtH(new Date().toISOString()),data:new Date().toLocaleDateString('pt-BR')});
+  document.getElementById('ck-obs-nova').value='';
+  renderObsCk();
+  toast('✅ Observação adicionada!');
 }
-function renderFotosCk(){
-  const div=document.getElementById('fotos-ck-preview');
+function renderObsCk(){
+  const div=document.getElementById('lista-obs-ck');
   if(!div)return;
-  div.innerHTML=fotosCk.map(f=>`<div style="position:relative;width:60px;height:60px;border-radius:6px;overflow:hidden;border:1px solid var(--border);"><img src="${f.data}" style="width:100%;height:100%;object-fit:cover;"><div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.7);font-size:7px;color:#fff;padding:1px 2px;">${f.hora}</div></div>`).join('');
+  if(!obsCkLista.length){div.innerHTML='<div class="text-muted text-xs">Nenhuma observação ainda.</div>';return;}
+  div.innerHTML=obsCkLista.map((o,i)=>`
+    <div style="background:var(--slate);border-radius:8px;padding:10px;margin-bottom:6px;border-left:3px solid var(--amber);position:relative;">
+      <div style="font-size:12px;font-weight:600;">${o.texto}</div>
+      <div style="font-size:10px;color:var(--muted);margin-top:4px;">📅 ${o.data} · ⏰ ${o.hora}</div>
+      <button onclick="removerObsCk(${i})" style="position:absolute;top:6px;right:6px;background:none;border:none;color:var(--red);font-size:14px;cursor:pointer;">✕</button>
+    </div>`).join('');
 }
+function removerObsCk(idx){
+  obsCkLista.splice(idx,1);
+  renderObsCk();
+}
+function renderFotosCk(){} // vazio por compatibilidade
+window.adicionarObsCk=adicionarObsCk;
+window.removerObsCk=removerObsCk;
 
 // ═══════════════════════════════════════════
 // FINALIZAR PLANTÃO PELO ADMIN
