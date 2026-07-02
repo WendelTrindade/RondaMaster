@@ -993,7 +993,7 @@ async function initDemo(){
   // 2. Fechar todos os modais
   document.querySelectorAll('.modal-overlay').forEach(m=>m.classList.add('hidden'));
 
-  // 3. Carregar localStorage (síncrono, instantâneo)
+  // 3. Carregar localStorage (síncrono, instantâneo) — mostra algo na tela rápido
   const cols=['usuarios','vigilantes','contratantes','escala','plantoes','financeiro','equipamentos','itens_veiculo'];
   cols.forEach(k=>{
     try{
@@ -1002,7 +1002,45 @@ async function initDemo(){
     }catch(e){}
   });
 
-  // 4. Se não tem usuário admin, criar dados iniciais
+  // 4. CRÍTICO: tentar buscar do Firebase ANTES de decidir criar dados padrão.
+  //    Isso evita que um dispositivo novo (sem localStorage) sobrescreva os
+  //    dados reais da nuvem com um admin "zerado".
+  if(window._fbGet){
+    try{
+      const usuariosFB=await Promise.race([
+        window._fbGet('usuarios'),
+        new Promise(r=>setTimeout(()=>r(null),6000))
+      ]);
+      if(Array.isArray(usuariosFB)&&usuariosFB.length){
+        // Firebase tem dados reais — usar como fonte da verdade se tiver mais que o local
+        const localAtual=CACHE['usuarios']||[];
+        if(usuariosFB.length>=localAtual.length){
+          CACHE['usuarios']=usuariosFB;
+          localStorage.setItem('rm_usuarios',JSON.stringify(usuariosFB));
+        }
+        // Buscar o restante das coleções também antes de prosseguir
+        const outrasCols=cols.filter(k=>k!=='usuarios');
+        await Promise.all(outrasCols.map(async k=>{
+          try{
+            const v=await Promise.race([
+              window._fbGet(k),
+              new Promise(r=>setTimeout(()=>r(null),6000))
+            ]);
+            if(v!==null){
+              const local=CACHE[k]||[];
+              const usar=Array.isArray(v)?(v.length>=local.length):true;
+              if(usar){CACHE[k]=v;localStorage.setItem('rm_'+k,JSON.stringify(v));}
+            }
+          }catch(e){}
+        }));
+      }
+    }catch(e){
+      console.warn('Firebase indisponível na inicialização, usando dados locais:',e.message);
+    }
+  }
+
+  // 5. SÓ AGORA, se ainda não há NENHUM usuário (nem local, nem Firebase),
+  //    criar o admin padrão. Isso só acontece na primeiríssima vez do sistema.
   const usuarios=DB.get('usuarios');
   if(!usuarios.length){
     DB.set('usuarios',[{id:'u1',nome:'Administrador',email:'admin@rm.com',senha:'123456',perfil:'admin'}]);
@@ -1015,9 +1053,10 @@ async function initDemo(){
       {id:'iv3',nome:'🪞 Retrovisores'},{id:'iv4',nome:'💡 Faróis'},
       {id:'iv5',nome:'🔦 Lanternas'}
     ]);
+    console.log('⚠️ Nenhum usuário encontrado (local ou nuvem) — admin padrão criado.');
   }
 
-  // 5. Verificar plantão aberto
+  // 6. Verificar plantão aberto
   const plantoes=DB.get('plantoes');
   const aberto=plantoes.find(p=>!p.fim);
   if(aberto){
@@ -1027,7 +1066,7 @@ async function initDemo(){
 
   console.log('✅ Sistema pronto. Usuários:',DB.get('usuarios').length);
 
-  // 6. Sincronizar com Firebase em segundo plano (sem bloquear)
+  // 7. Continuar sincronizando em segundo plano (para pegar atualizações posteriores)
   setTimeout(()=>{
     if(!window._fbGet) return;
     cols.forEach(async k=>{
@@ -1043,7 +1082,7 @@ async function initDemo(){
         }
       }catch(e){}
     });
-  }, 500);
+  }, 3000);
 }
 
 // ═══════════════════════════════════════════
