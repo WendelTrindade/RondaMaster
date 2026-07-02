@@ -4,8 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>RondaMaster</title>
-<!-- html2pdf para geração de PDF sem corte -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <!-- Firebase compat -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
@@ -283,7 +281,7 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var
 </head>
 <body>
 <!-- CARREGANDO -->
-<div id="loading-screen" style="position:fixed;inset:0;background:linear-gradient(160deg,#0B1D3A,#1E293B);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:999;">
+<div id="loading-screen" style="position:fixed;inset:0;background:linear-gradient(160deg,#0B1D3A,#1E293B);display:none;flex-direction:column;align-items:center;justify-content:center;z-index:999;">
   <div style="font-size:48px;margin-bottom:16px;">🛡️</div>
   <div style="font-size:22px;font-weight:900;color:#fff;margin-bottom:8px;">Ronda<span style="color:#2E8BF7">Master</span></div>
   <div style="color:#64748B;font-size:14px;margin-bottom:28px;">Conectando ao banco de dados...</div>
@@ -505,8 +503,15 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var
             <div id="plantao-escala-detalhes"></div>
           </div>
         </div>
-        <div class="field mt-3"><label>Local de Ronda</label><select id="sel-local-plantao"><option value="">Selecione...</option></select></div>
-        <button class="ponto-btn entrada" onclick="iniciarPlantao()">
+        <div id="plantao-local-sel-wrap">
+          <!-- Preenchido por verificarEscalaVigilante() -->
+        </div>
+        <div id="sem-escala-aviso" class="hidden" style="background:rgba(239,68,68,.1);border:1.5px solid var(--red);border-radius:12px;padding:16px;text-align:center;margin-bottom:12px;">
+          <div style="font-size:28px;margin-bottom:8px;">🚫</div>
+          <div style="font-weight:700;margin-bottom:4px;">Sem plantão agendado</div>
+          <div style="font-size:13px;color:var(--muted);">Você não está escalado para hoje.<br>Entre em contato com o administrador.</div>
+        </div>
+        <button class="ponto-btn entrada" id="btn-iniciar-plantao" onclick="iniciarPlantao()" style="display:none">
           <span class="ponto-icon">🟢</span>INICIAR PLANTÃO
           <div style="font-size:12px;font-weight:400;opacity:.8;margin-top:4px;" id="hora-atual-entrada"></div>
         </button>
@@ -779,21 +784,19 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var
 </div>
 
 <!-- MODAL FOTO ROSTO (entrada/saída) -->
-<div class="modal-overlay hidden" id="modal-foto-rosto">
-  <div class="modal" style="text-align:center;">
-    <div class="modal-handle"></div>
-    <div class="modal-title" id="foto-rosto-title">📸 Validação de Entrada</div>
-    <div style="font-size:13px;color:var(--muted);margin-bottom:16px;" id="foto-rosto-instrucao">Tire uma foto do seu rosto para registrar a entrada</div>
-    <div id="foto-rosto-preview" style="width:140px;height:140px;border-radius:50%;background:var(--slate2);border:3px solid var(--border);margin:0 auto 20px;overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:56px;">👤</div>
-    <!-- Apenas câmera frontal — sem galeria -->
-    <input type="file" id="camera-rosto" accept="image/*" capture="user" class="hidden" onchange="capturarFotoRosto(this)">
-    <button class="btn btn-primary" onclick="document.getElementById('camera-rosto').click()" style="max-width:240px;margin:0 auto;">
-      📸 Abrir Câmera
-    </button>
-    <div style="font-size:11px;color:var(--muted);margin-top:8px;">Use a câmera frontal do celular</div>
-    <div class="flex gap-3 mt-3">
-      <button class="btn btn-outline" onclick="fecharModal('modal-foto-rosto')">Cancelar</button>
-      <button class="btn btn-green" id="btn-confirmar-rosto" onclick="confirmarFotoRosto()" style="display:none">✅ Confirmar</button>
+
+<!-- MODAL RESUMO ENCERRAMENTO -->
+<div class="modal-overlay hidden" id="modal-resumo-encerramento">
+  <div class="modal"><div class="modal-handle"></div>
+    <div class="modal-title">🔴 Confirmar Encerramento</div>
+    <div id="resumo-encerramento-conteudo"></div>
+    <div class="field">
+      <label>Observação final (opcional)</label>
+      <textarea id="obs-encerramento" placeholder="Alguma ocorrência para registrar antes de encerrar..."></textarea>
+    </div>
+    <div class="flex gap-3 mt-2">
+      <button class="btn btn-outline" onclick="fecharModal('modal-resumo-encerramento')">Voltar</button>
+      <button class="btn btn-red" onclick="confirmarEncerramento()">🔴 Encerrar Plantão</button>
     </div>
   </div>
 </div>
@@ -801,40 +804,29 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var
 <!-- MODAL FINALIZAR PLANTÃO PELO ADMIN -->
 <div class="modal-overlay hidden" id="modal-finalizar-admin">
   <div class="modal"><div class="modal-handle"></div>
-    <div class="modal-title">🔴 Finalizar Plantão</div>
+    <div class="modal-title">🔴 Encerrar Plantão (Admin)</div>
     <input type="hidden" id="fa-plantao-id">
-    <div id="fa-info" style="background:var(--slate2);border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px;"></div>
-    <div class="field"><label>Motivo do encerramento pelo admin</label>
-      <textarea id="fa-motivo" placeholder="Ex: Fim do turno, emergência, ausência do vigilante..."></textarea>
+    <div id="fa-info" style="background:var(--slate2);border-radius:10px;padding:12px;margin-bottom:16px;font-size:13px;line-height:1.6;"></div>
+    <div class="field"><label>Motivo do encerramento</label>
+      <textarea id="fa-motivo" placeholder="Ex: fim de turno, falta de comunicação, emergência..."></textarea>
     </div>
     <div class="flex gap-3 mt-2">
       <button class="btn btn-outline" onclick="fecharModal('modal-finalizar-admin')">Cancelar</button>
-      <button class="btn btn-red" onclick="finalizarPlantaoAdmin()">🔴 Finalizar Plantão</button>
+      <button class="btn btn-red" onclick="finalizarPlantaoAdmin()">🔴 Encerrar Plantão</button>
     </div>
   </div>
 </div>
 
-<!-- MODAL RELATÓRIO COM FOTOS -->
-<div class="modal-overlay hidden" id="modal-relatorio-fotos">
-  <div class="modal"><div class="modal-handle"></div>
-    <div class="modal-title">📋 Relatório com Fotos</div>
-    <div id="relatorio-fotos-conteudo"></div>
-    <div class="flex gap-3 mt-3">
-      <button class="btn btn-outline" onclick="fecharModal('modal-relatorio-fotos')">Fechar</button>
-      <button class="btn btn-primary" onclick="gerarPDF('relatorio-fotos-conteudo')">📄 Gerar PDF</button>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL BLOQUEIO ENCERRAMENTO -->
+<!-- MODAL BLOQUEIO (impede encerrar plantão com pendências) -->
 <div class="modal-overlay hidden" id="modal-bloqueio">
   <div class="modal" style="text-align:center;">
-    <div style="font-size:52px;margin-bottom:12px;" id="bloqueio-icon">⛔</div>
-    <div class="modal-title" id="bloqueio-titulo" style="text-align:center;">Ação necessária</div>
-    <div id="bloqueio-msg" style="font-size:13px;color:var(--muted);margin-bottom:20px;line-height:1.6;white-space:pre-line;"></div>
+    <div class="modal-handle"></div>
+    <div id="bloqueio-icon" style="font-size:48px;margin-bottom:8px;">⛔</div>
+    <div id="bloqueio-titulo" style="font-size:17px;font-weight:800;margin-bottom:8px;"></div>
+    <div id="bloqueio-msg" style="font-size:13px;color:var(--muted);margin-bottom:20px;white-space:pre-line;"></div>
     <div class="flex gap-3">
       <button class="btn btn-outline" onclick="fecharModal('modal-bloqueio')">Fechar</button>
-      <button class="btn btn-amber" id="bloqueio-btn-acao" style="color:#000" onclick="acaoBloqueio()">Resolver agora</button>
+      <button class="btn btn-primary" id="bloqueio-btn-acao" onclick="acaoBloqueio()">Resolver</button>
     </div>
   </div>
 </div>
@@ -868,7 +860,7 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var
     <div id="relatorio-conteudo"></div>
     <div class="flex gap-3 mt-3">
       <button class="btn btn-outline" onclick="fecharModal('modal-relatorio')">Fechar</button>
-      <button class="btn btn-primary" onclick="gerarPDF('relatorio-conteudo')">📄 Gerar PDF</button>
+      <button class="btn btn-primary" onclick="gerarPDFAtual()">📄 Gerar PDF</button>
     </div>
   </div>
 </div>
@@ -982,39 +974,8 @@ const DB={
     return CACHE[k]||[];
   },
   async loadAll(){
-    _mostrarLoading(true);
-    // Fase 1: carregar tudo do localStorage imediatamente
     const cols=['usuarios','vigilantes','contratantes','escala','plantoes','financeiro','equipamentos','itens_veiculo'];
-    cols.forEach(k=>{
-      try{
-        const v=localStorage.getItem('rm_'+k);
-        if(v)CACHE[k]=JSON.parse(v);
-      }catch(e){}
-    });
-    // Esconder loading após localStorage (rápido)
-    _mostrarLoading(false);
-    // Fase 2: tentar sincronizar com Firebase em segundo plano
-    if(window._fbGet){
-      cols.forEach(async k=>{
-        try{
-          const v=await Promise.race([
-            window._fbGet(k),
-            new Promise(r=>setTimeout(()=>r(null),4000))
-          ]);
-          if(v!==null){
-            const local=CACHE[k]||[];
-            const usarFB=Array.isArray(v)?(v.length>=local.length):true;
-            if(usarFB){
-              CACHE[k]=v;
-              localStorage.setItem('rm_'+k,JSON.stringify(v));
-            }
-          }
-        }catch(e){}
-      });
-      if(window._fbGetEmpresa){
-        try{const j=await window._fbGetEmpresa();if(j)localStorage.setItem('rm_empresa',j);}catch(e){}
-      }
-    }
+    cols.forEach(k=>{try{const v=localStorage.getItem('rm_'+k);if(v)CACHE[k]=JSON.parse(v);}catch(e){} });
   }
 };
 function _mostrarLoading(sim){
@@ -1026,9 +987,22 @@ function _mostrarLoading(sim){
 // INIT
 // ═══════════════════════════════════════════
 async function initDemo(){
-  await DB.loadAll();
-  // Fechar todos os modais na inicialização
+  // 1. Esconder loading IMEDIATAMENTE — nunca travar na tela azul
+  _mostrarLoading(false);
+
+  // 2. Fechar todos os modais
   document.querySelectorAll('.modal-overlay').forEach(m=>m.classList.add('hidden'));
+
+  // 3. Carregar localStorage (síncrono, instantâneo)
+  const cols=['usuarios','vigilantes','contratantes','escala','plantoes','financeiro','equipamentos','itens_veiculo'];
+  cols.forEach(k=>{
+    try{
+      const v=localStorage.getItem('rm_'+k);
+      if(v) CACHE[k]=JSON.parse(v);
+    }catch(e){}
+  });
+
+  // 4. Se não tem usuário admin, criar dados iniciais
   const usuarios=DB.get('usuarios');
   if(!usuarios.length){
     DB.set('usuarios',[{id:'u1',nome:'Administrador',email:'admin@rm.com',senha:'123456',perfil:'admin'}]);
@@ -1037,22 +1011,39 @@ async function initDemo(){
       {id:'eq3',nome:'📡 Rádio / Comunicação'},{id:'eq4',nome:'🦺 Colete / EPI'}
     ]);
     DB.set('itens_veiculo',[
-      {id:'iv1',nome:'🔵 Pneus'},
-      {id:'iv2',nome:'🔧 Avarias'},
-      {id:'iv3',nome:'🪞 Retrovisores'},
-      {id:'iv4',nome:'💡 Faróis'},
+      {id:'iv1',nome:'🔵 Pneus'},{id:'iv2',nome:'🔧 Avarias'},
+      {id:'iv3',nome:'🪞 Retrovisores'},{id:'iv4',nome:'💡 Faróis'},
       {id:'iv5',nome:'🔦 Lanternas'}
     ]);
-    console.log('✅ Dados iniciais criados');
   }
-  console.log('✅ Sistema iniciado. Usuários:',DB.get('usuarios').length);
-  // Verificar se há plantão aberto (para mostrar aviso na tela de login)
+
+  // 5. Verificar plantão aberto
   const plantoes=DB.get('plantoes');
   const aberto=plantoes.find(p=>!p.fim);
   if(aberto){
     const el=document.getElementById('aviso-plantao-aberto');
-    if(el)el.classList.remove('hidden');
+    if(el) el.classList.remove('hidden');
   }
+
+  console.log('✅ Sistema pronto. Usuários:',DB.get('usuarios').length);
+
+  // 6. Sincronizar com Firebase em segundo plano (sem bloquear)
+  setTimeout(()=>{
+    if(!window._fbGet) return;
+    cols.forEach(async k=>{
+      try{
+        const v=await Promise.race([
+          window._fbGet(k),
+          new Promise(r=>setTimeout(()=>r(null),5000))
+        ]);
+        if(v!==null){
+          const local=CACHE[k]||[];
+          const usar=Array.isArray(v)?(v.length>=local.length):true;
+          if(usar){CACHE[k]=v;localStorage.setItem('rm_'+k,JSON.stringify(v));}
+        }
+      }catch(e){}
+    });
+  }, 500);
 }
 
 // ═══════════════════════════════════════════
@@ -1064,6 +1055,35 @@ let tipoPortaria='entrega';
 let escalaMes=new Date();
 let escalaDiaSel=null;
 let checklistSalvo=false;
+
+// ═══════════════════════════════════════════
+// PERSISTÊNCIA DO PLANTÃO ATIVO
+// ═══════════════════════════════════════════
+function atualizarStorage(){
+  if(!plantaoAtivo)return;
+  // Sincronizar arrays em memória com o objeto do plantão
+  plantaoAtivo.fotos=fotosP;
+  plantaoAtivo.portaria=portariaP;
+  plantaoAtivo.ckState=ckState;
+  plantaoAtivo.rondas=(typeof rondasAtivas!=='undefined')?rondasAtivas:(plantaoAtivo.rondas||[]);
+  plantaoAtivo.fotosCk=(typeof fotosCk!=='undefined')?fotosCk:(plantaoAtivo.fotosCk||[]);
+  plantaoAtivo.checklistSalvo=checklistSalvo;
+  // Salvar no banco (localStorage + Firebase)
+  const plantoes=DB.get('plantoes').map(p=>p.id===plantaoAtivo.id?plantaoAtivo:p);
+  DB.set('plantoes',plantoes);
+  // Salvar estado da sessão separadamente para recuperação rápida ao reabrir
+  try{
+    localStorage.setItem('rm_sessao_ativa', JSON.stringify({
+      plantaoId: plantaoAtivo.id,
+      vigilanteId: U?U.id:null,
+      ckState,
+      checklistSalvo,
+      rondasAtivasIdx: (typeof rondaAtualIdx!=='undefined')?rondaAtualIdx:null,
+      fotosCk: (typeof fotosCk!=='undefined')?fotosCk:[]
+    }));
+  }catch(e){}
+}
+window.atualizarStorage=atualizarStorage;
 
 // ═══════════════════════════════════════════
 // UTILS
@@ -1256,7 +1276,7 @@ function atualizarDashboard(){
             <div class="mt-1">${s.badge}${calcularHoraExtra(p)>0?`<span class="badge badge-amber"> ⏱️ HE: ${fmtMoeda(calcularHoraExtra(p))}</span>`:''}</div>
           </div>
           <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;">
-            ${p.fim?`<button class="btn btn-primary btn-sm" onclick="verRelatorio('${p.id}')">Ver</button><button class="btn btn-outline btn-sm" onclick="verRelatorioComFotos('${p.id}')">🖨️</button>`:`<button class="btn btn-red btn-sm" onclick="abrirFinalizarAdmin('${p.id}')">🔴 Encerrar</button>`}
+            ${p.fim?`<button class="btn btn-primary btn-sm" onclick="verRelatorio('${p.id}')">Ver</button>`:`<button class="btn btn-red btn-sm" onclick="abrirFinalizarAdmin('${p.id}')">🔴 Encerrar</button>`}
           </div>
         </div>`;
       }).join('')}
@@ -1853,27 +1873,85 @@ function ckSet(id,val,el){
 // ═══════════════════════════════════════════
 function verificarEscalaVigilante(){
   const hoje=new Date().toISOString().split('T')[0];
-  const e=DB.get('escala').find(x=>x.data===hoje&&x.tipo==='plantao'&&(x.vigilanteId===U.id||(x.substitutoId===U.id&&x.status==='substituicao')));
+  const escala=DB.get('escala');
+  const escalasHoje=escala.filter(x=>
+    x.data===hoje&&x.tipo==='plantao'&&
+    (x.vigilanteId===U.id||(x.substitutoId===U.id&&x.status==='substituicao'))
+  );
   const info=document.getElementById('plantao-escala-info');
   const card=document.getElementById('plantao-escala-card');
-  if(!e){info.textContent='Nenhum plantão agendado para hoje.';return;}
-  info.textContent='Você tem plantão agendado hoje!';
-  document.getElementById('plantao-escala-detalhes').innerHTML=`
-    <div class="rel-row"><span class="rel-lbl">Local</span><span style="font-weight:600">${e.localNome}</span></div>
-    <div class="rel-row"><span class="rel-lbl">Horário</span><span style="font-weight:600">${e.entrada} às ${e.saida}</span></div>
-    ${e.status==='substituicao'?`<div class="rel-row"><span class="rel-lbl">Obs.</span><span style="font-weight:600;color:var(--amber)">Substituindo ${e.vigilanteNome}</span></div>`:''}`;
-  card.classList.remove('hidden');
-  setTimeout(()=>{
-    const sel=document.getElementById('sel-local-plantao');
-    const opt=Array.from(sel.options).find(o=>o.text.includes(e.localNome)||o.value.includes(e.localNome));
-    if(opt)sel.value=opt.value;
-  },400);
+  const aviso=document.getElementById('sem-escala-aviso');
+  const btnIniciar=document.getElementById('btn-iniciar-plantao');
+  const wrap=document.getElementById('plantao-local-sel-wrap');
+
+  // Sempre mostrar o botão — vigilante pode iniciar com ou sem escala
+  if(btnIniciar) btnIniciar.style.display='';
+  if(aviso) aviso.classList.add('hidden');
+
+  if(escalasHoje.length){
+    // TEM ESCALA — mostrar info e pré-selecionar local
+    info.textContent='✅ Você tem plantão agendado hoje!';
+    card.classList.remove('hidden');
+    document.getElementById('plantao-escala-detalhes').innerHTML=
+      escalasHoje.map(e=>`<div class="rel-row"><span class="rel-lbl">${e.localNome}</span><span style="font-weight:600">${e.entrada}–${e.saida}</span></div>`).join('');
+
+    if(wrap){
+      if(escalasHoje.length===1){
+        const e=escalasHoje[0];
+        wrap.innerHTML=`<div class="card" style="border-color:var(--green);margin-bottom:12px;">
+          <div class="card-title">📍 Local do plantão</div>
+          <div style="font-size:14px;font-weight:700;">${e.localNome}</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:4px;">⏰ ${e.entrada} às ${e.saida}</div>
+          ${e.status==='substituicao'?`<div style="font-size:12px;color:var(--amber);margin-top:4px;">🔄 Substituindo ${e.vigilanteNome}</div>`:''}
+        </div>`;
+        wrap.dataset.localId=(e.contratanteNome||'')+'|'+e.localNome;
+        wrap.dataset.escalaId=e.id;
+      } else {
+        wrap.innerHTML=`<div class="field">
+          <label>Local de Ronda</label>
+          <select id="sel-local-plantao">
+            <option value="">Selecione o local...</option>
+            ${escalasHoje.map(e=>`<option value="${(e.contratanteNome||'')}|${e.localNome}" data-escala="${e.id}">${e.localNome} (${e.entrada}–${e.saida})</option>`).join('')}
+          </select>
+        </div>`;
+        wrap.dataset.localId='';
+        wrap.dataset.escalaId='';
+      }
+    }
+  } else {
+    // SEM ESCALA — permitir escolher local manualmente
+    info.textContent='ℹ️ Sem escala cadastrada para hoje.';
+    card.classList.add('hidden');
+
+    // Montar select com todos os locais disponíveis
+    const contratantes=DB.get('contratantes');
+    let optsHtml='<option value="">Selecione o local...</option>';
+    contratantes.forEach(c=>{
+      (c.locais||'').split('\n').filter(l=>l.trim()).forEach(l=>{
+        optsHtml+=`<option value="${c.nome}|${l.trim()}">${c.nome} — ${l.trim()}</option>`;
+      });
+    });
+
+    if(wrap){
+      if(contratantes.length===0){
+        wrap.innerHTML=`<div style="background:rgba(239,68,68,.1);border:1.5px solid var(--red);border-radius:10px;padding:14px;text-align:center;margin-bottom:12px;">
+          <div style="font-size:13px;color:var(--red);">⚠️ Nenhum local cadastrado.<br>Contate o administrador.</div>
+        </div>`;
+        if(btnIniciar) btnIniciar.style.display='none';
+      } else {
+        wrap.innerHTML=`<div class="field">
+          <label>📍 Selecione o local da ronda</label>
+          <select id="sel-local-plantao">${optsHtml}</select>
+        </div>`;
+        wrap.dataset.localId='';
+        wrap.dataset.escalaId='';
+      }
+    }
+  }
 }
 function popularLocais(){
-  const sel=document.getElementById('sel-local-plantao');
-  let opts='<option value="">Selecione o local...</option>';
-  DB.get('contratantes').forEach(c=>(c.locais||'').split('\n').filter(l=>l.trim()).forEach(l=>{opts+=`<option value="${c.id}|${l.trim()}">${c.nome} — ${l.trim()}</option>`;}));
-  sel.innerHTML=opts;
+  // Locais agora são controlados pela escala em verificarEscalaVigilante()
+  // Esta função é mantida para compatibilidade com o admin
 }
 function verificarPlantaoAtivo(){
   // Ler SEMPRE direto do localStorage — garante dados frescos mesmo se CACHE estiver vazio
@@ -1928,58 +2006,72 @@ function verificarPlantaoAtivo(){
   setTimeout(()=>toast(msgs.length?('✅ Retomando: '+msgs.join(', ')+' recuperados!'):'✅ Plantão retomado!'),300);
 }
 function iniciarPlantao(){
+  let localNome='';let contNome='';let escalaHoje=null;
+
   const sel=document.getElementById('sel-local-plantao');
-  if(!sel.value){toast('⚠️ Selecione um local');return;}
-  // Pedir foto de rosto antes de iniciar
-  pedirFotoRosto('📸 Validação de Entrada','Tire uma foto do seu rosto para registrar a entrada no plantão',function(fotoRosto){
-    const pi=sel.value.indexOf('|');
-    const contId=sel.value.slice(0,pi);const localNome=sel.value.slice(pi+1);
-    const cont=DB.get('contratantes').find(c=>c.id===contId);
-    const vig=DB.get('vigilantes').find(v=>v.id===U.id);
-    const hoje=new Date().toISOString().split('T')[0];
-    let escalaHoje=DB.get('escala').find(e=>e.data===hoje&&e.tipo==='plantao'&&(e.vigilanteId===U.id||(e.substitutoId===U.id&&e.status==='substituicao')));
-    // Limpar checklist
-    // Pré-popular todos os itens de verificação como OK
-    ckState={};
-    DB.get('itens_veiculo').forEach(iv=>{ckState[iv.id]='ok';});
-    DB.get('equipamentos').forEach(eq=>{ckState[eq.id]='ok';});
-    checklistSalvo=false;fotosCk=[];rondasAtivas=[];rondaAtualIdx=null;obsCkLista=[];
-    document.getElementById('btn-editar-ck').style.display='none';
-    document.getElementById('checklist-form').classList.remove('hidden');
-    document.getElementById('checklist-salvo').classList.add('hidden');
-    document.getElementById('ck-km-entrada').value='';document.getElementById('ck-km-saida').value='';
-    document.getElementById('ck-obs').value='';
-    document.getElementById('ck-veiculo').selectedIndex=0;
-    document.getElementById('ck-gasolina').selectedIndex=0;
-    document.getElementById('ck-oleo').selectedIndex=0;
-    document.getElementById('ronda-ativa-info').classList.add('hidden');
-    document.getElementById('btn-iniciar-ronda').classList.remove('hidden');
-    plantaoAtivo={
-      id:'p'+Date.now(),vigilanteId:U.id,vigilanteNome:U.nome,
-      contratanteId:contId,contratanteNome:cont?cont.nome:'—',localNome,
-      inicio:new Date().toISOString(),fim:null,fotos:[],portaria:[],checklist:null,ckState:{},rondas:[],
-      horaPrevistaSaida:escalaHoje?escalaHoje.saida:null,
-      duracaoPrevistaH:vig?Number(vig.horas||8):8,
-      saidaAntecipada:false,motivoSaida:null,
-      fotoRostoEntrada:fotoRosto
-    };
-    fotosP=[];portariaP=[];
-    DB.set('plantoes',[...DB.get('plantoes').filter(p=>p.id!==plantaoAtivo.id),plantaoAtivo]);
-    // Se não tem escala hoje, registrar automaticamente
-    if(!escalaHoje){
-      const novaEscala={
-        id:'e_auto_'+Date.now(),tipo:'plantao',vigilanteId:U.id,vigilanteNome:U.nome,
-        localNome,contratanteNome:cont?cont.nome:'—',
-        data:hoje,entrada:fmtH(new Date().toISOString()),saida:'—',
-        status:'agendado',substituto:null,substitutoId:null,motivo:'Registro automático'
-      };
-      const escala=DB.get('escala');escala.push(novaEscala);DB.set('escala',escala);
-      toast('📅 Plantão registrado automaticamente na escala!');
-    }
-    mostrarAtivo();iniciarRelogioSaida();renderEquipamentosChecklist();
-    toast('🟢 Plantão iniciado'+(fotoRosto?' com foto de validação!':'!'));
-  });
+  const wrap=document.getElementById('plantao-local-sel-wrap');
+
+  if(sel&&sel.value){
+    const partes=sel.value.split('|');
+    contNome=partes[0]||'';
+    localNome=partes[1]||partes[0]||'';
+    const opt=sel.options[sel.selectedIndex];
+    if(opt&&opt.dataset&&opt.dataset.escala)
+      escalaHoje=DB.get('escala').find(e=>e.id===opt.dataset.escala)||null;
+  } else if(wrap&&wrap.dataset&&wrap.dataset.localId&&wrap.dataset.localId.indexOf('|')>=0){
+    const partes=wrap.dataset.localId.split('|');
+    contNome=partes[0]||'';
+    localNome=partes[1]||'';
+    if(wrap.dataset.escalaId)
+      escalaHoje=DB.get('escala').find(e=>e.id===wrap.dataset.escalaId)||null;
+  }
+
+  if(!localNome){
+    toast('⚠️ Selecione o local antes de iniciar');
+    return;
+  }
+
+  const vig=DB.get('vigilantes').find(v=>v.id===U.id);
+
+  ckState={};
+  DB.get('itens_veiculo').forEach(iv=>{ckState[iv.id]='ok';});
+  DB.get('equipamentos').forEach(eq=>{ckState[eq.id]='ok';});
+  checklistSalvo=false;fotosCk=[];rondasAtivas=[];rondaAtualIdx=null;obsCkLista=[];
+
+  const resetEl=(id,fn)=>{try{const el=document.getElementById(id);if(el)fn(el);}catch(e){}};
+  resetEl('btn-editar-ck',el=>el.style.display='none');
+  resetEl('checklist-form',el=>el.classList.remove('hidden'));
+  resetEl('checklist-salvo',el=>el.classList.add('hidden'));
+  resetEl('ck-km-entrada',el=>el.value='');
+  resetEl('ck-km-saida',el=>el.value='');
+  resetEl('ck-obs-nova',el=>el.value='');
+  resetEl('ck-veiculo',el=>el.selectedIndex=0);
+  resetEl('ck-gasolina',el=>el.selectedIndex=0);
+  resetEl('ck-oleo',el=>el.selectedIndex=0);
+  resetEl('ronda-ativa-info',el=>el.classList.add('hidden'));
+  resetEl('btn-iniciar-ronda',el=>el.classList.remove('hidden'));
+
+  plantaoAtivo={
+    id:'p'+Date.now(),
+    vigilanteId:U.id,vigilanteNome:U.nome,
+    contratanteNome:contNome,localNome:localNome,
+    inicio:new Date().toISOString(),fim:null,
+    fotos:[],portaria:[],checklist:null,ckState:{},rondas:[],
+    horaPrevistaSaida:escalaHoje?escalaHoje.saida:null,
+    duracaoPrevistaH:vig?Number(vig.horas||8):8,
+    saidaAntecipada:false,motivoSaida:null
+  };
+  fotosP=[];portariaP=[];
+
+  const todosPlantoes=DB.get('plantoes').filter(p=>p.id!==plantaoAtivo.id);
+  todosPlantoes.push(plantaoAtivo);
+  DB.set('plantoes',todosPlantoes);
+
+  mostrarAtivo();iniciarRelogioSaida();renderEquipamentosChecklist();
+  toast('🟢 Plantão iniciado em '+localNome+'!');
 }
+
+
 function mostrarAtivo(){
   document.getElementById('plantao-sem-turno').classList.add('hidden');
   document.getElementById('plantao-ativo-view').classList.remove('hidden');
@@ -1991,7 +2083,11 @@ function mostrarAtivo(){
     document.getElementById('btn-editar-ck').style.display='';
     renderChecklistSalvo(plantaoAtivo.checklist);
   }
-  renderItensVeiculo();renderEquipamentosChecklist();renderPortariaPlantao();renderListaRondas();renderObsCk();
+  try{renderItensVeiculo();}catch(e){console.warn('renderItensVeiculo:',e);}
+  try{renderEquipamentosChecklist();}catch(e){console.warn('renderEquipamentos:',e);}
+  try{renderPortariaPlantao();}catch(e){console.warn('renderPortaria:',e);}
+  try{renderListaRondas();}catch(e){console.warn('renderRondas:',e);}
+  try{renderObsCk();}catch(e){console.warn('renderObs:',e);}
   // Restaurar estado visual do checklist e rondas
   setTimeout(()=>{
     restaurarEstadoChecklistVisual();
@@ -2075,16 +2171,62 @@ function encerrarPlantao(){
       abrirModal('modal-saida-antecipada');return;
     }
   }
-  // ── Pedir foto de rosto na saída ──
-  pedirFotoRosto('📸 Validação de Saída','Tire uma foto do seu rosto para confirmar o encerramento',function(fotoSaida){
-    plantaoAtivo.fotoRostoSaida=fotoSaida;
-    finalizarPlantao(false,null);
-  });
+  // ── VALIDAÇÃO 5: Itens do veículo com PROBLEMA não anotados ──
+  const ck2=plantaoAtivo.checklist;
+  const itensProblema=[];
+  if(ck2&&ck2.equipamentos){
+    const todosItens=[...DB.get('itens_veiculo'),...DB.get('equipamentos')];
+    todosItens.forEach(item=>{
+      if(ck2.equipamentos[item.id]==='nok') itensProblema.push(item.nome);
+    });
+  }
+
+  // ── RESUMO ANTES DE ENCERRAR ──
+  // Montar resumo do plantão
+  const totalRondas=rondasAtivas.filter(r=>r.fim).length;
+  const totalPortaria=portariaP.length;
+  const totalObs=obsCkLista?obsCkLista.length:0;
+  let resumoHtml=`
+    <div style="background:var(--slate2);border-radius:10px;padding:14px;margin-bottom:16px;">
+      <div style="font-size:13px;font-weight:700;margin-bottom:10px;">📋 Resumo do plantão</div>
+      <div style="font-size:12px;color:var(--muted);display:flex;flex-direction:column;gap:6px;">
+        <div>🚶 Rondas realizadas: <strong style="color:var(--white)">${totalRondas}</strong></div>
+        <div>🚦 Registros de portaria: <strong style="color:var(--white)">${totalPortaria}</strong></div>
+        <div>📝 Observações: <strong style="color:var(--white)">${totalObs}</strong></div>
+        ${itensProblema.length?`<div style="color:var(--red);">⚠️ Itens com PROBLEMA: <strong>${itensProblema.join(', ')}</strong></div>`:'<div style="color:var(--green);">✅ Todos os itens OK</div>'}
+      </div>
+    </div>`;
+  document.getElementById('resumo-encerramento-conteudo').innerHTML=resumoHtml;
+  abrirModal('modal-resumo-encerramento');
 }
+function confirmarEncerramento(){
+  const obsExtra=document.getElementById('obs-encerramento').value.trim();
+  if(obsExtra&&obsCkLista){
+    obsCkLista.push({id:'obs'+Date.now(),texto:'[Encerramento] '+obsExtra,hora:fmtH(new Date().toISOString()),data:new Date().toLocaleDateString('pt-BR')});
+  }
+  fecharModal('modal-resumo-encerramento');
+  // Verificar saída antecipada
+  const agora=new Date();
+  if(plantaoAtivo&&plantaoAtivo.horaPrevistaSaida){
+    const[hP,mP]=plantaoAtivo.horaPrevistaSaida.split(':').map(Number);
+    const entrada=new Date(plantaoAtivo.inicio);
+    let prev=new Date(entrada);prev.setHours(hP,mP,0,0);
+    if(prev<=entrada)prev.setDate(prev.getDate()+1);
+    if(agora<prev){
+      const diff=Math.round((prev-agora)/60000);
+      document.getElementById('saida-antecipada-info').innerHTML=`⚠️ Você está saindo <strong>${diff} minuto(s) antes</strong> do horário previsto (${plantaoAtivo.horaPrevistaSaida}).<br><br>Informe o motivo para continuar.`;
+      abrirModal('modal-saida-antecipada');return;
+    }
+  }
+  finalizarPlantao(false,null);
+}
+window.confirmarEncerramento=confirmarEncerramento;
+
 function confirmarSaidaAntecipada(){
   const motivo=document.getElementById('motivo-saida').value.trim();
   if(!motivo){toast('⚠️ Informe o motivo');return;}
-  fecharModal('modal-saida-antecipada');finalizarPlantao(true,motivo);
+  fecharModal('modal-saida-antecipada');
+  finalizarPlantao(true,motivo);
 }
 function finalizarPlantao(antecipado,motivo){
   plantaoAtivo.fim=new Date().toISOString();plantaoAtivo.saidaAntecipada=antecipado;plantaoAtivo.motivoSaida=motivo;
@@ -2107,44 +2249,6 @@ function finalizarPlantao(antecipado,motivo){
 // ═══════════════════════════════════════════
 // FOTOS
 // ═══════════════════════════════════════════
-function registrarFoto(input){
-  if(!input.files[0])return;
-  const reader=new FileReader();
-  reader.onload=e=>{
-    // Sem GPS — apenas número sequencial e horário de upload
-    const foto={
-      id:'f'+Date.now(),
-      num:fotosP.length+1,
-      data:e.target.result,
-      hora:fmtH(new Date().toISOString()),
-      dataCompleta:new Date().toLocaleDateString('pt-BR')+' '+fmtH(new Date().toISOString()),
-      dataHora:new Date().toISOString(),
-      lat:null,lng:null
-    };
-    salvarFoto(foto);
-  };
-  reader.readAsDataURL(input.files[0]);input.value='';
-}
-function salvarFoto(foto){
-  fotosP.push(foto);
-  // Persistir fotos no localStorage imediatamente (proteção contra fechamento do app)
-  try{
-    const plantaoId=plantaoAtivo?plantaoAtivo.id:'rascunho';
-    localStorage.setItem('rm_fotos_rascunho_'+plantaoId, JSON.stringify(fotosP));
-  }catch(e){}
-  atualizarStorage();
-  renderFotos();
-  toast(`📷 Foto #${foto.num} registrada!${foto.lat?' GPS ✓':''}`);
-}function renderFotos(){
-  document.getElementById('foto-count').textContent=fotosP.length+' foto'+(fotosP.length!==1?'s':'');
-  document.getElementById('fotos-grid').innerHTML=fotosP.map(f=>`
-    <div class="foto-thumb">
-      <img src="${f.data}" alt="Ronda #${f.num}">
-      <div class="foto-hora">${f.hora}${f.lat?' 📍':''}</div>
-      <div class="foto-num">#${String(f.num).padStart(3,'0')}</div>
-    </div>`).join('');
-}
-
 // ═══════════════════════════════════════════
 // PORTARIA
 // ═══════════════════════════════════════════
@@ -2183,6 +2287,7 @@ function registrarSaidaVisitante(id){
 }
 function renderPortariaPlantao(){
   const div=document.getElementById('lista-portaria-plantao');
+  if(!div)return;
   if(!portariaP.length){div.innerHTML='<div class="empty-state"><div class="es-icon">🚦</div><div>Nenhum registro</div></div>';return;}
   div.innerHTML=[...portariaP].reverse().map(r=>{
     if(r.tipo==='entrega')return`<div class="list-item"><div class="li-main"><div class="li-title">📦 ${r.empresa} — ${r.entregador}</div><div class="li-sub">🚗 ${r.placa} · Para: ${r.destino} · ${r.hora}</div></div><span class="badge badge-purple">Entrega</span></div>`;
@@ -2232,44 +2337,28 @@ function toggleEditarChecklist(){
   document.getElementById('btn-editar-ck').textContent=checklistSalvo?'✏️ Editar':'💾 Fechar edição';
 }
 function renderChecklistSalvo(ck){
+  const det=document.getElementById('checklist-salvo-detalhes');
+  const salvo=document.getElementById('checklist-salvo');
+  if(!det||!salvo)return;
+  const itensV=DB.get('itens_veiculo');
   const equips=DB.get('equipamentos');
-  const eqHtml=equips.map(eq=>{
-    const v=ck.equipamentos?ck.equipamentos[eq.id]:'ok';
-    return`<div class="rel-row"><span class="rel-lbl">${eq.nome}</span><span class="rel-val"><span class="${v==='ok'?'status-ok':'status-nok'}">${v==='ok'?'✓ OK':'✗ FALTA'}</span></span></div>`;
+  const todosItens=[...itensV,...equips];
+  const eqHtml=todosItens.map(item=>{
+    const v=ck.equipamentos?ck.equipamentos[item.id]:'ok';
+    return`<div class="rel-row"><span class="rel-lbl">${item.nome}</span><span class="rel-val"><span class="${v==='ok'?'status-ok':'status-nok'}">${v==='ok'?'✓ OK':'✗ PROBLEMA'}</span></span></div>`;
   }).join('');
-  document.getElementById('checklist-salvo-detalhes').innerHTML=`
+  const obsArr=Array.isArray(ck.obs)?ck.obs:[];
+  det.innerHTML=`
     <div class="rel-row"><span class="rel-lbl">Veículo</span><span class="rel-val">${ck.veiculo||'—'}</span></div>
     <div class="rel-row"><span class="rel-lbl">KM Entrada</span><span class="rel-val">${ck.kmEntrada||'—'}</span></div>
     <div class="rel-row"><span class="rel-lbl">KM Saída</span><span class="rel-val">${ck.kmSaida||'—'}</span></div>
     <div class="rel-row"><span class="rel-lbl">Gasolina</span><span class="rel-val">${ck.gasolina||'—'}</span></div>
     <div class="rel-row"><span class="rel-lbl">Óleo</span><span class="rel-val">${ck.oleo||'—'}</span></div>
     ${eqHtml}
-    ${ck.obs?`<div class="rel-row"><span class="rel-lbl">Obs.</span><span class="rel-val">${ck.obs}</span></div>`:''}`;
-  document.getElementById('checklist-salvo').classList.remove('hidden');
-}
-function atualizarStorage(){
-  if(!plantaoAtivo)return;
-  // Sincronizar arrays em memória com o objeto do plantão
-  plantaoAtivo.fotos=fotosP;
-  plantaoAtivo.portaria=portariaP;
-  plantaoAtivo.ckState=ckState;
-  plantaoAtivo.rondas=rondasAtivas;
-  plantaoAtivo.fotosCk=fotosCk;
-  plantaoAtivo.checklistSalvo=checklistSalvo;
-  // Salvar no banco (localStorage + Firebase)
-  const plantoes=DB.get('plantoes').map(p=>p.id===plantaoAtivo.id?plantaoAtivo:p);
-  DB.set('plantoes',plantoes);
-  // Salvar estado da sessão separadamente para recuperação rápida
-  try{
-    localStorage.setItem('rm_sessao_ativa', JSON.stringify({
-      plantaoId: plantaoAtivo.id,
-      vigilanteId: U?U.id:null,
-      ckState,
-      checklistSalvo,
-      rondasAtivasIdx: rondaAtualIdx,
-      fotosCk
-    }));
-  }catch(e){}
+    ${obsArr.length?`<div class="rel-row"><span class="rel-lbl">Obs.</span><span class="rel-val">${obsArr.length} registro(s)</span></div>`:''}`;
+  salvo.classList.remove('hidden');
+  const form=document.getElementById('checklist-form');
+  if(form)form.classList.add('hidden');
 }
 
 // ═══════════════════════════════════════════
@@ -2324,144 +2413,141 @@ function renderRelatoriosPorData(plantoes,divId){
 function renderRelatoriosAdmin(){renderRelatoriosPorData(DB.get('plantoes').filter(p=>p.fim),'lista-relatorios-admin');}
 function renderMeusRelatorios(){renderRelatoriosPorData(DB.get('plantoes').filter(p=>p.fim&&p.vigilanteId===U.id),'lista-meus-relatorios');}
 function gerarHtmlRelatorio(p, opcoes){
-  opcoes = opcoes || {};
-  const mostrarFotos = opcoes.mostrarFotos !== false;
-  const ck = p.checklist || {};
-  const fotos = p.fotos || [];
-  const portaria = p.portaria || [];
-  const entregas = portaria.filter(x => x.tipo === 'entrega');
-  const visitantes = portaria.filter(x => x.tipo === 'visitante');
-  const s = statusPlantao(p);
-  const id = p.id || '';
-  let emp = {}; try { emp = JSON.parse(localStorage.getItem('rm_empresa') || '{}'); } catch(e) {}
+  opcoes=opcoes||{};
+  const ck=p.checklist||{};
+  const portaria=p.portaria||[];
+  const entregas=portaria.filter(x=>x.tipo==='entrega');
+  const visitantes=portaria.filter(x=>x.tipo==='visitante');
+  const s=statusPlantao(p);
+  const id=p.id||'';
+  let emp={};try{emp=JSON.parse(localStorage.getItem('rm_empresa')||'{}');}catch(e){}
 
-  // Status
-  let statusHtml = '';
-  if(s.label === 'antes') statusHtml = `<div style="background:#FEF3C7;border:1px solid #F59E0B;border-radius:6px;padding:8px 12px;font-size:12px;color:#92400E;margin-bottom:10px;">⚠️ <strong>Saída antecipada</strong>${p.motivoSaida ? ' — ' + p.motivoSaida : ''}</div>`;
-  else if(s.label === 'depois') statusHtml = `<div style="background:#EFF6FF;border:1px solid #2E8BF7;border-radius:6px;padding:8px 12px;font-size:12px;color:#1e40af;margin-bottom:10px;">🔵 <strong>Hora extra registrada</strong></div>`;
-  else if(p.fim) statusHtml = `<div style="background:#D1FAE5;border:1px solid #10B981;border-radius:6px;padding:8px 12px;font-size:12px;color:#065F46;margin-bottom:10px;">✅ <strong>Encerrado no horário</strong></div>`;
+  const S={
+    card:'background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:24px;font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#1a1a1a;',
+    header:'border-bottom:2px solid #0B1D3A;padding-bottom:12px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:flex-start;',
+    logo:'font-size:20px;font-weight:900;color:#0B1D3A;',
+    logoSpan:'color:#1A4FAF;',
+    empNome:'font-size:13px;font-weight:700;color:#1a1a1a;margin-top:4px;',
+    empInfo:'font-size:11px;color:#64748B;margin-top:2px;',
+    num:'font-size:11px;color:#64748B;text-align:right;',
+    section:'margin-bottom:16px;page-break-inside:avoid;',
+    h4:'font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#1A4FAF;margin-bottom:8px;border-bottom:1px solid #e2e8f0;padding-bottom:4px;',
+    row:'display:flex;justify-content:space-between;font-size:12px;padding:5px 0;border-bottom:1px solid #f8fafc;',
+    lbl:'color:#64748B;flex-shrink:0;min-width:120px;',
+    val:'font-weight:600;text-align:right;margin-left:8px;',
+    ok:'background:#D1FAE5;color:#065F46;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;',
+    nok:'background:#FEE2E2;color:#7F1D1D;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;',
+    ronda:'background:#f0fdf4;border-radius:6px;padding:8px 10px;margin-bottom:6px;border-left:3px solid #10B981;page-break-inside:avoid;',
+    obs:'background:#FEF3C7;border-radius:4px;padding:6px 10px;margin-bottom:4px;border-left:3px solid #F59E0B;',
+    footer:'border-top:1px solid #e2e8f0;padding-top:10px;text-align:center;font-size:10px;color:#94A3B8;margin-top:16px;',
+  };
+
+  // Status box
+  let statusBox='';
+  if(s.label==='antes') statusBox=`<div style="background:#FEF3C7;border:1px solid #F59E0B;border-radius:6px;padding:8px 12px;font-size:12px;color:#92400E;margin-bottom:12px;">⚠️ <strong>Saída antecipada</strong>${p.motivoSaida?' — '+p.motivoSaida:''}</div>`;
+  else if(s.label==='depois') statusBox=`<div style="background:#EFF6FF;border:1px solid #2E8BF7;border-radius:6px;padding:8px 12px;font-size:12px;color:#1e40af;margin-bottom:12px;">🔵 <strong>Hora extra registrada</strong></div>`;
+  else if(p.fim) statusBox=`<div style="background:#D1FAE5;border:1px solid #10B981;border-radius:6px;padding:8px 12px;font-size:12px;color:#065F46;margin-bottom:12px;">✅ <strong>Encerrado no horário</strong></div>`;
 
   // Equipamentos
-  const equips = DB.get('equipamentos');
-  const eqHtml = ck.equipamentos ? equips.map(eq => {
-    const v = ck.equipamentos[eq.id] || 'ok';
-    return `<div class="rel-row"><span class="rel-lbl">${eq.nome}</span><span class="rel-val"><span class="${v==='ok'?'status-ok':'status-nok'}">${v==='ok'?'✓ OK':'✗ FALTA'}</span></span></div>`;
-  }).join('') : '';
+  const equips=DB.get('equipamentos');
+  const itensVeic=DB.get('itens_veiculo');
+  const todosItens=[...itensVeic,...equips];
+  const eqHtml=ck.equipamentos?todosItens.map(item=>{
+    const v=ck.equipamentos[item.id]||'ok';
+    return`<div style="${S.row}"><span style="${S.lbl}">${item.nome}</span><span style="${S.val}"><span style="${v==='ok'?S.ok:S.nok}">${v==='ok'?'✓ OK':'✗ PROBLEMA'}</span></span></div>`;
+  }).join(''):'';
 
-  // Verificação veículo (itens dinâmicos)
-  const itensVeiculo = DB.get('itens_veiculo');
-  const veiHtml = ck.equipamentos && itensVeiculo.length ? itensVeiculo.map(item => {
-    const v = ck.equipamentos[item.id] || 'ok';
-    return `<div class="rel-row"><span class="rel-lbl">${item.nome}</span><span class="rel-val"><span class="${v==='ok'?'status-ok':'status-nok'}">${v==='ok'?'✓ OK':'✗ PROBLEMA'}</span></span></div>`;
-  }).join('') : '';
-
-  // Rondas com hora inicial e final
-  const rondasHtml = (p.rondas && p.rondas.length) ? `
-    <div class="rel-section"><h4>🚶 Rondas Realizadas (${p.rondas.filter(r=>r.fim).length})</h4>
-      ${p.rondas.map(r => `<div style="background:#f8fafc;border-radius:6px;padding:8px;margin-bottom:6px;border-left:3px solid #10B981;">
-        <div style="font-weight:700;font-size:12px;">Ronda #${r.num}</div>
-        <div style="font-size:11px;color:#64748B;">📅 ${r.data||''} · ⏰ ${r.hora||fmtH(r.inicio)} → ${r.horaFim||fmtH(r.fim)}</div>
-        ${r.lat?`<div style="font-size:10px;color:#14B8A6;">📍 Início: ${r.lat}, ${r.lng}</div>`:''}
-        ${r.latFim?`<div style="font-size:10px;color:#14B8A6;">📍 Fim: ${r.latFim}, ${r.lngFim}</div>`:''}
+  // Rondas
+  const rondasHtml=(p.rondas&&p.rondas.length)?`
+    <div style="${S.section}">
+      <h4 style="${S.h4}">🚶 Rondas Realizadas (${p.rondas.filter(r=>r.fim).length})</h4>
+      ${p.rondas.map(r=>`<div style="${S.ronda}">
+        <div style="font-weight:700;font-size:12px;margin-bottom:3px;">Ronda #${r.num}</div>
+        <div style="font-size:11px;color:#64748B;">📅 ${r.data||fmtData(r.inicio)} · ⏰ ${r.hora||fmtH(r.inicio)} → ${r.horaFim||fmtH(r.fim)||'Em andamento'}</div>
+        ${r.lat?`<div style="font-size:10px;color:#0d9488;margin-top:2px;">📍 Início: ${r.lat}, ${r.lng}</div>`:''}
+        ${r.latFim?`<div style="font-size:10px;color:#0d9488;margin-top:1px;">📍 Fim: ${r.latFim}, ${r.lngFim}</div>`:''}
       </div>`).join('')}
-    </div>` : '';
+    </div>`:'';
 
-  // Fotos de validação
-  const fotosValidHtml = (p.fotoRostoEntrada || p.fotoRostoSaida) ? `
-    <div class="rel-section"><h4>📸 Fotos de Validação</h4>
-      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;">
-        ${p.fotoRostoEntrada ? `<div style="text-align:center;">
-          <img src="${p.fotoRostoEntrada}" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:3px solid #10B981;print-color-adjust:exact;">
-          <div style="font-size:10px;color:#64748B;margin-top:4px;">✅ Entrada ${fmtH(p.inicio)}</div>
-        </div>` : ''}
-        ${p.fotoRostoSaida ? `<div style="text-align:center;">
-          <img src="${p.fotoRostoSaida}" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:3px solid #EF4444;print-color-adjust:exact;">
-          <div style="font-size:10px;color:#64748B;margin-top:4px;">🔴 Saída ${fmtH(p.fim)}</div>
-        </div>` : ''}
-      </div>
-    </div>` : '';
-
-  // Fotos de ronda
-  const fotosRondaHtml = ''; // Fotos removidas — dados salvos só localmente
-
-  // Fotos do checklist
-  const fotosCkHtml = ''; // Fotos do checklist removidas
-
-  // Checklist veículo
-  const ckVeiculoHtml = ck.veiculo ? `
-    <div class="rel-section"><h4>🏍️ Checklist do Veículo</h4>
-      <div class="rel-row"><span class="rel-lbl">Veículo</span><span class="rel-val">${ck.veiculo}</span></div>
-      <div class="rel-row"><span class="rel-lbl">KM Entrada</span><span class="rel-val">${ck.kmEntrada||'—'}</span></div>
-      <div class="rel-row"><span class="rel-lbl">KM Saída</span><span class="rel-val">${ck.kmSaida||'—'}</span></div>
-      <div class="rel-row"><span class="rel-lbl">Gasolina</span><span class="rel-val">${ck.gasolina||'—'}</span></div>
-      <div class="rel-row"><span class="rel-lbl">Óleo</span><span class="rel-val">${ck.oleo||'—'}</span></div>
-      ${veiHtml}
+  // Checklist
+  const ckHtml=ck.veiculo?`
+    <div style="${S.section}">
+      <h4 style="${S.h4}">🏍️ Checklist do Veículo</h4>
+      <div style="${S.row}"><span style="${S.lbl}">Veículo</span><span style="${S.val}">${ck.veiculo}</span></div>
+      <div style="${S.row}"><span style="${S.lbl}">KM Entrada</span><span style="${S.val}">${ck.kmEntrada||'—'}</span></div>
+      <div style="${S.row}"><span style="${S.lbl}">KM Saída</span><span style="${S.val}">${ck.kmSaida||'—'}</span></div>
+      <div style="${S.row}"><span style="${S.lbl}">Gasolina</span><span style="${S.val}">${ck.gasolina||'—'}</span></div>
+      <div style="${S.row}"><span style="${S.lbl}">Óleo</span><span style="${S.val}">${ck.oleo||'—'}</span></div>
       ${eqHtml}
-      ${Array.isArray(ck.obs)&&ck.obs.length?`<div style="margin-top:6px;"><div style="font-size:10px;font-weight:700;color:#F59E0B;margin-bottom:4px;">📝 OBSERVAÇÕES</div>${ck.obs.map((o,i)=>`<div style="background:#FEF3C7;border-radius:4px;padding:6px 8px;margin-bottom:4px;font-size:11px;"><strong>#${i+1}</strong> ${o.texto} <span style="color:#64748B;">· ${o.data} ${o.hora}</span></div>`).join('')}</div>`:''}
-    </div>
-    ${fotosCkHtml}` : '';
+    </div>`:'';
+
+  // Observações
+  const obsArr=Array.isArray(ck.obs)?ck.obs:[];
+  const obsHtml=obsArr.length?`
+    <div style="${S.section}">
+      <h4 style="${S.h4}">📝 Observações</h4>
+      ${obsArr.map((o,i)=>`<div style="${S.obs}">
+        <span style="font-weight:700;">#${i+1}</span> ${o.texto}
+        <div style="font-size:10px;color:#92400E;margin-top:2px;">📅 ${o.data} · ⏰ ${o.hora}</div>
+      </div>`).join('')}
+    </div>`:'';
 
   // Entregas
-  const entregasHtml = entregas.length ? `
-    <div class="rel-section"><h4>📦 Entregas (${entregas.length})</h4>
-      ${entregas.map(e => `<div class="rel-row"><span class="rel-lbl">${e.empresa} · ${e.entregador}</span><span class="rel-val">${e.placa} · ${e.destino} · ${e.hora}</span></div>`).join('')}
-    </div>` : '';
+  const entHtml=entregas.length?`
+    <div style="${S.section}">
+      <h4 style="${S.h4}">📦 Entregas (${entregas.length})</h4>
+      ${entregas.map(e=>`<div style="${S.row}"><span style="${S.lbl}">${e.empresa} · ${e.entregador}</span><span style="${S.val}">${e.placa} · ${e.destino} · ${e.hora}</span></div>`).join('')}
+    </div>`:'';
 
   // Visitantes
-  const visitantesHtml = visitantes.length ? `
-    <div class="rel-section"><h4>🚗 Visitantes (${visitantes.length})</h4>
-      ${visitantes.map(v => `<div class="rel-row">
-        <span class="rel-lbl">${v.visitante}</span>
-        <span class="rel-val">${v.placa} · ${v.destino}<br>${v.hora}${v.horaSaida?' → '+v.horaSaida:' (sem saída)'}${v.ocorrencia?'<br>⚠️ '+v.ocorrencia.obs:''}</span>
+  const visHtml=visitantes.length?`
+    <div style="${S.section}">
+      <h4 style="${S.h4}">🚗 Visitantes (${visitantes.length})</h4>
+      ${visitantes.map(v=>`<div style="${S.row}">
+        <span style="${S.lbl}">${v.visitante}</span>
+        <span style="${S.val}">${v.placa} · ${v.destino}<br><small style="color:#64748B;">${v.hora}${v.horaSaida?' → '+v.horaSaida:' (sem saída)'}${v.ocorrencia?'<br>⚠️ '+v.ocorrencia.obs:''}</small></span>
       </div>`).join('')}
-    </div>` : '';
+    </div>`:'';
 
-  return `<div class="relatorio-card" style="page-break-after:auto;">
-    <div class="rel-header">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-        <div>
-          <div class="rel-logo">🛡️ Ronda<span>Master</span></div>
-          ${emp.nome ? `<div style="font-size:12px;font-weight:700;color:#1a1a1a;margin-top:4px;">${emp.nome}</div>` : ''}
-          ${emp.doc ? `<div style="font-size:11px;color:#64748B;">CNPJ: ${emp.doc}</div>` : ''}
-          ${emp.tel ? `<div style="font-size:11px;color:#64748B;">Tel: ${emp.tel}</div>` : ''}
-          ${emp.end ? `<div style="font-size:11px;color:#64748B;">${emp.end}${emp.cidade?', '+emp.cidade:''}${emp.estado?' - '+emp.estado:''}</div>` : ''}
-        </div>
-        <div style="text-align:right;">
-          <div style="font-size:11px;color:#64748B;">Nº ${id.slice(-4).toUpperCase()}</div>
-          <div style="font-size:11px;color:#64748B;">${fmtData(p.inicio)}</div>
-        </div>
+  return `<div style="${S.card}">
+    <div style="${S.header}">
+      <div>
+        <div style="${S.logo}">🛡️ Ronda<span style="${S.logoSpan}">Master</span></div>
+        ${emp.nome?`<div style="${S.empNome}">${emp.nome}</div>`:''}
+        ${emp.doc?`<div style="${S.empInfo}">CNPJ: ${emp.doc}</div>`:''}
+        ${emp.tel?`<div style="${S.empInfo}">Tel: ${emp.tel}</div>`:''}
+        ${emp.end?`<div style="${S.empInfo}">${emp.end}${emp.cidade?', '+emp.cidade:''}${emp.estado?' - '+emp.estado:''}</div>`:''}
       </div>
-      <div style="font-size:11px;color:#64748B;margin-top:6px;padding-top:6px;border-top:1px solid #e2e8f0;">Relatório Diário de Vigilância</div>
+      <div style="${S.num}">Nº ${id.slice(-4).toUpperCase()}<br>${fmtData(p.inicio)}<br><span style="color:#94A3B8;font-size:10px;">Relatório Diário</span></div>
     </div>
-    ${statusHtml}
-    <div class="rel-section"><h4>🏢 Contratante / Local</h4>
-      <div class="rel-row"><span class="rel-lbl">Contratante</span><span class="rel-val">${p.contratanteNome||'—'}</span></div>
-      <div class="rel-row"><span class="rel-lbl">Local</span><span class="rel-val">${p.localNome||'—'}</span></div>
+    ${statusBox}
+    <div style="${S.section}">
+      <h4 style="${S.h4}">🏢 Contratante / Local</h4>
+      <div style="${S.row}"><span style="${S.lbl}">Contratante</span><span style="${S.val}">${p.contratanteNome||'—'}</span></div>
+      <div style="${S.row}"><span style="${S.lbl}">Local</span><span style="${S.val}">${p.localNome||'—'}</span></div>
     </div>
-    <div class="rel-section"><h4>🦺 Vigilante</h4>
-      <div class="rel-row"><span class="rel-lbl">Nome</span><span class="rel-val">${p.vigilanteNome||'—'}</span></div>
+    <div style="${S.section}">
+      <h4 style="${S.h4}">🦺 Vigilante</h4>
+      <div style="${S.row}"><span style="${S.lbl}">Nome</span><span style="${S.val}">${p.vigilanteNome||'—'}</span></div>
     </div>
-    <div class="rel-section"><h4>⏱️ Jornada</h4>
-      <div class="rel-row"><span class="rel-lbl">Entrada</span><span class="rel-val">${fmtH(p.inicio)}</span></div>
-      <div class="rel-row"><span class="rel-lbl">Saída</span><span class="rel-val">${p.fim?fmtH(p.fim):'Em andamento'}</span></div>
-      ${p.horaPrevistaSaida ? `<div class="rel-row"><span class="rel-lbl">Saída prevista</span><span class="rel-val">${p.horaPrevistaSaida}</span></div>` : ''}
+    <div style="${S.section}">
+      <h4 style="${S.h4}">⏱️ Jornada</h4>
+      <div style="${S.row}"><span style="${S.lbl}">Entrada</span><span style="${S.val}">${fmtH(p.inicio)}</span></div>
+      <div style="${S.row}"><span style="${S.lbl}">Saída</span><span style="${S.val}">${p.fim?fmtH(p.fim):'Em andamento'}</span></div>
+      ${p.horaPrevistaSaida?`<div style="${S.row}"><span style="${S.lbl}">Saída prevista</span><span style="${S.val}">${p.horaPrevistaSaida}</span></div>`:''}
+      ${p.rondas?`<div style="${S.row}"><span style="${S.lbl}">Rondas realizadas</span><span style="${S.val}">${p.rondas.filter(r=>r.fim).length}</span></div>`:''}
     </div>
-    ${fotosValidHtml}
     ${rondasHtml}
-    ${mostrarFotos ? fotosRondaHtml : ''}
-    ${ckVeiculoHtml}
-    ${entregasHtml}
-    ${visitantesHtml}
-    <div style="border-top:1px solid #e2e8f0;padding-top:10px;text-align:center;font-size:10px;color:#94A3B8;margin-top:10px;">
-      RondaMaster · ID: ${id}
-    </div>
+    ${ckHtml}
+    ${obsHtml}
+    ${entHtml}
+    ${visHtml}
+    <div style="${S.footer}">RondaMaster · ID: ${id}</div>
   </div>`;
 }
-function verRelatorio(id){
-  const p=DB.get('plantoes').find(x=>x.id===id);if(!p)return;
-  document.getElementById('relatorio-conteudo').innerHTML=gerarHtmlRelatorio(p,{mostrarFotos:true});
-  abrirModal('modal-relatorio');
-}
+
+// verRelatorio movida acima
+
 
 // ═══════════════════════════════════════════
 // MODAIS
@@ -2629,100 +2715,172 @@ function carregarHoraExtra(){
 // ═══════════════════════════════════════════
 // GERAÇÃO DE PDF
 // ═══════════════════════════════════════════
-function gerarPDF(divId){
-  const el=document.getElementById(divId);
-  if(!el){toast('❌ Conteúdo não encontrado');return;}
+function gerarPDF(plantaoId){
+  const p=DB.get('plantoes').find(x=>x.id===plantaoId);
+  if(!p){toast('❌ Plantão não encontrado');return;}
+  let emp={};try{emp=JSON.parse(localStorage.getItem('rm_empresa')||'{}');}catch(e){}
 
-  // Nome do arquivo baseado no conteúdo
-  const data=new Date();
-  const nomeArq=`RondaMaster_Relatorio_${data.getDate().toString().padStart(2,'0')}${(data.getMonth()+1).toString().padStart(2,'0')}${data.getFullYear()}.pdf`;
+  const win=window.open('','_blank');
+  if(!win){toast('⚠️ Permita pop-ups para gerar o PDF');return;}
 
-  toast('⏳ Gerando PDF...');
+  const corpo=montarCorpoHTML(p,emp);
 
-  // Clonar o elemento para não afetar o modal
-  const clone=el.cloneNode(true);
-  clone.style.background='#ffffff';
-  clone.style.padding='20px';
-  clone.style.fontFamily="'Segoe UI', Arial, sans-serif";
-  clone.style.fontSize='12px';
-  clone.style.color='#1a1a1a';
-  clone.style.width='700px';
+  // CSS do relatório
+  const css=[
+    '*{box-sizing:border-box;margin:0;padding:0;}',
+    'body{font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#111;background:#f5f5f5;padding:0;}',
+    '@page{size:A4;margin:14mm 12mm;}',
+    '@media print{body{background:#fff;}.print-bar{display:none!important;}.pagina{box-shadow:none;margin:0;border-radius:0;}}',
+    '.print-bar{position:fixed;top:0;left:0;right:0;background:#1A4FAF;color:#fff;padding:10px 20px;display:flex;align-items:center;justify-content:space-between;z-index:999;font-size:13px;}',
+    '.btn-print{background:#fff;color:#1A4FAF;border:none;padding:8px 22px;border-radius:6px;font-weight:700;font-size:13px;cursor:pointer;}',
+    '.pagina{background:#fff;max-width:760px;margin:70px auto 30px;padding:28px 32px;box-shadow:0 2px 16px rgba(0,0,0,.12);border-radius:6px;}',
+    '.logo-header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2.5px solid #0B1D3A;padding-bottom:12px;margin-bottom:16px;}',
+    '.logo-text{font-size:20px;font-weight:900;color:#0B1D3A;}',
+    '.logo-text span{color:#1A4FAF;}',
+    '.emp-nome{font-size:12px;font-weight:700;margin-top:5px;}',
+    '.emp-info{font-size:10px;color:#666;margin-top:2px;}',
+    '.num-area{text-align:right;font-size:11px;color:#666;line-height:1.8;}',
+    '.sub-header{font-size:10px;color:#888;margin-top:5px;padding-top:5px;border-top:1px solid #eee;}',
+    '.status-box{padding:7px 12px;border-radius:5px;font-size:12px;margin-bottom:12px;font-weight:600;}',
+    '.s-antes{background:#FEF3C7;border:1px solid #F59E0B;color:#7c4d00;}',
+    '.s-depois{background:#EFF6FF;border:1px solid #2E8BF7;color:#1e40af;}',
+    '.s-ok{background:#ECFDF5;border:1px solid #10B981;color:#064e3b;}',
+    '.secao{margin-bottom:14px;page-break-inside:avoid;}',
+    '.sec-titulo{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.13em;color:#1A4FAF;margin-bottom:7px;padding-bottom:3px;border-bottom:1px solid #E2E8F0;}',
+    '.linha{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #F8FAFC;font-size:11px;}',
+    '.linha-lbl{color:#666;min-width:120px;flex-shrink:0;}',
+    '.linha-val{font-weight:600;text-align:right;}',
+    '.b-ok{background:#D1FAE5;color:#065F46;padding:1px 7px;border-radius:3px;font-size:10px;font-weight:700;display:inline-block;}',
+    '.b-nok{background:#FEE2E2;color:#7F1D1D;padding:1px 7px;border-radius:3px;font-size:10px;font-weight:700;display:inline-block;}',
+    '.ronda-card{background:#F0FDF4;border-left:3px solid #10B981;border-radius:4px;padding:7px 10px;margin-bottom:5px;}',
+    '.ronda-num{font-weight:700;font-size:11px;}',
+    '.ronda-det{font-size:10px;color:#555;margin-top:2px;line-height:1.5;}',
+    '.gps{font-size:10px;color:#0d9488;}',
+    '.obs-card{background:#FFFBEB;border-left:3px solid #F59E0B;border-radius:4px;padding:6px 10px;margin-bottom:4px;}',
+    '.obs-txt{font-size:11px;}',
+    '.obs-meta{font-size:10px;color:#92400E;margin-top:2px;}',
+    '.rodape{border-top:1px solid #eee;padding-top:8px;text-align:center;font-size:10px;color:#aaa;margin-top:14px;}'
+  ].join('');
 
-  // Aplicar estilos inline nas classes do relatório
-  clone.querySelectorAll('.relatorio-card').forEach(card=>{
-    card.style.background='#ffffff';
-    card.style.color='#1a1a1a';
-    card.style.padding='20px';
-    card.style.marginBottom='20px';
-    card.style.border='1px solid #e2e8f0';
-    card.style.borderRadius='8px';
-  });
-  clone.querySelectorAll('.rel-header').forEach(el=>{
-    el.style.borderBottom='2px solid #0B1D3A';
-    el.style.paddingBottom='12px';
-    el.style.marginBottom='14px';
-  });
-  clone.querySelectorAll('.rel-logo').forEach(el=>{
-    el.style.fontSize='18px';el.style.fontWeight='900';el.style.color='#0B1D3A';
-  });
-  clone.querySelectorAll('.rel-logo span').forEach(el=>{
-    el.style.color='#1A4FAF';
-  });
-  clone.querySelectorAll('.rel-section').forEach(el=>{
-    el.style.marginBottom='14px';el.style.pageBreakInside='avoid';
-  });
-  clone.querySelectorAll('.rel-section h4').forEach(el=>{
-    el.style.fontSize='10px';el.style.fontWeight='700';
-    el.style.textTransform='uppercase';el.style.letterSpacing='.1em';
-    el.style.color='#1A4FAF';el.style.marginBottom='8px';
-  });
-  clone.querySelectorAll('.rel-row').forEach(el=>{
-    el.style.display='flex';el.style.justifyContent='space-between';
-    el.style.fontSize='12px';el.style.padding='4px 0';
-    el.style.borderBottom='1px solid #f0f0f0';
-  });
-  clone.querySelectorAll('.rel-lbl').forEach(el=>{
-    el.style.color='#64748B';el.style.flexShrink='0';
-  });
-  clone.querySelectorAll('.rel-val').forEach(el=>{
-    el.style.fontWeight='600';el.style.textAlign='right';el.style.marginLeft='8px';
-  });
-  clone.querySelectorAll('.status-ok').forEach(el=>{
-    el.style.background='#D1FAE5';el.style.color='#065F46';
-    el.style.padding='2px 7px';el.style.borderRadius='4px';
-    el.style.fontSize='10px';el.style.fontWeight='700';
-  });
-  clone.querySelectorAll('.status-nok').forEach(el=>{
-    el.style.background='#FEE2E2';el.style.color='#7F1D1D';
-    el.style.padding='2px 7px';el.style.borderRadius='4px';
-    el.style.fontSize='10px';el.style.fontWeight='700';
-  });
+  // Montar HTML usando DOM em vez de template string com tags HTML
+  const doc=win.document;
+  doc.open();
+  doc.write('<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">');
+  doc.write('<title>Relatorio RondaMaster</title>');
+  doc.write('<style>'+css+'</style>');
+  doc.write('</head><body>');
+  doc.write('<div class="print-bar">');
+  doc.write('<span>Ronda Master - Relatorio de Vigilancia</span>');
+  doc.write('<button class="btn-print" onclick="window.print()">Salvar PDF</button>');
+  doc.write('</div>');
+  doc.write('<div class="pagina">'+corpo+'</div>');
+  doc.write('</body></html>');
+  doc.close();
 
-  const opt={
-    margin:[10,10,10,10],
-    filename:nomeArq,
-    image:{type:'jpeg',quality:0.95},
-    html2canvas:{
-      scale:2,
-      useCORS:true,
-      allowTaint:true,
-      logging:false,
-      imageTimeout:15000
-    },
-    jsPDF:{
-      unit:'mm',
-      format:'a4',
-      orientation:'portrait',
-      compress:true
-    },
-    pagebreak:{mode:['avoid-all','css','legacy']}
-  };
-
-  html2pdf().set(opt).from(clone).save()
-    .then(()=>toast('✅ PDF gerado e baixado!'))
-    .catch(e=>{console.error(e);toast('❌ Erro ao gerar PDF. Tente novamente.');});
+  toast('✅ Relatório aberto! Clique em "Salvar PDF" na nova janela.');
 }
 window.gerarPDF=gerarPDF;
+
+function montarCorpoHTML(p,emp){
+  emp=emp||{};
+  const ck=p.checklist||{};
+  const portaria=p.portaria||[];
+  const entregas=portaria.filter(x=>x.tipo==='entrega');
+  const visitantes=portaria.filter(x=>x.tipo==='visitante');
+  const s=statusPlantao(p);
+  const id=p.id||'';
+
+  let statusBox='';
+  if(s.label==='antes') statusBox='<div class="status-box s-antes">⚠️ <strong>Saída antecipada</strong>'+(p.motivoSaida?' — '+p.motivoSaida:'')+'</div>';
+  else if(s.label==='depois') statusBox='<div class="status-box s-depois">🔵 <strong>Hora extra registrada</strong></div>';
+  else if(p.fim) statusBox='<div class="status-box s-ok">✅ <strong>Encerrado no horário</strong></div>';
+
+  const equips=DB.get('equipamentos');
+  const itensV=DB.get('itens_veiculo');
+  const todosItens=[...itensV,...equips];
+  const eqLinhas=ck.equipamentos?todosItens.map(item=>{
+    const v=ck.equipamentos[item.id]||'ok';
+    return'<div class="linha"><span class="linha-lbl">'+item.nome+'</span><span class="linha-val"><span class="'+(v==='ok'?'b-ok':'b-nok')+'">'+(v==='ok'?'✓ OK':'✗ PROBLEMA')+'</span></span></div>';
+  }).join(''):'';
+
+  const rondasCards=(p.rondas&&p.rondas.length)?p.rondas.map(r=>{
+    let h='<div class="ronda-card">';
+    h+='<div class="ronda-num">Ronda #'+r.num+'</div>';
+    h+='<div class="ronda-det">📅 '+(r.data||fmtData(r.inicio))+' · ⏰ '+(r.hora||fmtH(r.inicio))+' → '+(r.horaFim||fmtH(r.fim)||'Em andamento')+'</div>';
+    if(r.lat) h+='<div class="gps">📍 Início: '+r.lat+', '+r.lng+'</div>';
+    if(r.latFim) h+='<div class="gps">📍 Fim: '+r.latFim+', '+r.lngFim+'</div>';
+    h+='</div>';
+    return h;
+  }).join(''):'';
+
+  const obsArr=Array.isArray(ck.obs)?ck.obs:[];
+  const obsCards=obsArr.map((o,i)=>{
+    return'<div class="obs-card"><div class="obs-txt"><strong>#'+(i+1)+'</strong> '+o.texto+'</div><div class="obs-meta">📅 '+o.data+' · ⏰ '+o.hora+'</div></div>';
+  }).join('');
+
+  const entLinhas=entregas.map(e=>'<div class="linha"><span class="linha-lbl">'+e.empresa+' · '+e.entregador+'</span><span class="linha-val">'+e.placa+' · '+e.destino+' · '+e.hora+'</span></div>').join('');
+  const visLinhas=visitantes.map(v=>'<div class="linha"><span class="linha-lbl">'+v.visitante+'</span><span class="linha-val">'+v.placa+'<br>'+v.hora+(v.horaSaida?' → '+v.horaSaida:' (sem saída)')+'</span></div>').join('');
+
+  let html='';
+  html+='<div class="logo-header"><div>';
+  html+='<div class="logo-text">🛡️ Ronda<span>Master</span></div>';
+  if(emp.nome) html+='<div class="emp-nome">'+emp.nome+'</div>';
+  if(emp.doc) html+='<div class="emp-info">CNPJ: '+emp.doc+'</div>';
+  if(emp.tel) html+='<div class="emp-info">Tel: '+emp.tel+'</div>';
+  if(emp.end) html+='<div class="emp-info">'+emp.end+(emp.cidade?', '+emp.cidade:'')+(emp.estado?' - '+emp.estado:'')+'</div>';
+  html+='</div>';
+  html+='<div class="num-area">Nº '+id.slice(-4).toUpperCase()+'<br>'+fmtData(p.inicio)+'<br><span style="color:#aaa;font-size:10px;">Relatório Diário</span></div>';
+  html+='</div>';
+  html+='<div class="sub-header">Relatório Diário de Vigilância</div>';
+  html+='<div style="margin-top:14px;">'+statusBox+'</div>';
+
+  html+='<div class="secao"><div class="sec-titulo">🏢 Contratante / Local</div>';
+  html+='<div class="linha"><span class="linha-lbl">Contratante</span><span class="linha-val">'+(p.contratanteNome||'—')+'</span></div>';
+  html+='<div class="linha"><span class="linha-lbl">Local</span><span class="linha-val">'+(p.localNome||'—')+'</span></div></div>';
+
+  html+='<div class="secao"><div class="sec-titulo">🦺 Vigilante</div>';
+  html+='<div class="linha"><span class="linha-lbl">Nome</span><span class="linha-val">'+(p.vigilanteNome||'—')+'</span></div></div>';
+
+  html+='<div class="secao"><div class="sec-titulo">⏱️ Jornada</div>';
+  html+='<div class="linha"><span class="linha-lbl">Entrada</span><span class="linha-val">'+fmtH(p.inicio)+'</span></div>';
+  html+='<div class="linha"><span class="linha-lbl">Saída</span><span class="linha-val">'+(p.fim?fmtH(p.fim):'Em andamento')+'</span></div>';
+  if(p.horaPrevistaSaida) html+='<div class="linha"><span class="linha-lbl">Saída prevista</span><span class="linha-val">'+p.horaPrevistaSaida+'</span></div>';
+  if(p.rondas) html+='<div class="linha"><span class="linha-lbl">Rondas realizadas</span><span class="linha-val">'+p.rondas.filter(r=>r.fim).length+'</span></div>';
+  html+='</div>';
+
+  if(p.rondas&&p.rondas.length) html+='<div class="secao"><div class="sec-titulo">🚶 Rondas Realizadas ('+p.rondas.filter(r=>r.fim).length+')</div>'+rondasCards+'</div>';
+
+  if(ck.veiculo){
+    html+='<div class="secao"><div class="sec-titulo">🏍️ Checklist do Veículo</div>';
+    html+='<div class="linha"><span class="linha-lbl">Veículo</span><span class="linha-val">'+ck.veiculo+'</span></div>';
+    html+='<div class="linha"><span class="linha-lbl">KM Entrada</span><span class="linha-val">'+(ck.kmEntrada||'—')+'</span></div>';
+    html+='<div class="linha"><span class="linha-lbl">KM Saída</span><span class="linha-val">'+(ck.kmSaida||'—')+'</span></div>';
+    html+='<div class="linha"><span class="linha-lbl">Gasolina</span><span class="linha-val">'+(ck.gasolina||'—')+'</span></div>';
+    html+='<div class="linha"><span class="linha-lbl">Óleo</span><span class="linha-val">'+(ck.oleo||'—')+'</span></div>';
+    html+=eqLinhas;
+    html+='</div>';
+  }
+
+  if(obsArr.length) html+='<div class="secao"><div class="sec-titulo">📝 Observações</div>'+obsCards+'</div>';
+  if(entregas.length) html+='<div class="secao"><div class="sec-titulo">📦 Entregas ('+entregas.length+')</div>'+entLinhas+'</div>';
+  if(visitantes.length) html+='<div class="secao"><div class="sec-titulo">🚗 Visitantes ('+visitantes.length+')</div>'+visLinhas+'</div>';
+
+  html+='<div class="rodape">RondaMaster · ID: '+id+'</div>';
+  return html;
+}
+window.montarCorpoHTML=montarCorpoHTML;
+let _relatorioAtualId=null;
+function verRelatorio(id){
+  _relatorioAtualId=id;
+  const p=DB.get('plantoes').find(x=>x.id===id);if(!p)return;
+  document.getElementById('relatorio-conteudo').innerHTML=gerarHtmlRelatorio(p,{mostrarFotos:true});
+  abrirModal('modal-relatorio');
+}
+function gerarPDFAtual(){
+  if(_relatorioAtualId) gerarPDF(_relatorioAtualId);
+  else toast('❌ Nenhum relatório selecionado');
+}
+window.gerarPDFAtual=gerarPDFAtual;
 let _acaoBloqueioFn=null;
 function mostrarBloqueio(titulo,msg,btnLabel,fn){
   _acaoBloqueioFn=fn;
@@ -2742,51 +2900,7 @@ function acaoBloqueio(){
   _acaoBloqueioFn=null;
 }
 window.acaoBloqueio=acaoBloqueio;
-let _fotoRostoCallback=null;
-let _fotoRostoData=null;
-function pedirFotoRosto(titulo,instrucao,callback){
-  _fotoRostoCallback=callback;_fotoRostoData=null;
-  document.getElementById('foto-rosto-title').textContent=titulo;
-  document.getElementById('foto-rosto-instrucao').textContent=instrucao;
-  const prev=document.getElementById('foto-rosto-preview');
-  prev.innerHTML='👤';prev.style.fontSize='56px';
-  document.getElementById('btn-confirmar-rosto').style.display='none';
-  // Desabilitar cancelar enquanto não tirar a foto
-  const btnCancelar=document.querySelector('#modal-foto-rosto .btn-outline');
-  if(btnCancelar){btnCancelar.textContent='❌ Cancelar plantão';btnCancelar.onclick=()=>{if(confirm('Cancelar sem validar a foto?')){fecharModal('modal-foto-rosto');_fotoRostoCallback=null;}}}
-  abrirModal('modal-foto-rosto');
-}
-function capturarFotoRosto(input){
-  if(!input.files||!input.files[0])return;
-  const reader=new FileReader();
-  reader.onload=e=>{
-    _fotoRostoData=e.target.result;
-    const prev=document.getElementById('foto-rosto-preview');
-    prev.innerHTML=`<img src="${_fotoRostoData}" style="width:100%;height:100%;object-fit:cover;">`;
-    prev.style.fontSize='0';
-    document.getElementById('btn-confirmar-rosto').style.display='';
-    // Destacar borda verde ao capturar
-    prev.style.borderColor='var(--green)';
-  };
-  reader.readAsDataURL(input.files[0]);
-  input.value='';
-}
-function confirmarFotoRosto(){
-  if(!_fotoRostoData){toast('⚠️ Tire a foto antes de confirmar!');return;}
-  fecharModal('modal-foto-rosto');
-  const cb=_fotoRostoCallback;
-  _fotoRostoCallback=null;
-  if(cb)cb(_fotoRostoData);
-}
-function pularFotoRosto(){
-  // Mantida apenas para compatibilidade — não usada mais
-  if(confirm('Deseja mesmo pular a validação por foto?')){
-    fecharModal('modal-foto-rosto');
-    const cb=_fotoRostoCallback;_fotoRostoCallback=null;
-    if(cb)cb(null);
-  }
-}
-
+// Foto de rosto removida
 // ═══════════════════════════════════════════
 // RONDAS (iniciar/finalizar)
 // ═══════════════════════════════════════════
@@ -2942,70 +3056,12 @@ function finalizarPlantaoAdmin(){
   toast('✅ Plantão encerrado pelo administrador!');
 }
 
-// ═══════════════════════════════════════════
-// RELATÓRIO COM FOTOS (impressão)
-// ═══════════════════════════════════════════
-function verRelatorioComFotos(id){
-  const p=DB.get('plantoes').find(x=>x.id===id);if(!p)return;
-  const fotos=p.fotos||[];
-  const ck=p.checklist||{};
-  let emp={};try{emp=JSON.parse(localStorage.getItem('rm_empresa')||'{}');}catch(e){}
-  let html=`<div class="relatorio-card">
-    <div class="rel-header">
-      <div style="display:flex;justify-content:space-between;">
-        <div>
-          <div class="rel-logo">🛡️ Ronda<span>Master</span></div>
-          ${emp.nome?`<div style="font-size:12px;font-weight:700;color:#1a1a1a;">${emp.nome}</div>`:''}
-          ${emp.doc?`<div style="font-size:11px;color:#64748B;">CNPJ: ${emp.doc}</div>`:''}
-        </div>
-        <div style="text-align:right;font-size:11px;color:#64748B;">Nº ${id.slice(-4).toUpperCase()}<br>${fmtData(p.inicio)}</div>
-      </div>
-      <div style="font-size:11px;color:#64748B;margin-top:6px;padding-top:6px;border-top:1px solid #e2e8f0;">Relatório com Registro Fotográfico</div>
-    </div>
-    <div class="rel-section"><h4>🦺 Vigilante / Local</h4>
-      <div class="rel-row"><span class="rel-lbl">Vigilante</span><span class="rel-val">${p.vigilanteNome}</span></div>
-      <div class="rel-row"><span class="rel-lbl">Local</span><span class="rel-val">${p.localNome}</span></div>
-      <div class="rel-row"><span class="rel-lbl">Entrada</span><span class="rel-val">${fmtH(p.inicio)}</span></div>
-      <div class="rel-row"><span class="rel-lbl">Saída</span><span class="rel-val">${p.fim?fmtH(p.fim):'Em andamento'}</span></div>
-      ${p.rondas&&p.rondas.length?`<div class="rel-row"><span class="rel-lbl">Rondas realizadas</span><span class="rel-val">${p.rondas.filter(r=>r.fim).length}</span></div>`:''}
-    </div>`;
-  if(p.fotoRostoEntrada){
-    html+=`<div class="rel-section"><h4>📸 Foto de Validação</h4>
-      <img src="${p.fotoRostoEntrada}" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:2px solid #1A4FAF;"></div>`;
-  }
-  if(fotos.length){
-    html+=`<div class="rel-section"><h4>📷 Fotos das Rondas (${fotos.length})</h4>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px;">
-        ${fotos.map(f=>`<div style="text-align:center;">
-          <img src="${f.data}" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;border:1px solid #e2e8f0;">
-          <div style="font-size:9px;color:#64748B;margin-top:2px;">#${String(f.num).padStart(3,'0')} · ${f.hora}${f.lat?'<br>📍 '+f.lat+', '+f.lng:''}</div>
-        </div>`).join('')}
-      </div></div>`;
-  }
-  if(ck.fotosCk&&ck.fotosCk.length){
-    html+=`<div class="rel-section"><h4>📷 Fotos de Ocorrências (${ck.fotosCk.length})</h4>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px;">
-        ${ck.fotosCk.map(f=>`<div style="text-align:center;">
-          <img src="${f.data}" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;border:1px solid #e2e8f0;">
-          <div style="font-size:9px;color:#64748B;margin-top:2px;">${f.hora}</div>
-        </div>`).join('')}
-      </div></div>`;
-  }
-  html+=`<div style="border-top:1px solid #e2e8f0;padding-top:10px;text-align:center;font-size:10px;color:#94A3B8;margin-top:10px;">RondaMaster · ID: ${id}</div></div>`;
-  document.getElementById('relatorio-fotos-conteudo').innerHTML=html;
-  abrirModal('modal-relatorio-fotos');
-}
 
 window.abrirFinalizarAdmin=abrirFinalizarAdmin;
 window.finalizarPlantaoAdmin=finalizarPlantaoAdmin;
-window.verRelatorioComFotos=verRelatorioComFotos;
 window.iniciarRonda=iniciarRonda;
 window.finalizarRonda=finalizarRonda;
 window.salvarHoraExtra=salvarHoraExtra;
-window.capturarFotoRosto=capturarFotoRosto;
-window.confirmarFotoRosto=confirmarFotoRosto;
-window.pularFotoRosto=pularFotoRosto;
-window.registrarFotoCk=registrarFotoCk;
 
 // mostrarCarregando movida para _mostrarLoading acima
 
@@ -3051,7 +3107,6 @@ window.limparVigilantes=limparVigilantes;
 window.mascaraMoeda=mascaraMoeda;
 window.navMes=navMes;
 window.recSubst=recSubst;
-window.registrarFoto=registrarFoto;
 window.registrarSaidaVisitante=registrarSaidaVisitante;
 window.removerEscala=removerEscala;
 window.renderConfig=renderConfig;
