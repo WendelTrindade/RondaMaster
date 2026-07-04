@@ -39,15 +39,24 @@
         return fb.map(pFB=>{
           const pL=(local||[]).find(p=>p.id===pFB.id);
           if(!pL) return pFB;
+          const rondasFB=pFB.rondas||[];
+          const rondasL=pL.rondas||[];
+          const portariaFB=pFB.portaria||[];
+          const portariaL=pL.portaria||[];
+          const ckFB=pFB.checklist||null;
+          const ckL=pL.checklist||null;
+          const obsFB=(ckFB&&Array.isArray(ckFB.obs))?ckFB.obs.length:0;
+          const obsL=(ckL&&Array.isArray(ckL.obs))?ckL.obs.length:0;
           return{...pFB,
             fotos:(pL.fotos||[]).length?(pL.fotos):(pFB.fotos||[]),
             fotoRostoEntrada:pL.fotoRostoEntrada||null,
             fotoRostoSaida:pL.fotoRostoSaida||null,
             fotosCk:(pL.fotosCk||[]).length?(pL.fotosCk):(pFB.fotosCk||[]),
-            portaria:pL.portaria||pFB.portaria||[],
-            rondas:pL.rondas||pFB.rondas||[],
-            checklist:pL.checklist||pFB.checklist||null,
-            ckState:pL.ckState||pFB.ckState||{}
+            // Usar sempre a versão com MAIS dados (dados só crescem durante o plantão)
+            portaria: portariaL.length>=portariaFB.length ? portariaL : portariaFB,
+            rondas: rondasL.length>=rondasFB.length ? rondasL : rondasFB,
+            checklist: !ckL ? ckFB : (!ckFB ? ckL : (obsL>=obsFB ? ckL : ckFB)),
+            ckState: Object.keys(pL.ckState||{}).length>=Object.keys(pFB.ckState||{}).length ? (pL.ckState||{}) : (pFB.ckState||{})
           };
         });
       }
