@@ -2773,41 +2773,68 @@ function gerarPDF(plantaoId){
 
   const corpo=montarCorpoHTML(p,emp);
 
-  // CSS do relatório
+  // CSS do relatório — layout fino, compacto, uma página
   const css=[
     '*{box-sizing:border-box;margin:0;padding:0;}',
-    'body{font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#111;background:#f5f5f5;padding:0;}',
-    '@page{size:A4;margin:14mm 12mm;}',
-    '@media print{body{background:#fff;}.print-bar{display:none!important;}.pagina{box-shadow:none;margin:0;border-radius:0;}}',
-    '.print-bar{position:fixed;top:0;left:0;right:0;background:#1A4FAF;color:#fff;padding:10px 20px;display:flex;align-items:center;justify-content:space-between;z-index:999;font-size:13px;}',
-    '.btn-print{background:#fff;color:#1A4FAF;border:none;padding:8px 22px;border-radius:6px;font-weight:700;font-size:13px;cursor:pointer;}',
-    '.pagina{background:#fff;max-width:760px;margin:70px auto 30px;padding:28px 32px;box-shadow:0 2px 16px rgba(0,0,0,.12);border-radius:6px;}',
-    '.logo-header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2.5px solid #0B1D3A;padding-bottom:12px;margin-bottom:16px;}',
-    '.logo-text{font-size:20px;font-weight:900;color:#0B1D3A;}',
-    '.logo-text span{color:#1A4FAF;}',
-    '.emp-nome{font-size:12px;font-weight:700;margin-top:5px;}',
-    '.emp-info{font-size:10px;color:#666;margin-top:2px;}',
-    '.num-area{text-align:right;font-size:11px;color:#666;line-height:1.8;}',
-    '.sub-header{font-size:10px;color:#888;margin-top:5px;padding-top:5px;border-top:1px solid #eee;}',
-    '.status-box{padding:7px 12px;border-radius:5px;font-size:12px;margin-bottom:12px;font-weight:600;}',
-    '.s-antes{background:#FEF3C7;border:1px solid #F59E0B;color:#7c4d00;}',
-    '.s-depois{background:#EFF6FF;border:1px solid #2E8BF7;color:#1e40af;}',
-    '.s-ok{background:#ECFDF5;border:1px solid #10B981;color:#064e3b;}',
-    '.secao{margin-bottom:14px;page-break-inside:avoid;}',
-    '.sec-titulo{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.13em;color:#1A4FAF;margin-bottom:7px;padding-bottom:3px;border-bottom:1px solid #E2E8F0;}',
-    '.linha{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #F8FAFC;font-size:11px;}',
-    '.linha-lbl{color:#666;min-width:120px;flex-shrink:0;}',
-    '.linha-val{font-weight:600;text-align:right;}',
-    '.b-ok{background:#D1FAE5;color:#065F46;padding:1px 7px;border-radius:3px;font-size:10px;font-weight:700;display:inline-block;}',
-    '.b-nok{background:#FEE2E2;color:#7F1D1D;padding:1px 7px;border-radius:3px;font-size:10px;font-weight:700;display:inline-block;}',
-    '.ronda-card{background:#F0FDF4;border-left:3px solid #10B981;border-radius:4px;padding:7px 10px;margin-bottom:5px;}',
-    '.ronda-num{font-weight:700;font-size:11px;}',
-    '.ronda-det{font-size:10px;color:#555;margin-top:2px;line-height:1.5;}',
-    '.gps{font-size:10px;color:#0d9488;}',
-    '.obs-card{background:#FFFBEB;border-left:3px solid #F59E0B;border-radius:4px;padding:6px 10px;margin-bottom:4px;}',
-    '.obs-txt{font-size:11px;}',
-    '.obs-meta{font-size:10px;color:#92400E;margin-top:2px;}',
-    '.rodape{border-top:1px solid #eee;padding-top:8px;text-align:center;font-size:10px;color:#aaa;margin-top:14px;}'
+    'body{font-family:"Helvetica Neue",Arial,sans-serif;font-size:10px;color:#1c1c1c;background:#e9edf2;line-height:1.4;}',
+    '@page{size:A4;margin:10mm 11mm;}',
+    '@media print{body{background:#fff;}.print-bar{display:none!important;}.pagina{box-shadow:none;margin:0;padding:0;border-radius:0;max-width:none;}}',
+    '.print-bar{position:fixed;top:0;left:0;right:0;background:#0B1D3A;color:#fff;padding:9px 18px;display:flex;align-items:center;justify-content:space-between;z-index:999;font-size:12px;}',
+    '.btn-print{background:#fff;color:#0B1D3A;border:none;padding:6px 18px;border-radius:5px;font-weight:700;font-size:12px;cursor:pointer;}',
+    '.pagina{background:#fff;max-width:750px;margin:56px auto 24px;padding:26px 30px;box-shadow:0 1px 10px rgba(0,0,0,.1);}',
+
+    // Cabeçalho
+    '.cab{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:1.5px solid #0B1D3A;padding-bottom:9px;margin-bottom:11px;}',
+    '.cab-logo{font-size:16px;font-weight:800;color:#0B1D3A;letter-spacing:-.01em;}',
+    '.cab-logo span{color:#1A4FAF;font-weight:800;}',
+    '.cab-emp{font-size:9.5px;font-weight:700;color:#1c1c1c;margin-top:3px;}',
+    '.cab-info{font-size:8.5px;color:#777;margin-top:1px;}',
+    '.cab-dir{text-align:right;font-size:9px;color:#777;line-height:1.6;}',
+    '.cab-dir b{color:#1c1c1c;font-size:9.5px;}',
+    '.tipo-doc{font-size:8px;color:#999;text-transform:uppercase;letter-spacing:.12em;margin-top:2px;}',
+
+    // Faixa de status
+    '.status{display:inline-block;padding:3px 10px;border-radius:3px;font-size:9px;font-weight:700;margin-bottom:9px;}',
+    '.st-antes{background:#FEF3C7;color:#8a5a00;border:1px solid #F2C464;}',
+    '.st-depois{background:#E7EFFD;color:#1e4fa3;border:1px solid #a9c4f2;}',
+    '.st-ok{background:#E6F7EF;color:#0d6b41;border:1px solid #a4e3c4;}',
+
+    // Grade de informações (3 colunas)
+    '.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px;}',
+    '.box{border:1px solid #e3e7ee;border-radius:4px;padding:7px 9px;}',
+    '.box-tit{font-size:7.5px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#8a93a3;margin-bottom:4px;}',
+    '.box-val{font-size:10.5px;font-weight:700;color:#1c1c1c;line-height:1.35;}',
+    '.box-sub{font-size:8.5px;color:#888;margin-top:2px;}',
+
+    // Seções
+    '.sec{margin-bottom:11px;page-break-inside:avoid;}',
+    '.sec-tit{font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#1A4FAF;margin-bottom:5px;padding-bottom:3px;border-bottom:1px solid #e3e7ee;}',
+
+    // Tabela genérica (rondas, portaria)
+    'table.tb{width:100%;border-collapse:collapse;font-size:9px;}',
+    'table.tb th{text-align:left;font-size:7.5px;text-transform:uppercase;letter-spacing:.06em;color:#8a93a3;font-weight:700;padding:3px 6px;border-bottom:1px solid #e3e7ee;}',
+    'table.tb td{padding:4px 6px;border-bottom:1px solid #f2f4f7;vertical-align:top;}',
+    'table.tb tr:last-child td{border-bottom:none;}',
+    '.mono{font-variant-numeric:tabular-nums;color:#555;font-size:8.5px;}',
+
+    // Linha label/valor simples
+    '.ln{display:flex;justify-content:space-between;padding:2.5px 0;font-size:9.5px;border-bottom:1px solid #f5f6f8;}',
+    '.ln:last-child{border-bottom:none;}',
+    '.ln-l{color:#777;}',
+    '.ln-v{font-weight:600;text-align:right;color:#1c1c1c;}',
+
+    // Checklist itens (badges compactos em linha)
+    '.chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;}',
+    '.chip{font-size:8px;padding:2px 7px;border-radius:9px;font-weight:600;white-space:nowrap;}',
+    '.chip-ok{background:#E6F7EF;color:#0d6b41;}',
+    '.chip-nok{background:#FBE8E8;color:#a12525;}',
+
+    // Observações — lista fina
+    '.obs{border-left:2px solid #F2C464;padding:3px 0 3px 8px;margin-bottom:4px;font-size:9px;}',
+    '.obs b{color:#8a5a00;}',
+    '.obs-hr{color:#999;font-size:8px;}',
+
+    '.rodape{border-top:1px solid #eee;padding-top:6px;text-align:center;font-size:8px;color:#aaa;margin-top:10px;}'
   ].join('');
 
   // Montar HTML usando DOM em vez de template string com tags HTML
@@ -2838,82 +2865,92 @@ function montarCorpoHTML(p,emp){
   const s=statusPlantao(p);
   const id=p.id||'';
 
-  let statusBox='';
-  if(s.label==='antes') statusBox='<div class="status-box s-antes">⚠️ <strong>Saída antecipada</strong>'+(p.motivoSaida?' — '+p.motivoSaida:'')+'</div>';
-  else if(s.label==='depois') statusBox='<div class="status-box s-depois">🔵 <strong>Hora extra registrada</strong></div>';
-  else if(p.fim) statusBox='<div class="status-box s-ok">✅ <strong>Encerrado no horário</strong></div>';
+  let statusHtml='';
+  if(s.label==='antes') statusHtml='<div class="status st-antes">⚠ SAÍDA ANTECIPADA'+(p.motivoSaida?' — '+p.motivoSaida:'')+'</div>';
+  else if(s.label==='depois') statusHtml='<div class="status st-depois">● HORA EXTRA REGISTRADA</div>';
+  else if(p.fim) statusHtml='<div class="status st-ok">✓ ENCERRADO NO HORÁRIO</div>';
 
   const equips=DB.get('equipamentos');
   const itensV=DB.get('itens_veiculo');
   const todosItens=[...itensV,...equips];
-  const eqLinhas=ck.equipamentos?todosItens.map(item=>{
+  const chips=ck.equipamentos?todosItens.map(item=>{
     const v=ck.equipamentos[item.id]||'ok';
-    return'<div class="linha"><span class="linha-lbl">'+item.nome+'</span><span class="linha-val"><span class="'+(v==='ok'?'b-ok':'b-nok')+'">'+(v==='ok'?'✓ OK':'✗ PROBLEMA')+'</span></span></div>';
+    return'<span class="chip '+(v==='ok'?'chip-ok':'chip-nok')+'">'+item.nome+' '+(v==='ok'?'✓':'✗')+'</span>';
   }).join(''):'';
 
-  const rondasCards=(p.rondas&&p.rondas.length)?p.rondas.map(r=>{
-    let h='<div class="ronda-card">';
-    h+='<div class="ronda-num">Ronda #'+r.num+'</div>';
-    h+='<div class="ronda-det">📅 '+(r.data||fmtData(r.inicio))+' · ⏰ '+(r.hora||fmtH(r.inicio))+' → '+(r.horaFim||fmtH(r.fim)||'Em andamento')+'</div>';
-    if(r.lat) h+='<div class="gps">📍 Início: '+r.lat+', '+r.lng+'</div>';
-    if(r.latFim) h+='<div class="gps">📍 Fim: '+r.latFim+', '+r.lngFim+'</div>';
-    h+='</div>';
-    return h;
-  }).join(''):'';
+  // Tabela de rondas — compacta
+  let rondasTbl='';
+  if(p.rondas&&p.rondas.length){
+    rondasTbl='<table class="tb"><thead><tr>'+
+      '<th style="width:26px;">#</th><th>Data</th><th>Entrada</th><th>Saída</th><th>GPS Entrada</th><th>GPS Saída</th>'+
+      '</tr></thead><tbody>';
+    rondasTbl+=p.rondas.map(r=>{
+      const gpsE=r.lat?r.lat+', '+r.lng:'—';
+      const gpsS=r.latFim?r.latFim+', '+r.lngFim:'—';
+      return'<tr><td><b>'+r.num+'</b></td><td>'+(r.data||fmtData(r.inicio))+'</td>'+
+        '<td>'+(r.hora||fmtH(r.inicio))+'</td><td>'+(r.horaFim||fmtH(r.fim)||'—')+'</td>'+
+        '<td class="mono">'+gpsE+'</td><td class="mono">'+gpsS+'</td></tr>';
+    }).join('');
+    rondasTbl+='</tbody></table>';
+  }
 
+  // Observações — lista fina
   const obsArr=Array.isArray(ck.obs)?ck.obs:[];
-  const obsCards=obsArr.map((o,i)=>{
-    return'<div class="obs-card"><div class="obs-txt"><strong>#'+(i+1)+'</strong> '+o.texto+'</div><div class="obs-meta">📅 '+o.data+' · ⏰ '+o.hora+'</div></div>';
-  }).join('');
+  const obsHtml=obsArr.map((o,i)=>
+    '<div class="obs"><b>#'+(i+1)+'</b> '+o.texto+' <span class="obs-hr">· '+o.data+' '+o.hora+'</span></div>'
+  ).join('');
 
-  const entLinhas=entregas.map(e=>'<div class="linha"><span class="linha-lbl">'+e.empresa+' · '+e.entregador+'</span><span class="linha-val">'+e.placa+' · '+e.destino+' · '+e.hora+'</span></div>').join('');
-  const visLinhas=visitantes.map(v=>'<div class="linha"><span class="linha-lbl">'+v.visitante+'</span><span class="linha-val">'+v.placa+'<br>'+v.hora+(v.horaSaida?' → '+v.horaSaida:' (sem saída)')+'</span></div>').join('');
+  // Tabela de portaria (entregas + visitantes juntos)
+  let portariaTbl='';
+  if(entregas.length||visitantes.length){
+    portariaTbl='<table class="tb"><thead><tr><th>Tipo</th><th>Nome</th><th>Placa</th><th>Destino</th><th>Horário</th></tr></thead><tbody>';
+    entregas.forEach(e=>{
+      portariaTbl+='<tr><td>📦 Entrega</td><td>'+e.empresa+' · '+e.entregador+'</td><td class="mono">'+(e.placa||'—')+'</td><td>'+e.destino+'</td><td>'+e.hora+'</td></tr>';
+    });
+    visitantes.forEach(v=>{
+      const hr=v.hora+(v.horaSaida?' → '+v.horaSaida:' (sem saída)');
+      portariaTbl+='<tr><td>🚗 Visitante</td><td>'+v.visitante+'</td><td class="mono">'+(v.placa||'—')+'</td><td>'+v.destino+'</td><td>'+hr+'</td></tr>';
+    });
+    portariaTbl+='</tbody></table>';
+  }
 
   let html='';
-  html+='<div class="logo-header"><div>';
-  html+='<div class="logo-text">🛡️ Ronda<span>Master</span></div>';
-  if(emp.nome) html+='<div class="emp-nome">'+emp.nome+'</div>';
-  if(emp.doc) html+='<div class="emp-info">CNPJ: '+emp.doc+'</div>';
-  if(emp.tel) html+='<div class="emp-info">Tel: '+emp.tel+'</div>';
-  if(emp.end) html+='<div class="emp-info">'+emp.end+(emp.cidade?', '+emp.cidade:'')+(emp.estado?' - '+emp.estado:'')+'</div>';
+
+  // Cabeçalho
+  html+='<div class="cab"><div>';
+  html+='<div class="cab-logo">🛡️ Ronda<span>Master</span></div>';
+  if(emp.nome) html+='<div class="cab-emp">'+emp.nome+'</div>';
+  const infoLinha=[emp.doc?'CNPJ '+emp.doc:'',emp.tel?'Tel '+emp.tel:''].filter(Boolean).join(' · ');
+  if(infoLinha) html+='<div class="cab-info">'+infoLinha+'</div>';
+  if(emp.end) html+='<div class="cab-info">'+emp.end+(emp.cidade?', '+emp.cidade:'')+(emp.estado?' - '+emp.estado:'')+'</div>';
   html+='</div>';
-  html+='<div class="num-area">Nº '+id.slice(-4).toUpperCase()+'<br>'+fmtData(p.inicio)+'<br><span style="color:#aaa;font-size:10px;">Relatório Diário</span></div>';
-  html+='</div>';
-  html+='<div class="sub-header">Relatório Diário de Vigilância</div>';
-  html+='<div style="margin-top:14px;">'+statusBox+'</div>';
-
-  html+='<div class="secao"><div class="sec-titulo">🏢 Contratante / Local</div>';
-  html+='<div class="linha"><span class="linha-lbl">Contratante</span><span class="linha-val">'+(p.contratanteNome||'—')+'</span></div>';
-  html+='<div class="linha"><span class="linha-lbl">Local</span><span class="linha-val">'+(p.localNome||'—')+'</span></div></div>';
-
-  html+='<div class="secao"><div class="sec-titulo">🦺 Vigilante</div>';
-  html+='<div class="linha"><span class="linha-lbl">Nome</span><span class="linha-val">'+(p.vigilanteNome||'—')+'</span></div></div>';
-
-  html+='<div class="secao"><div class="sec-titulo">⏱️ Jornada</div>';
-  html+='<div class="linha"><span class="linha-lbl">Entrada</span><span class="linha-val">'+fmtH(p.inicio)+'</span></div>';
-  html+='<div class="linha"><span class="linha-lbl">Saída</span><span class="linha-val">'+(p.fim?fmtH(p.fim):'Em andamento')+'</span></div>';
-  if(p.horaPrevistaSaida) html+='<div class="linha"><span class="linha-lbl">Saída prevista</span><span class="linha-val">'+p.horaPrevistaSaida+'</span></div>';
-  if(p.rondas) html+='<div class="linha"><span class="linha-lbl">Rondas realizadas</span><span class="linha-val">'+p.rondas.filter(r=>r.fim).length+'</span></div>';
+  html+='<div class="cab-dir"><b>Nº '+id.slice(-4).toUpperCase()+'</b><br>'+fmtData(p.inicio)+'<div class="tipo-doc">Relatório Diário</div></div>';
   html+='</div>';
 
-  if(p.rondas&&p.rondas.length) html+='<div class="secao"><div class="sec-titulo">🚶 Rondas Realizadas ('+p.rondas.filter(r=>r.fim).length+')</div>'+rondasCards+'</div>';
+  html+=statusHtml;
+
+  // Grade de 3 colunas: Local | Vigilante | Jornada
+  html+='<div class="grid3">';
+  html+='<div class="box"><div class="box-tit">Contratante / Local</div><div class="box-val">'+(p.localNome||'—')+'</div><div class="box-sub">'+(p.contratanteNome||'—')+'</div></div>';
+  html+='<div class="box"><div class="box-tit">Vigilante</div><div class="box-val">'+(p.vigilanteNome||'—')+'</div><div class="box-sub">'+(p.rondas?p.rondas.filter(r=>r.fim).length+' ronda(s) realizada(s)':'—')+'</div></div>';
+  html+='<div class="box"><div class="box-tit">Jornada</div><div class="box-val">'+fmtH(p.inicio)+' — '+(p.fim?fmtH(p.fim):'em andamento')+'</div><div class="box-sub">'+(p.horaPrevistaSaida?'Previsto: '+p.horaPrevistaSaida:'—')+'</div></div>';
+  html+='</div>';
+
+  if(rondasTbl) html+='<div class="sec"><div class="sec-tit">🚶 Rondas Realizadas</div>'+rondasTbl+'</div>';
 
   if(ck.veiculo){
-    html+='<div class="secao"><div class="sec-titulo">🏍️ Checklist do Veículo</div>';
-    html+='<div class="linha"><span class="linha-lbl">Veículo</span><span class="linha-val">'+ck.veiculo+'</span></div>';
-    html+='<div class="linha"><span class="linha-lbl">KM Entrada</span><span class="linha-val">'+(ck.kmEntrada||'—')+'</span></div>';
-    html+='<div class="linha"><span class="linha-lbl">KM Saída</span><span class="linha-val">'+(ck.kmSaida||'—')+'</span></div>';
-    html+='<div class="linha"><span class="linha-lbl">Gasolina</span><span class="linha-val">'+(ck.gasolina||'—')+'</span></div>';
-    html+='<div class="linha"><span class="linha-lbl">Óleo</span><span class="linha-val">'+(ck.oleo||'—')+'</span></div>';
-    html+=eqLinhas;
+    html+='<div class="sec"><div class="sec-tit">🏍️ Checklist do Veículo</div>';
+    html+='<div class="ln"><span class="ln-l">Veículo</span><span class="ln-v">'+ck.veiculo+'</span></div>';
+    html+='<div class="ln"><span class="ln-l">KM Entrada → Saída</span><span class="ln-v">'+(ck.kmEntrada||'—')+' → '+(ck.kmSaida||'—')+'</span></div>';
+    html+='<div class="ln"><span class="ln-l">Gasolina / Óleo</span><span class="ln-v">'+(ck.gasolina||'—')+' / '+(ck.oleo||'—')+'</span></div>';
+    if(chips) html+='<div class="chips">'+chips+'</div>';
     html+='</div>';
   }
 
-  if(obsArr.length) html+='<div class="secao"><div class="sec-titulo">📝 Observações</div>'+obsCards+'</div>';
-  if(entregas.length) html+='<div class="secao"><div class="sec-titulo">📦 Entregas ('+entregas.length+')</div>'+entLinhas+'</div>';
-  if(visitantes.length) html+='<div class="secao"><div class="sec-titulo">🚗 Visitantes ('+visitantes.length+')</div>'+visLinhas+'</div>';
+  if(obsArr.length) html+='<div class="sec"><div class="sec-tit">📝 Observações</div>'+obsHtml+'</div>';
+  if(portariaTbl) html+='<div class="sec"><div class="sec-tit">🚦 Portaria</div>'+portariaTbl+'</div>';
 
-  html+='<div class="rodape">RondaMaster · ID: '+id+'</div>';
+  html+='<div class="rodape">RondaMaster · ID '+id+' · Gerado em '+new Date().toLocaleString('pt-BR')+'</div>';
   return html;
 }
 window.montarCorpoHTML=montarCorpoHTML;
