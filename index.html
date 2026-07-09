@@ -67,12 +67,12 @@
       try{
         const dados=limparParaFB(k,v);
         const json=JSON.stringify(dados);
-        if(json.length>900000){console.warn('Dado muito grande para Firebase:',k);return;}
-        db.collection('rondamaster').doc(k).set({
+        if(json.length>900000){console.warn('Dado muito grande para Firebase:',k);return Promise.reject(new Error('dado_grande'));}
+        return db.collection('rondamaster').doc(k).set({
           dados:json,
           ts:firebase.firestore.FieldValue.serverTimestamp()
-        }).catch(e=>console.warn('fbSet erro:',e.message));
-      }catch(e){console.warn('fbSet erro:',e.message);}
+        });
+      }catch(e){console.warn('fbSet erro:',e.message);return Promise.reject(e);}
     };
 
     window._fbGet=async function(k){
@@ -121,6 +121,7 @@
 }
 html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var(--navy);color:var(--white);overflow-x:hidden;}
 .hidden{display:none!important;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.35;}}
 .flex{display:flex;}.items-center{align-items:center;}.justify-between{justify-content:space-between;}
 .gap-2{gap:8px;}.gap-3{gap:12px;}.w-full{width:100%;}.text-center{text-align:center;}
 .mt-1{margin-top:4px;}.mt-2{margin-top:8px;}.mt-3{margin-top:12px;}.mt-4{margin-top:16px;}
@@ -318,12 +319,16 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var
 <div id="app" class="hidden">
   <div id="topbar">
     <div class="logo">🛡️ Ronda<span>Master</span></div>
-    <div class="user-info"><strong id="tb-nome">—</strong><span id="tb-perfil">—</span></div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <span id="sync-indicador" class="hidden" title="Aguardando conexão para sincronizar" style="font-size:16px;animation:pulse 1.5s infinite;">📡</span>
+      <div class="user-info"><strong id="tb-nome">—</strong><span id="tb-perfil">—</span></div>
+    </div>
   </div>
   <div id="main">
 
     <!-- DASHBOARD -->
     <div id="screen-dashboard" class="screen">
+      <div id="alerta-manutencao-dash" class="hidden" style="background:rgba(239,68,68,.1);border:1.5px solid var(--red);border-radius:12px;padding:14px;margin-bottom:14px;color:var(--red);text-align:center;"></div>
       <div class="stat-row">
         <div class="stat-box"><div class="stat-val" id="st-plantoes">0</div><div class="stat-lbl">Plantões Hoje</div></div>
         <div class="stat-box"><div class="stat-val" id="st-vigilantes">0</div><div class="stat-lbl">Vigilantes</div></div>
@@ -461,6 +466,18 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var
           <input type="text" id="cfg-hora-extra" placeholder="R$ 0,00" oninput="mascaraMoeda(this)">
         </div>
         <button class="btn btn-primary" onclick="salvarHoraExtra()">💾 Salvar valor</button>
+      </div>
+
+      <!-- MANUTENÇÃO DA MOTO -->
+      <div class="card mt-3">
+        <div class="card-title">🔧 Manutenção da Moto</div>
+        <div id="manutencao-status" style="margin-bottom:12px;"></div>
+        <div class="field"><label>Trocar óleo a cada (km)</label>
+          <input type="number" id="cfg-limite-km" placeholder="Ex: 1000">
+        </div>
+        <button class="btn btn-primary" onclick="salvarLimiteManutencao()">💾 Salvar limite</button>
+        <button class="btn btn-green mt-2" style="width:100%;" onclick="marcarTrocaOleoFeita()">✅ Marcar troca de óleo realizada</button>
+        <div class="text-xs mt-2" style="color:var(--muted);">Esse alerta aparece apenas aqui, no painel administrativo. O vigia não vê essa informação.</div>
       </div>
 
       <!-- CREDENCIAIS ADMIN -->
@@ -951,10 +968,8 @@ const DB={
       Object.keys(localStorage).filter(k=>k.startsWith('rm_fotos_rascunho_')).forEach(k=>localStorage.removeItem(k));
       try{localStorage.setItem('rm_'+k,JSON.stringify(v));}catch(e2){}
     }
-    // Firebase: salvar de forma assíncrona (não bloqueia UI, falha silenciosa)
-    if(window._fbSet){
-      try{window._fbSet(k,v);}catch(e){}
-    }
+    // Firebase: enviar agora se online; se falhar/offline, entra na fila pendente
+    _syncFirebase(k,v);
   },
   async load(k){
     // 1. Carregar localStorage primeiro (imediato, sempre funciona)
@@ -983,10 +998,76 @@ const DB={
     return CACHE[k]||[];
   },
   async loadAll(){
-    const cols=['usuarios','vigilantes','contratantes','escala','plantoes','financeiro','equipamentos','itens_veiculo'];
+    const cols=['usuarios','vigilantes','contratantes','escala','plantoes','financeiro','equipamentos','itens_veiculo','manutencao'];
     cols.forEach(k=>{try{const v=localStorage.getItem('rm_'+k);if(v)CACHE[k]=JSON.parse(v);}catch(e){} });
   }
 };
+
+// ═══════════════════════════════════════════
+// FILA DE SINCRONIZAÇÃO OFFLINE
+// ═══════════════════════════════════════════
+// Sempre que algo não conseguir ser enviado ao Firebase (sem internet, erro
+// de rede etc.), o item entra numa fila salva no localStorage. Assim que o
+// dispositivo detectar internet novamente (evento 'online' ou verificação
+// periódica), o sistema tenta reenviar tudo sozinho, sem o usuário precisar
+// fazer nada.
+function _syncFirebase(k,v){
+  if(!window._fbSet)return; // Firebase não configurado neste carregamento
+  if(!navigator.onLine){
+    _marcarPendente(k);
+    return;
+  }
+  try{
+    const resultado=window._fbSet(k,v);
+    if(resultado&&typeof resultado.then==='function'){
+      resultado.then(()=>_desmarcarPendente(k)).catch(()=>_marcarPendente(k));
+    }
+  }catch(e){_marcarPendente(k);}
+}
+function _marcarPendente(k){
+  let pend=[];
+  try{pend=JSON.parse(localStorage.getItem('rm_sync_pendente')||'[]');}catch(e){}
+  if(!pend.includes(k)){pend.push(k);localStorage.setItem('rm_sync_pendente',JSON.stringify(pend));}
+  _atualizarIndicadorSync();
+}
+function _desmarcarPendente(k){
+  let pend=[];
+  try{pend=JSON.parse(localStorage.getItem('rm_sync_pendente')||'[]');}catch(e){}
+  pend=pend.filter(x=>x!==k);
+  try{localStorage.setItem('rm_sync_pendente',JSON.stringify(pend));}catch(e){}
+  _atualizarIndicadorSync();
+}
+async function flushSyncPendente(){
+  if(!navigator.onLine||!window._fbSet)return;
+  let pend=[];
+  try{pend=JSON.parse(localStorage.getItem('rm_sync_pendente')||'[]');}catch(e){return;}
+  if(!pend.length)return;
+  console.log('🔄 Sincronizando '+pend.length+' item(ns) pendente(s) com a nuvem...');
+  for(const k of pend){
+    try{
+      const dadosAtuais=CACHE[k]!==undefined?CACHE[k]:JSON.parse(localStorage.getItem('rm_'+k)||'[]');
+      await window._fbSet(k,dadosAtuais);
+      _desmarcarPendente(k);
+    }catch(e){/* continua pendente, tenta de novo na próxima chance */}
+  }
+}
+function _atualizarIndicadorSync(){
+  const el=document.getElementById('sync-indicador');
+  if(!el)return;
+  let pend=[];
+  try{pend=JSON.parse(localStorage.getItem('rm_sync_pendente')||'[]');}catch(e){}
+  if(pend.length>0){
+    el.classList.remove('hidden');
+    el.title=pend.length+' item(ns) aguardando conexão para sincronizar';
+  }else{
+    el.classList.add('hidden');
+  }
+}
+window.flushSyncPendente=flushSyncPendente;
+// Assim que o dispositivo voltar a ter internet, sincroniza tudo automaticamente
+window.addEventListener('online',()=>{console.log('🌐 Internet voltou — sincronizando...');flushSyncPendente();});
+// Verificação periódica de segurança (celulares nem sempre disparam o evento 'online' corretamente)
+setInterval(()=>{if(navigator.onLine)flushSyncPendente();},25000);
 function _mostrarLoading(sim){
   const el=document.getElementById('loading-screen');
   if(el) el.style.display=sim?'flex':'none';
@@ -1003,7 +1084,7 @@ async function initDemo(){
   document.querySelectorAll('.modal-overlay').forEach(m=>m.classList.add('hidden'));
 
   // 3. Carregar localStorage (síncrono, instantâneo) — mostra algo na tela rápido
-  const cols=['usuarios','vigilantes','contratantes','escala','plantoes','financeiro','equipamentos','itens_veiculo'];
+  const cols=['usuarios','vigilantes','contratantes','escala','plantoes','financeiro','equipamentos','itens_veiculo','manutencao'];
   cols.forEach(k=>{
     try{
       const v=localStorage.getItem('rm_'+k);
@@ -1073,7 +1154,16 @@ async function initDemo(){
     if(el) el.classList.remove('hidden');
   }
 
+  // Criar configuração de manutenção padrão se não existir
+  if(!DB.get('manutencao').length){
+    DB.set('manutencao',[{id:'m1',limiteKm:1000,kmDesdeTroca:0,ultimaTrocaEm:null}]);
+  }
+
   console.log('✅ Sistema pronto. Usuários:',DB.get('usuarios').length);
+
+  // Tentar sincronizar qualquer coisa que ficou pendente de uma sessão offline anterior
+  flushSyncPendente();
+  _atualizarIndicadorSync();
 
   // 7. Continuar sincronizando em segundo plano (para pegar atualizações posteriores)
   setTimeout(()=>{
@@ -1141,6 +1231,49 @@ function pad(n){return String(n).padStart(2,'0');}
 function fmtH(iso){if(!iso)return'—';const d=new Date(iso);return pad(d.getHours())+':'+pad(d.getMinutes());}
 function fmtData(iso){if(!iso)return'—';const d=new Date(iso);return pad(d.getDate())+'/'+pad(d.getMonth()+1)+'/'+d.getFullYear();}
 function fmtDataStr(s){if(!s)return'—';const[y,m,d]=s.split('-');return`${d}/${m}/${y}`;}
+
+// ═══════════════════════════════════════════
+// KM RODADOS / MANUTENÇÃO DO VEÍCULO
+// ═══════════════════════════════════════════
+function calcularKmRodados(ck){
+  if(!ck)return null;
+  const e=parseFloat(ck.kmEntrada);
+  const s=parseFloat(ck.kmSaida);
+  if(isNaN(e)||isNaN(s)||s<e)return null;
+  return s-e;
+}
+function getManutencao(){
+  const m=DB.get('manutencao');
+  return m[0]||{id:'m1',limiteKm:1000,kmDesdeTroca:0,ultimaTrocaEm:null};
+}
+function registrarKmManutencao(kmRodados){
+  if(!kmRodados||kmRodados<=0)return;
+  const m=getManutencao();
+  m.kmDesdeTroca=(m.kmDesdeTroca||0)+kmRodados;
+  DB.set('manutencao',[m]);
+}
+function marcarTrocaOleoFeita(){
+  if(!confirm('Confirma que a troca de óleo foi realizada agora? O contador de KM será zerado.'))return;
+  const m=getManutencao();
+  m.kmDesdeTroca=0;
+  m.ultimaTrocaEm=new Date().toISOString();
+  DB.set('manutencao',[m]);
+  renderManutencao();
+  atualizarDashboard();
+  toast('✅ Troca de óleo registrada! Contador zerado.');
+}
+function salvarLimiteManutencao(){
+  const v=parseFloat(document.getElementById('cfg-limite-km').value);
+  if(!v||v<=0){toast('⚠️ Informe um valor válido de KM');return;}
+  const m=getManutencao();
+  m.limiteKm=v;
+  DB.set('manutencao',[m]);
+  toast('✅ Limite de manutenção salvo: '+v+' km');
+  renderManutencao();
+  atualizarDashboard();
+}
+window.marcarTrocaOleoFeita=marcarTrocaOleoFeita;
+window.salvarLimiteManutencao=salvarLimiteManutencao;
 function fmtMoeda(v){return'R$ '+Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
 function parseMoeda(s){
   if(!s&&s!==0)return 0;
@@ -1307,6 +1440,21 @@ function atualizarDashboard(){
   document.getElementById('st-relatorios').textContent=plantoes.filter(p=>p.fim).length;
   const saldo=rec-pago;
   document.getElementById('st-saldo').textContent=fmtMoeda(saldo);
+
+  // Alerta de manutenção — visível SOMENTE para admin/gestor no dashboard
+  const manut=getManutencao();
+  const alertaEl=document.getElementById('alerta-manutencao-dash');
+  if(alertaEl){
+    if((manut.kmDesdeTroca||0)>=(manut.limiteKm||1000)){
+      alertaEl.classList.remove('hidden');
+      alertaEl.innerHTML=`⚠️ <strong>Troca de óleo da moto necessária!</strong><br>
+        <span style="font-size:12px;">${manut.kmDesdeTroca} km rodados desde a última troca (limite: ${manut.limiteKm} km)</span>
+        <button class="btn btn-amber btn-sm mt-2" style="color:#000;display:block;width:100%;" onclick="irPara('screen-config')">Ver em Configurações</button>`;
+    }else{
+      alertaEl.classList.add('hidden');
+    }
+  }
+
   // Plantões por data
   const recentes=[...plantoes].reverse().slice(0,10);
   const div=document.getElementById('lista-plantoes-dash');
@@ -1317,11 +1465,12 @@ function atualizarDashboard(){
       <div class="date-group-header">📅 ${data}</div>
       ${items.map(p=>{
         const s=statusPlantao(p);
+        const kmR=calcularKmRodados(p.checklist);
         return`<div class="list-item">
           <div class="li-main">
             <div class="li-title">${p.vigilanteNome||'—'}</div>
             <div class="li-sub">${p.localNome||'—'} · Entrada: ${fmtH(p.inicio)}${p.fim?' · Saída: '+fmtH(p.fim):''}</div>
-            <div class="mt-1">${s.badge}${calcularHoraExtra(p)>0?`<span class="badge badge-amber"> ⏱️ HE: ${fmtMoeda(calcularHoraExtra(p))}</span>`:''}</div>
+            <div class="mt-1">${s.badge}${calcularHoraExtra(p)>0?`<span class="badge badge-amber"> ⏱️ HE: ${fmtMoeda(calcularHoraExtra(p))}</span>`:''}${kmR!==null?`<span class="badge badge-blue"> 🛣️ ${kmR} km</span>`:''}</div>
           </div>
           <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;">
             ${p.fim?`<button class="btn btn-primary btn-sm" onclick="verRelatorio('${p.id}')">Ver</button>`:`<button class="btn btn-red btn-sm" onclick="abrirFinalizarAdmin('${p.id}')">🔴 Encerrar</button>`}
@@ -1718,9 +1867,33 @@ function renderConfig(){
   const u=DB.get('usuarios').find(x=>x.perfil==='admin');
   if(u){document.getElementById('cfg-email').value=u.email;}
   carregarEmpresa();
+  carregarHoraExtra();
   renderEquipConfig();
+  renderEquipVeiculoConfig();
+  renderManutencao();
   renderGerentes();
 }
+function renderManutencao(){
+  const m=getManutencao();
+  const inputLimite=document.getElementById('cfg-limite-km');
+  if(inputLimite) inputLimite.value=m.limiteKm||1000;
+  const statusEl=document.getElementById('manutencao-status');
+  if(!statusEl)return;
+  const vencido=(m.kmDesdeTroca||0)>=(m.limiteKm||1000);
+  const pct=Math.min(100,Math.round(((m.kmDesdeTroca||0)/(m.limiteKm||1000))*100));
+  statusEl.innerHTML=`
+    <div style="background:${vencido?'rgba(239,68,68,.1)':'var(--slate2)'};border:1px solid ${vencido?'var(--red)':'var(--border)'};border-radius:10px;padding:12px;">
+      <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;margin-bottom:6px;">
+        <span>${vencido?'⚠️ Troca de óleo necessária!':'🛣️ KM desde a última troca'}</span>
+        <span>${m.kmDesdeTroca||0} / ${m.limiteKm||1000} km</span>
+      </div>
+      <div style="background:var(--border);border-radius:6px;height:8px;overflow:hidden;">
+        <div style="background:${vencido?'var(--red)':'var(--green)'};height:100%;width:${pct}%;"></div>
+      </div>
+      ${m.ultimaTrocaEm?`<div style="font-size:11px;color:var(--muted);margin-top:6px;">Última troca: ${fmtData(m.ultimaTrocaEm)}</div>`:''}
+    </div>`;
+}
+window.renderManutencao=renderManutencao;
 function salvarCredenciaisAdmin(){
   const email=document.getElementById('cfg-email').value.trim();
   const s1=document.getElementById('cfg-senha').value;
@@ -2279,6 +2452,9 @@ function confirmarSaidaAntecipada(){
 function finalizarPlantao(antecipado,motivo){
   plantaoAtivo.fim=new Date().toISOString();plantaoAtivo.saidaAntecipada=antecipado;plantaoAtivo.motivoSaida=motivo;
   plantaoAtivo.fotos=fotosP;plantaoAtivo.portaria=portariaP;plantaoAtivo.ckState=ckState;
+  // Registrar KM rodados no acumulado de manutenção (não visível ao vigia)
+  const kmR=calcularKmRodados(plantaoAtivo.checklist);
+  if(kmR!==null)registrarKmManutencao(kmR);
   DB.set('plantoes',DB.get('plantoes').map(p=>p.id===plantaoAtivo.id?plantaoAtivo:p));
   // Limpar todos os dados de sessão após finalizar
   try{
@@ -2518,12 +2694,14 @@ function gerarHtmlRelatorio(p, opcoes){
     </div>`:'';
 
   // Checklist
+  const kmRodadosModal=calcularKmRodados(ck);
   const ckHtml=ck.veiculo?`
     <div style="${S.section}">
       <h4 style="${S.h4}">🏍️ Checklist do Veículo</h4>
       <div style="${S.row}"><span style="${S.lbl}">Veículo</span><span style="${S.val}">${ck.veiculo}</span></div>
       <div style="${S.row}"><span style="${S.lbl}">KM Entrada</span><span style="${S.val}">${ck.kmEntrada||'—'}</span></div>
       <div style="${S.row}"><span style="${S.lbl}">KM Saída</span><span style="${S.val}">${ck.kmSaida||'—'}</span></div>
+      ${kmRodadosModal!==null?`<div style="${S.row}"><span style="${S.lbl}">🛣️ KM Rodados</span><span style="${S.val};color:#1A4FAF;">${kmRodadosModal} km</span></div>`:''}
       <div style="${S.row}"><span style="${S.lbl}">Gasolina</span><span style="${S.val}">${ck.gasolina||'—'}</span></div>
       <div style="${S.row}"><span style="${S.lbl}">Óleo</span><span style="${S.val}">${ck.oleo||'—'}</span></div>
       ${eqHtml}
@@ -2939,9 +3117,10 @@ function montarCorpoHTML(p,emp){
   if(rondasTbl) html+='<div class="sec"><div class="sec-tit">🚶 Rondas Realizadas</div>'+rondasTbl+'</div>';
 
   if(ck.veiculo){
+    const kmRodadosPdf=calcularKmRodados(ck);
     html+='<div class="sec"><div class="sec-tit">🏍️ Checklist do Veículo</div>';
     html+='<div class="ln"><span class="ln-l">Veículo</span><span class="ln-v">'+ck.veiculo+'</span></div>';
-    html+='<div class="ln"><span class="ln-l">KM Entrada → Saída</span><span class="ln-v">'+(ck.kmEntrada||'—')+' → '+(ck.kmSaida||'—')+'</span></div>';
+    html+='<div class="ln"><span class="ln-l">KM Entrada → Saída</span><span class="ln-v">'+(ck.kmEntrada||'—')+' → '+(ck.kmSaida||'—')+(kmRodadosPdf!==null?' <b style="color:#1A4FAF;">('+kmRodadosPdf+' km rodados)</b>':'')+'</span></div>';
     html+='<div class="ln"><span class="ln-l">Gasolina / Óleo</span><span class="ln-v">'+(ck.gasolina||'—')+' / '+(ck.oleo||'—')+'</span></div>';
     if(chips) html+='<div class="chips">'+chips+'</div>';
     html+='</div>';
@@ -3132,7 +3311,11 @@ function finalizarPlantaoAdmin(){
   const motivo=document.getElementById('fa-motivo').value.trim();
   if(!motivo){toast('⚠️ Informe o motivo');return;}
   const plantoes=DB.get('plantoes').map(p=>{
-    if(p.id===id&&!p.fim) return{...p,fim:new Date().toISOString(),encerradoPeloAdmin:true,motivoAdmin:motivo};
+    if(p.id===id&&!p.fim){
+      const kmR=calcularKmRodados(p.checklist);
+      if(kmR!==null)registrarKmManutencao(kmR);
+      return{...p,fim:new Date().toISOString(),encerradoPeloAdmin:true,motivoAdmin:motivo};
+    }
     return p;
   });
   DB.set('plantoes',plantoes);
