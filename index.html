@@ -128,77 +128,93 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var
 .mb-2{margin-bottom:8px;}.mb-3{margin-bottom:12px;}.mb-4{margin-bottom:16px;}
 .text-muted{color:var(--muted);font-size:13px;}.text-sm{font-size:13px;}.text-xs{font-size:11px;}
 .font-bold{font-weight:700;}.p-3{padding:12px;}.p-4{padding:16px;}
-.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:999px;font-size:10px;font-weight:700;letter-spacing:.04em;}
-.badge-green{background:rgba(16,185,129,.2);color:#10B981;}
-.badge-amber{background:rgba(245,158,11,.2);color:#F59E0B;}
-.badge-red{background:rgba(239,68,68,.2);color:#EF4444;}
-.badge-blue{background:rgba(46,139,247,.2);color:#2E8BF7;}
-.badge-purple{background:rgba(168,85,247,.2);color:#A855F7;}
-.badge-teal{background:rgba(20,184,166,.2);color:#14B8A6;}
-.badge-gray{background:rgba(100,116,139,.2);color:#94A3B8;}
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:999px;font-size:10px;font-weight:700;letter-spacing:.04em;border:1px solid transparent;}
+.badge-green{background:rgba(16,185,129,.15);color:#34d399;border-color:rgba(16,185,129,.3);}
+.badge-amber{background:rgba(245,158,11,.15);color:#fbbf24;border-color:rgba(245,158,11,.3);}
+.badge-red{background:rgba(239,68,68,.15);color:#f87171;border-color:rgba(239,68,68,.3);}
+.badge-blue{background:rgba(46,139,247,.15);color:#60a5fa;border-color:rgba(46,139,247,.3);}
+.badge-purple{background:rgba(168,85,247,.15);color:#c084fc;border-color:rgba(168,85,247,.3);}
+.badge-teal{background:rgba(20,184,166,.15);color:#2dd4bf;border-color:rgba(20,184,166,.3);}
+.badge-gray{background:rgba(100,116,139,.15);color:#94A3B8;border-color:rgba(100,116,139,.3);}
 #app{display:flex;flex-direction:column;min-height:100vh;}
-#topbar{background:var(--slate);border-bottom:1px solid var(--border);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;}
+#topbar{background:var(--slate);border-bottom:1px solid var(--border);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 2px 10px rgba(0,0,0,.2);}
 #topbar .logo{font-size:17px;font-weight:900;}
 #topbar .logo span{color:var(--sky);}
 #topbar .user-info{font-size:12px;color:var(--muted);text-align:right;}
 #topbar .user-info strong{display:block;color:var(--white);font-size:13px;}
 #main{flex:1;padding:16px;max-width:800px;margin:0 auto;width:100%;}
-#bottom-nav{background:var(--slate);border-top:1px solid var(--border);display:flex;position:sticky;bottom:0;z-index:100;overflow-x:auto;}
-.nav-btn{flex:1;min-width:52px;padding:9px 2px 7px;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:7.5px;font-weight:600;text-transform:uppercase;color:var(--muted);border:none;background:transparent;cursor:pointer;transition:color .2s;white-space:nowrap;}
+#bottom-nav{background:var(--slate);border-top:1px solid var(--border);display:flex;position:sticky;bottom:0;z-index:100;overflow-x:auto;box-shadow:0 -2px 10px rgba(0,0,0,.2);}
+.nav-btn{flex:1;min-width:52px;padding:9px 2px 7px;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:7.5px;font-weight:600;text-transform:uppercase;color:var(--muted);border:none;background:transparent;cursor:pointer;transition:color .2s,transform .15s;white-space:nowrap;}
+.nav-btn:active{transform:scale(.92);}
 .nav-btn .nav-icon{font-size:18px;}
 .nav-btn.active{color:var(--sky);}
-.screen{display:none;}.screen.active{display:block;}
-.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:12px;}
+.screen{display:none;}
+.screen.active{display:block;animation:screenIn .2s ease;}
+@keyframes screenIn{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:12px;box-shadow:0 2px 8px rgba(0,0,0,.18);}
 .card-title{font-size:14px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:8px;}
 .stat-row{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:12px;}
-.stat-box{background:var(--slate2);border-radius:10px;padding:14px;text-align:center;}
+.stat-box{background:var(--slate2);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center;transition:border-color .2s;}
 .stat-box .stat-val{font-size:22px;font-weight:900;line-height:1;}
 .stat-box .stat-lbl{font-size:10px;color:var(--muted);margin-top:4px;text-transform:uppercase;letter-spacing:.05em;}
 .field{margin-bottom:14px;}
 .field label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em;}
-.field input,.field select,.field textarea{width:100%;background:var(--slate2);border:1.5px solid var(--border);border-radius:8px;padding:11px 13px;color:var(--white);font-size:14px;outline:none;transition:border-color .2s;font-family:inherit;}
-.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--sky);}
+.field input,.field select,.field textarea{width:100%;background:var(--slate2);border:1.5px solid var(--border);border-radius:8px;padding:11px 13px;color:var(--white);font-size:14px;outline:none;transition:border-color .2s,box-shadow .2s;font-family:inherit;}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--sky);box-shadow:0 0 0 3px rgba(46,139,247,.15);}
 .field select option{background:var(--slate);}
 .field textarea{resize:vertical;min-height:70px;}
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:12px 20px;border-radius:10px;font-size:14px;font-weight:700;border:none;cursor:pointer;transition:all .2s;width:100%;}
-.btn-primary{background:var(--blue);color:#fff;}
-.btn-green{background:var(--green);color:#fff;}
-.btn-red{background:var(--red);color:#fff;}
-.btn-amber{background:var(--amber);color:#000;}
-.btn-purple{background:var(--purple);color:#fff;}
-.btn-teal{background:var(--teal);color:#fff;}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:12px 20px;border-radius:10px;font-size:14px;font-weight:700;border:none;cursor:pointer;transition:transform .15s ease,box-shadow .15s ease,filter .15s ease;width:100%;letter-spacing:.01em;}
+.btn:active{transform:scale(.97);}
+.btn-primary{background:linear-gradient(135deg,var(--sky),var(--blue));color:#fff;box-shadow:0 2px 10px rgba(46,139,247,.25);}
+.btn-green{background:linear-gradient(135deg,#34d399,var(--green));color:#fff;box-shadow:0 2px 10px rgba(16,185,129,.25);}
+.btn-red{background:linear-gradient(135deg,#f87171,var(--red));color:#fff;box-shadow:0 2px 10px rgba(239,68,68,.22);}
+.btn-amber{background:linear-gradient(135deg,#fbbf24,var(--amber));color:#000;box-shadow:0 2px 10px rgba(245,158,11,.22);}
+.btn-purple{background:linear-gradient(135deg,#c084fc,var(--purple));color:#fff;box-shadow:0 2px 10px rgba(168,85,247,.22);}
+.btn-teal{background:linear-gradient(135deg,#2dd4bf,var(--teal));color:#fff;box-shadow:0 2px 10px rgba(20,184,166,.22);}
 .btn-outline{background:transparent;border:1.5px solid var(--border);color:var(--white);}
+.btn-outline:hover{border-color:var(--sky);color:var(--sky);}
+.btn:disabled{opacity:.5;cursor:not-allowed;transform:none;filter:none;}
 .btn-sm{padding:7px 14px;font-size:12px;width:auto;border-radius:7px;}
 .btn-icon{width:34px;height:34px;padding:0;border-radius:7px;font-size:14px;}
-.list-item{background:var(--slate2);border-radius:10px;padding:13px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.quick-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.quick-tile{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:16px 10px;border-radius:12px;border:1px solid var(--border);background:var(--slate2);cursor:pointer;transition:transform .15s ease,border-color .2s,background .2s;position:relative;overflow:hidden;}
+.quick-tile::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--qc);}
+.quick-tile:hover{border-color:var(--qc);background:color-mix(in srgb,var(--qc) 10%,var(--slate2));}
+.quick-tile:active{transform:scale(.96);}
+.quick-tile .qt-icon{font-size:24px;width:44px;height:44px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:color-mix(in srgb,var(--qc) 18%,transparent);}
+.quick-tile .qt-label{font-size:12.5px;font-weight:700;color:var(--white);text-align:center;line-height:1.25;}
+.list-item{background:var(--slate2);border:1px solid var(--border);border-radius:10px;padding:13px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:10px;transition:border-color .2s;}
 .list-item .li-main{flex:1;min-width:0;}
 .list-item .li-title{font-size:14px;font-weight:600;}
 .list-item .li-sub{font-size:12px;color:var(--muted);margin-top:2px;line-height:1.4;}
 .list-item .li-actions{display:flex;gap:6px;flex-shrink:0;}
-.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:200;display:flex;align-items:center;justify-content:center;padding:16px;}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:200;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(2px);}
 .modal-overlay.hidden{display:none;}
-.modal{background:var(--slate);border-radius:18px;width:100%;max-width:560px;max-height:88vh;overflow-y:auto;padding:20px 16px 28px;}
+.modal-overlay:not(.hidden) .modal{animation:modalIn .18s ease;}
+@keyframes modalIn{from{opacity:0;transform:translateY(8px) scale(.98);}to{opacity:1;transform:translateY(0) scale(1);}}
+.modal{background:var(--slate);border:1px solid var(--border);border-radius:18px;width:100%;max-width:560px;max-height:88vh;overflow-y:auto;padding:20px 16px 28px;box-shadow:0 12px 40px rgba(0,0,0,.4);}
 .modal-handle{width:40px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 16px;}
 .modal-title{font-size:16px;font-weight:800;margin-bottom:16px;}
-#login-screen{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;background:linear-gradient(160deg,var(--navy) 0%,var(--slate) 100%);}
-.login-logo{font-size:34px;font-weight:900;margin-bottom:4px;}
+#login-screen{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;background:radial-gradient(circle at 50% 0%,rgba(46,139,247,.12),transparent 55%),linear-gradient(160deg,var(--navy) 0%,var(--slate) 100%);}
+.login-logo{font-size:34px;font-weight:900;margin-bottom:4px;text-shadow:0 2px 20px rgba(46,139,247,.25);}
 .login-logo span{color:var(--sky);}
-.login-box{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:24px;width:100%;max-width:400px;}
+.login-box{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:24px;width:100%;max-width:400px;box-shadow:0 16px 50px rgba(0,0,0,.35);}
 .login-box h2{font-size:18px;font-weight:800;margin-bottom:20px;text-align:center;}
-.ponto-btn{border-radius:16px;padding:22px;text-align:center;border:none;cursor:pointer;width:100%;font-weight:900;font-size:17px;transition:all .2s;margin-bottom:12px;}
-.ponto-btn.entrada{background:linear-gradient(135deg,#065f46,var(--green));color:#fff;}
-.ponto-btn.saida{background:linear-gradient(135deg,#7f1d1d,var(--red));color:#fff;}
+.ponto-btn{border-radius:16px;padding:22px;text-align:center;border:none;cursor:pointer;width:100%;font-weight:900;font-size:17px;transition:transform .15s ease,box-shadow .15s ease;margin-bottom:12px;}
+.ponto-btn:active{transform:scale(.98);}
+.ponto-btn.entrada{background:linear-gradient(135deg,#065f46,var(--green));color:#fff;box-shadow:0 4px 20px rgba(16,185,129,.3);}
+.ponto-btn.saida{background:linear-gradient(135deg,#7f1d1d,var(--red));color:#fff;box-shadow:0 4px 20px rgba(239,68,68,.28);}
 .ponto-btn .ponto-icon{font-size:36px;display:block;margin-bottom:6px;}
 .plantao-ativo-box{background:linear-gradient(135deg,rgba(16,185,129,.15),rgba(16,185,129,.05));border:2px solid var(--green);border-radius:14px;padding:14px;margin-bottom:16px;}
 .tab-bar{display:flex;background:var(--slate2);border-radius:10px;padding:3px;margin-bottom:16px;}
 .tab-item{flex:1;padding:8px;text-align:center;font-size:11px;font-weight:700;border-radius:8px;cursor:pointer;color:var(--muted);transition:all .2s;}
-.tab-item.active{background:var(--blue);color:#fff;}
+.tab-item.active{background:var(--blue);color:#fff;box-shadow:0 2px 8px rgba(46,139,247,.3);}
 .foto-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px;}
 .foto-thumb{aspect-ratio:1;border-radius:8px;overflow:hidden;position:relative;background:var(--slate2);}
 .foto-thumb img{width:100%;height:100%;object-fit:cover;}
 .foto-thumb .foto-num{position:absolute;bottom:3px;right:3px;background:rgba(0,0,0,.78);color:#fff;font-size:9px;font-weight:700;padding:2px 5px;border-radius:3px;}
 .foto-thumb .foto-hora{position:absolute;top:3px;left:3px;background:rgba(0,0,0,.78);color:#fff;font-size:8px;padding:2px 4px;border-radius:3px;}
-.camera-btn{background:var(--slate2);border:2px dashed var(--border);border-radius:10px;padding:20px;text-align:center;cursor:pointer;width:100%;color:var(--muted);font-size:13px;transition:border-color .2s;}
+.camera-btn{background:var(--slate2);border:2px dashed var(--border);border-radius:10px;padding:20px;text-align:center;cursor:pointer;width:100%;color:var(--muted);font-size:13px;transition:border-color .2s,color .2s;}
 .camera-btn:hover{border-color:var(--sky);color:var(--sky);}
 .check-item{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);}
 .check-item:last-child{border-bottom:none;}
@@ -207,7 +223,8 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var
 .check-opt.nok{background:var(--red);border-color:var(--red);color:#fff;}
 .portaria-type-btns{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;}
 .type-btn{border-radius:12px;padding:16px;text-align:center;border:2px solid var(--border);background:var(--slate2);cursor:pointer;transition:all .2s;}
-.type-btn.selected{border-color:var(--sky);background:rgba(46,139,247,.1);}
+.type-btn:hover{border-color:rgba(46,139,247,.4);}
+.type-btn.selected{border-color:var(--sky);background:rgba(46,139,247,.12);box-shadow:0 2px 12px rgba(46,139,247,.15);}
 .type-btn .tb-icon{font-size:28px;margin-bottom:4px;}
 .type-btn .tb-label{font-size:13px;font-weight:700;}
 /* FINANCEIRO */
@@ -267,16 +284,22 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var
 .perm-label{font-size:13px;}
 .toggle{width:44px;height:24px;background:var(--border);border-radius:999px;position:relative;cursor:pointer;transition:background .2s;border:none;flex-shrink:0;}
 .toggle.on{background:var(--green);}
-.toggle::after{content:'';position:absolute;width:18px;height:18px;background:#fff;border-radius:50%;top:3px;left:3px;transition:transform .2s;}
+.toggle::after{content:'';position:absolute;width:18px;height:18px;background:#fff;border-radius:50%;top:3px;left:3px;transition:transform .2s cubic-bezier(.4,0,.2,1);box-shadow:0 1px 4px rgba(0,0,0,.3);}
 .toggle.on::after{transform:translateX(20px);}
 /* MISC */
 .divider{height:1px;background:var(--border);margin:12px 0;}
 .section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
-.section-header h2{font-size:16px;font-weight:800;}
-#toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--slate);border:1px solid var(--border);border-radius:10px;padding:11px 18px;font-size:13px;font-weight:600;z-index:400;opacity:0;transition:all .3s;pointer-events:none;white-space:nowrap;max-width:90vw;}
+.section-header h2{font-size:16px;font-weight:800;letter-spacing:-.01em;}
+.back-link{display:inline-flex;align-items:center;gap:5px;color:var(--muted);font-size:12.5px;font-weight:700;background:none;border:none;cursor:pointer;padding:4px 0;margin-bottom:10px;transition:color .2s;}
+.back-link:hover{color:var(--sky);}
+#toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--slate);border:1px solid var(--border);border-radius:10px;padding:11px 18px;font-size:13px;font-weight:600;z-index:400;opacity:0;transition:all .3s;pointer-events:none;white-space:nowrap;max-width:90vw;box-shadow:0 8px 24px rgba(0,0,0,.35);}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
-.empty-state{text-align:center;padding:36px 20px;color:var(--muted);}
-.empty-state .es-icon{font-size:44px;margin-bottom:10px;}
+.empty-state{text-align:center;padding:36px 20px;color:var(--muted);animation:screenIn .25s ease;}
+.empty-state .es-icon{font-size:44px;margin-bottom:10px;opacity:.7;}
+::-webkit-scrollbar{width:8px;height:8px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:8px;}
+::-webkit-scrollbar-thumb:hover{background:var(--muted);}
 @media print{
   #topbar,#bottom-nav,.btn,#toast,#loading-screen{display:none!important;}
   body{background:#fff;color:#000;margin:0;padding:0;}
@@ -307,10 +330,32 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var
     <h2>Entrar no sistema</h2>
     <div class="field"><label>E-mail</label><input type="email" id="login-email" placeholder="seu@email.com"></div>
     <div class="field"><label>Senha</label><input type="password" id="login-senha" placeholder="••••••••"></div>
-    <button class="btn btn-primary" onclick="fazerLogin()">🔐 Entrar</button>
+    <button class="btn btn-primary" onclick="fazerLogin()" style="width:100%;">🔐 Entrar</button>
+
+    <div style="display:flex;align-items:center;gap:10px;margin:18px 0 14px;">
+      <div style="flex:1;height:1px;background:var(--border);"></div>
+      <span style="font-size:11px;color:var(--muted);">ou</span>
+      <div style="flex:1;height:1px;background:var(--border);"></div>
+    </div>
+    <button class="btn btn-outline" onclick="abrirCadastroMorador()" style="width:100%;">🏠 Sou morador — Solicitar acesso</button>
+
     <div class="text-center mt-3 text-xs text-muted">Admin: admin@rm.com / 123456<br>Vigilante: joao@rm.com / 123456</div>
-    <div id="aviso-plantao-aberto" class="hidden" style="margin-top:12px;background:rgba(16,185,129,.15);border:1.5px solid #10B981;border-radius:8px;padding:10px;font-size:12px;color:#10B981;text-align:center;">
-      🛡️ <strong>Você tem um plantão em andamento!</strong><br>Faça login para retomar de onde parou.
+  </div>
+</div>
+
+<!-- MODAL CADASTRO DE MORADOR (acessível da tela de login) -->
+<div class="modal-overlay hidden" id="modal-cadastro-morador">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">🏠 Solicitar Acesso</div>
+    <div class="text-xs" style="color:var(--muted);margin-bottom:14px;">Preencha seus dados. O administrador vai analisar e enviar seu login e senha pelo WhatsApp.</div>
+    <div class="field"><label>Nome completo</label><input type="text" id="sm-nome"></div>
+    <div class="field"><label>CPF</label><input type="text" id="sm-cpf" placeholder="000.000.000-00" maxlength="14"></div>
+    <div class="field"><label>Telefone (WhatsApp)</label><input type="tel" id="sm-telefone" placeholder="(00) 00000-0000"></div>
+    <div class="field"><label>Endereço / Local</label><input type="text" id="sm-endereco" placeholder="Ex: Rua das Flores, 100 — Bloco A"></div>
+    <div class="flex gap-3 mt-2">
+      <button class="btn btn-outline" onclick="fecharModal('modal-cadastro-morador')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarCadastroMorador()">📤 Enviar Solicitação</button>
     </div>
   </div>
 </div>
@@ -328,6 +373,10 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var
 
     <!-- DASHBOARD -->
     <div id="screen-dashboard" class="screen">
+      <div style="display:flex;justify-content:flex-end;margin-bottom:8px;">
+        <button class="btn btn-outline btn-sm" onclick="sincronizarDadosAdmin().then(()=>{atualizarDashboard();toast('🔄 Atualizado!');})" title="Buscar plantões e atualizações da nuvem agora">🔄 Atualizar</button>
+      </div>
+      <div id="alerta-moradores-dash" class="hidden" style="background:rgba(20,184,166,.12);border:1.5px solid var(--teal);border-radius:12px;padding:14px;margin-bottom:14px;color:var(--teal);text-align:center;"></div>
       <div id="alerta-manutencao-dash" class="hidden" style="background:rgba(239,68,68,.1);border:1.5px solid var(--red);border-radius:12px;padding:14px;margin-bottom:14px;color:var(--red);text-align:center;"></div>
       <div class="stat-row">
         <div class="stat-box"><div class="stat-val" id="st-plantoes">0</div><div class="stat-lbl">Plantões Hoje</div></div>
@@ -337,12 +386,14 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var
       </div>
       <div class="card">
         <div class="card-title">⚡ Ações rápidas</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-          <button class="btn btn-primary btn-sm" style="width:100%" onclick="irPara('screen-vigilantes')">👤 Vigilantes</button>
-          <button class="btn btn-amber btn-sm" style="width:100%;color:#000" onclick="irPara('screen-contratantes')">🏢 Contratantes</button>
-          <button class="btn btn-purple btn-sm" style="width:100%" onclick="irPara('screen-escala')">📅 Escala</button>
-          <button class="btn btn-outline btn-sm" style="width:100%" onclick="irPara('screen-financeiro')">💰 Financeiro</button>
-          <button class="btn btn-teal btn-sm" style="width:100%;grid-column:1 / -1;" onclick="irPara('screen-veiculos')">🏍️ Veículos</button>
+        <div class="quick-grid">
+          <button class="quick-tile" style="--qc:var(--blue);" onclick="irPara('screen-vigilantes')"><span class="qt-icon">👤</span><span class="qt-label">Vigilantes</span></button>
+          <button class="quick-tile" style="--qc:var(--amber);" onclick="irPara('screen-contratantes')"><span class="qt-icon">🏢</span><span class="qt-label">Contratantes</span></button>
+          <button class="quick-tile" style="--qc:var(--purple);" onclick="irPara('screen-escala')"><span class="qt-icon">📅</span><span class="qt-label">Escala</span></button>
+          <button class="quick-tile" style="--qc:var(--green);" onclick="irPara('screen-financeiro')"><span class="qt-icon">💰</span><span class="qt-label">Financeiro</span></button>
+          <button class="quick-tile" style="--qc:var(--teal);" onclick="irPara('screen-veiculos')"><span class="qt-icon">🏍️</span><span class="qt-label">Veículos</span></button>
+          <button class="quick-tile" style="--qc:var(--sky);" onclick="irPara('screen-precadastros')"><span class="qt-icon">📇</span><span class="qt-label">Pré-Cadastros</span></button>
+          <button class="quick-tile" style="--qc:var(--red);grid-column:1 / -1;" onclick="irPara('screen-moradores')"><span class="qt-icon">🏠</span><span class="qt-label">Acesso de Moradores</span></button>
         </div>
       </div>
       <div class="section-header mt-3"><h2>📋 Plantões recentes</h2></div>
@@ -362,6 +413,7 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var
 
     <!-- CONTRATANTES -->
     <div id="screen-contratantes" class="screen">
+      <button class="back-link" onclick="irPara('screen-dashboard')">← Voltar ao Início</button>
       <div class="section-header"><h2>🏢 Contratantes</h2>
         <div style="display:flex;gap:6px;">
           <button class="btn btn-outline btn-sm" onclick="limparContratantes()" style="color:var(--red);border-color:var(--red);">🗑️ Limpar</button>
@@ -373,6 +425,7 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var
 
     <!-- VEÍCULOS -->
     <div id="screen-veiculos" class="screen">
+      <button class="back-link" onclick="irPara('screen-dashboard')">← Voltar ao Início</button>
       <div class="section-header"><h2>🏍️ Veículos</h2>
         <div style="display:flex;gap:6px;">
           <button class="btn btn-outline btn-sm" onclick="sincronizarDadosAdmin().then(()=>{renderVeiculos();toast('🔄 Atualizado!');})" title="Buscar atualizações da nuvem">🔄</button>
@@ -590,6 +643,7 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var
         </div>
         <!-- ABA PORTARIA -->
         <div id="aba-portaria" class="hidden">
+          <div id="bloco-precadastros-vig"></div>
           <div class="section-header"><h2>🚦 Portaria</h2><button class="btn btn-primary btn-sm" onclick="abrirModalPortaria()">+ Registrar</button></div>
           <div id="lista-portaria-plantao"></div>
         </div>
@@ -672,6 +726,100 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var
       <div id="lista-meus-relatorios"></div>
     </div>
 
+    <!-- PORTAL DO CLIENTE -->
+    <div id="screen-cliente" class="screen">
+      <div id="cliente-identificacao">
+        <div class="card">
+          <div class="card-title">👤 Identifique-se</div>
+          <div class="text-xs" style="color:var(--muted);margin-bottom:10px;">Antes de cadastrar, informe seus dados.</div>
+          <div class="field"><label>Nome completo</label><input type="text" id="cli-nome"></div>
+          <div class="field"><label>CPF</label><input type="text" id="cli-cpf" placeholder="000.000.000-00" maxlength="14"></div>
+          <div class="field"><label>Telefone</label><input type="tel" id="cli-telefone" placeholder="(00) 00000-0000"></div>
+          <button class="btn btn-primary" style="width:100%" onclick="confirmarIdentificacaoCliente()">Continuar</button>
+        </div>
+      </div>
+
+      <div id="cliente-form" class="hidden">
+        <div class="card" style="border-color:var(--teal);margin-bottom:14px;">
+          <div style="font-weight:700;" id="cli-identificado-nome"></div>
+          <div class="text-xs" style="color:var(--muted);" id="cli-identificado-cpf"></div>
+          <div class="text-xs" style="color:var(--muted);margin-top:4px;">Esses dados só podem ser alterados pelo administrador.</div>
+        </div>
+
+        <div class="portaria-type-btns">
+          <div class="type-btn selected" id="cli-btn-visitante" onclick="selTipoCliente('visitante')"><div class="tb-icon">🚗</div><div class="tb-label">Visitante</div></div>
+          <div class="type-btn" id="cli-btn-entrega" onclick="selTipoCliente('entrega')"><div class="tb-icon">📦</div><div class="tb-label">Entrega</div></div>
+          <div class="type-btn" id="cli-btn-prestador" onclick="selTipoCliente('prestador')"><div class="tb-icon">🔧</div><div class="tb-label">Prestador</div></div>
+        </div>
+
+        <div id="cli-campos-visitante">
+          <div class="field"><label>Nome do visitante</label><input type="text" id="cli-visitante-nome"></div>
+          <div class="field"><label>Placa do veículo</label><input type="text" id="cli-visitante-placa" style="text-transform:uppercase" maxlength="8"></div>
+          <div class="field"><label>Visitando (apto/local)</label><input type="text" id="cli-visitante-dest" placeholder="Ex: Apto 302, Casa 5..."></div>
+          <div class="field"><label>Observação (opcional)</label><textarea id="cli-visitante-obs"></textarea></div>
+        </div>
+        <div id="cli-campos-entrega" class="hidden">
+          <div class="field"><label>Empresa</label><select id="cli-entrega-empresa"><option>🛵 iFood</option><option>📦 Mercado Livre</option><option>📫 Amazon</option><option>🛍️ Shopee</option><option>📮 Correios</option><option>Outro</option></select></div>
+          <div class="field"><label>Nome do entregador (se souber)</label><input type="text" id="cli-entrega-nome"></div>
+          <div class="field"><label>Placa do veículo (se souber)</label><input type="text" id="cli-entrega-placa" style="text-transform:uppercase" maxlength="8"></div>
+          <div class="field"><label>Entrega para (apto/local)</label><input type="text" id="cli-entrega-local"></div>
+          <div class="field"><label>Observação (opcional)</label><textarea id="cli-entrega-obs"></textarea></div>
+        </div>
+        <div id="cli-campos-prestador" class="hidden">
+          <div class="field"><label>Nome do prestador</label><input type="text" id="cli-prestador-nome"></div>
+          <div class="field"><label>Empresa / Serviço</label><input type="text" id="cli-prestador-servico" placeholder="Ex: Encanador, Dedetizadora..."></div>
+          <div class="field"><label>Placa (se houver)</label><input type="text" id="cli-prestador-placa" style="text-transform:uppercase" maxlength="8"></div>
+          <div class="field"><label>Local do serviço (apto/local)</label><input type="text" id="cli-prestador-dest" placeholder="Ex: Apto 302, Casa 5..."></div>
+          <div class="field"><label>Observação (opcional)</label><textarea id="cli-prestador-obs"></textarea></div>
+        </div>
+
+        <button class="btn btn-primary" style="width:100%" onclick="salvarPreCadastro()">💾 Salvar Cadastro</button>
+
+        <div class="section-header mt-3"><h3 style="font-size:14px;">📋 Meus cadastros de hoje</h3></div>
+        <div id="lista-meus-precadastros"></div>
+      </div>
+    </div>
+
+    <!-- RELATÓRIOS DO CLIENTE -->
+    <div id="screen-cliente-relatorios" class="screen">
+      <div class="section-header"><h2>📋 Relatórios do Local</h2>
+        <button class="btn btn-outline btn-sm" onclick="sincronizarDadosAdmin().then(()=>{renderRelatoriosCliente();toast('🔄 Atualizado!');})" title="Buscar novidades">🔄</button>
+      </div>
+      <div class="text-xs mb-3" style="color:var(--muted);">Relatórios de plantões encerrados no seu local, com rondas, observações e pré-cadastros.</div>
+      <div id="lista-relatorios-cliente"></div>
+    </div>
+
+    <!-- PRÉ-CADASTROS (Admin) -->
+    <div id="screen-precadastros" class="screen">
+      <button class="back-link" onclick="irPara('screen-dashboard')">← Voltar ao Início</button>
+      <div class="section-header"><h2>📇 Pré-Cadastros</h2>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-outline btn-sm" onclick="sincronizarDadosAdmin().then(()=>{renderPreCadastrosAdmin();toast('🔄 Atualizado!');})" title="Buscar novidades">🔄</button>
+          <button class="btn btn-outline btn-sm" onclick="limparPreCadastros()" style="color:var(--red);border-color:var(--red);">🗑️ Limpar</button>
+        </div>
+      </div>
+      <div class="text-xs mb-3" style="color:var(--muted);">Cadastros feitos pelos próprios clientes para visitantes, entregas e prestadores esperados.</div>
+      <div class="field" style="margin-bottom:12px;"><input type="text" id="filtro-precadastros" placeholder="🔍 Buscar por nome, local ou empresa..." oninput="renderPreCadastrosAdmin()"></div>
+      <div id="lista-precadastros-admin"></div>
+    </div>
+
+    <!-- MORADORES / ACESSO DE CLIENTES (Admin) -->
+    <div id="screen-moradores" class="screen">
+      <button class="back-link" onclick="irPara('screen-dashboard')">← Voltar ao Início</button>
+      <div class="section-header"><h2>🏠 Acesso de Moradores</h2>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-outline btn-sm" onclick="sincronizarDadosAdmin().then(()=>{renderMoradoresAdmin();toast('🔄 Atualizado!');})" title="Buscar novidades">🔄</button>
+          <button class="btn btn-outline btn-sm" onclick="limparSolicitacoesMoradores()" style="color:var(--red);border-color:var(--red);" title="Limpar solicitações pendentes">🗑️</button>
+        </div>
+      </div>
+      <div class="field" style="margin-bottom:14px;"><input type="text" id="filtro-moradores" placeholder="🔍 Buscar por nome, local ou telefone..." oninput="renderMoradoresAdmin()"></div>
+      <div id="bloco-moradores-pendentes"></div>
+      <div class="section-header mt-3"><h3 style="font-size:14px;">✅ Moradores com Acesso</h3>
+        <button class="btn btn-outline btn-sm" onclick="limparMoradoresAprovados()" style="color:var(--red);border-color:var(--red);" title="Remover acesso de todos">🗑️ Limpar todos</button>
+      </div>
+      <div id="bloco-moradores-aprovados"></div>
+    </div>
+
   </div><!-- /main -->
   <div id="bottom-nav"></div>
 </div>
@@ -709,6 +857,12 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var
     <div class="field"><label>Contato</label><input type="tel" id="mc-contato" placeholder="(00) 00000-0000"></div>
     <div class="field"><label>Locais de ronda (um por linha)</label><textarea id="mc-locais" placeholder="Bloco A — Rua das Flores, 100&#10;Bloco B — Av. Central, 200"></textarea></div>
     <div class="field"><label>Valor do contrato (R$/mês)</label><input type="text" id="mc-valor" placeholder="R$ 0,00" oninput="mascaraMoeda(this)"></div>
+    <div class="card mt-2" style="border-color:var(--teal);">
+      <div class="card-title">🔑 Acesso do Cliente (opcional)</div>
+      <div class="text-xs" style="color:var(--muted);margin-bottom:8px;">Crie um login para o cliente pré-cadastrar visitantes, entregas e prestadores. Todas as pessoas do local podem usar o mesmo login.</div>
+      <div class="field"><label>E-mail de acesso</label><input type="email" id="mc-cliente-email" placeholder="cliente@exemplo.com"></div>
+      <div class="field"><label>Senha</label><input type="text" id="mc-cliente-senha" placeholder="Mínimo 6 caracteres"></div>
+    </div>
     <div class="flex gap-3 mt-2">
       <button class="btn btn-outline" onclick="fecharModal('modal-contratante')">Cancelar</button>
       <button class="btn btn-primary" onclick="salvarContratante()">💾 Salvar</button>
@@ -730,6 +884,46 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var
     <div class="flex gap-3 mt-2">
       <button class="btn btn-outline" onclick="fecharModal('modal-veiculo')">Cancelar</button>
       <button class="btn btn-primary" onclick="salvarVeiculo()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL APROVAR MORADOR -->
+<div class="modal-overlay hidden" id="modal-aprovar-morador">
+  <div class="modal"><div class="modal-handle"></div>
+    <div class="modal-title">✅ Aprovar Acesso</div>
+    <input type="hidden" id="am-solicitacao-id">
+    <div id="am-info" style="background:var(--slate2);border-radius:10px;padding:12px;margin-bottom:14px;font-size:13px;line-height:1.6;"></div>
+    <div class="field"><label>Vincular ao local</label>
+      <select id="am-contratante"><option value="">Selecione...</option></select>
+    </div>
+    <div class="field"><label>E-mail de acesso</label><input type="email" id="am-email"></div>
+    <div class="field"><label>Senha</label><input type="text" id="am-senha"></div>
+    <div class="text-xs" style="color:var(--muted);margin-bottom:8px;">Login e senha gerados automaticamente — pode editar se quiser.</div>
+    <div class="flex gap-3 mt-2">
+      <button class="btn btn-outline" onclick="fecharModal('modal-aprovar-morador')">Cancelar</button>
+      <button class="btn btn-green" onclick="confirmarAprovacaoMorador()">✅ Aprovar e Gerar Acesso</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL EDITAR MORADOR -->
+<div class="modal-overlay hidden" id="modal-editar-morador">
+  <div class="modal"><div class="modal-handle"></div>
+    <div class="modal-title">✏️ Editar Morador</div>
+    <input type="hidden" id="em-id">
+    <input type="hidden" id="em-tipo">
+    <div class="field"><label>Nome completo</label><input type="text" id="em-nome"></div>
+    <div class="field"><label>CPF</label><input type="text" id="em-cpf" maxlength="14"></div>
+    <div class="field"><label>Telefone (WhatsApp)</label><input type="tel" id="em-telefone"></div>
+    <div id="em-bloco-endereco"><div class="field"><label>Endereço / Local</label><input type="text" id="em-endereco"></div></div>
+    <div id="em-bloco-login" class="hidden">
+      <div class="field"><label>E-mail de acesso</label><input type="email" id="em-email"></div>
+      <div class="field"><label>Senha</label><input type="text" id="em-senha"></div>
+    </div>
+    <div class="flex gap-3 mt-2">
+      <button class="btn btn-outline" onclick="fecharModal('modal-editar-morador')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarEdicaoMorador()">💾 Salvar</button>
     </div>
   </div>
 </div>
@@ -847,6 +1041,7 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var
     <div class="portaria-type-btns">
       <div class="type-btn selected" id="pt-btn-entrega" onclick="selTipo('entrega')"><div class="tb-icon">📦</div><div class="tb-label">Entrega</div><div class="text-xs text-muted mt-1">iFood, ML, etc.</div></div>
       <div class="type-btn" id="pt-btn-visitante" onclick="selTipo('visitante')"><div class="tb-icon">🚗</div><div class="tb-label">Visitante</div><div class="text-xs text-muted mt-1">Morador / visita</div></div>
+      <div class="type-btn" id="pt-btn-prestador" onclick="selTipo('prestador')"><div class="tb-icon">🔧</div><div class="tb-label">Prestador</div><div class="text-xs text-muted mt-1">Serviço no local</div></div>
     </div>
     <div id="campos-entrega">
       <div class="field"><label>Empresa</label><select id="pt-empresa"><option>🛵 iFood</option><option>📦 Mercado Livre</option><option>📫 Amazon</option><option>🛍️ Shopee</option><option>📮 Correios</option><option>Outro</option></select></div>
@@ -858,6 +1053,12 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var
       <div class="field"><label>Nome do condutor</label><input type="text" id="pt-visitante"></div>
       <div class="field"><label>Placa</label><input type="text" id="pt-placa-v" style="text-transform:uppercase" maxlength="8"></div>
       <div class="field"><label>Visita para (morador/apto)</label><input type="text" id="pt-visita-dest"></div>
+    </div>
+    <div id="campos-prestador" class="hidden">
+      <div class="field"><label>Nome do prestador</label><input type="text" id="pt-prestador-nome"></div>
+      <div class="field"><label>Empresa / Serviço</label><input type="text" id="pt-prestador-servico" placeholder="Ex: Encanador, Dedetizadora..."></div>
+      <div class="field"><label>Placa (se houver)</label><input type="text" id="pt-placa-p" style="text-transform:uppercase" maxlength="8"></div>
+      <div class="field"><label>Local do serviço</label><input type="text" id="pt-prestador-dest"></div>
     </div>
     <div class="flex gap-3 mt-2">
       <button class="btn btn-outline" onclick="fecharModal('modal-portaria')">Cancelar</button>
@@ -1056,7 +1257,7 @@ const DB={
     return CACHE[k]||[];
   },
   async loadAll(){
-    const cols=['usuarios','vigilantes','contratantes','escala','plantoes','financeiro','equipamentos','itens_veiculo','veiculos','solicitacoes_troca'];
+    const cols=['usuarios','vigilantes','contratantes','escala','plantoes','financeiro','equipamentos','itens_veiculo','veiculos','solicitacoes_troca','pre_cadastros','solicitacoes_cadastro'];
     cols.forEach(k=>{try{const v=localStorage.getItem('rm_'+k);if(v)CACHE[k]=JSON.parse(v);}catch(e){} });
   }
 };
@@ -1136,7 +1337,7 @@ let _sincronizandoAdmin=false;
 async function sincronizarDadosAdmin(silencioso){
   if(!window._fbGet||!navigator.onLine||_sincronizandoAdmin)return;
   _sincronizandoAdmin=true;
-  const colsAdmin=['veiculos','contratantes','vigilantes','escala','itens_veiculo','equipamentos','solicitacoes_troca'];
+  const colsAdmin=['veiculos','contratantes','vigilantes','escala','itens_veiculo','equipamentos','solicitacoes_troca','plantoes','pre_cadastros','solicitacoes_cadastro','usuarios'];
   let algoMudou=false;
   try{
     await Promise.all(colsAdmin.map(async k=>{
@@ -1177,6 +1378,21 @@ async function sincronizarDadosAdmin(silencioso){
       if(document.getElementById('screen-escala')&&document.getElementById('screen-escala').classList.contains('active')){
         renderSolicitacoesAdmin();
       }
+      if(document.getElementById('screen-dashboard')&&document.getElementById('screen-dashboard').classList.contains('active')){
+        atualizarDashboard();
+      }
+      if(document.getElementById('screen-relatorios')&&document.getElementById('screen-relatorios').classList.contains('active')){
+        renderRelatoriosAdmin();
+      }
+      if(document.getElementById('screen-precadastros')&&document.getElementById('screen-precadastros').classList.contains('active')){
+        renderPreCadastrosAdmin();
+      }
+      if(document.getElementById('aba-portaria')&&!document.getElementById('aba-portaria').classList.contains('hidden')){
+        renderPreCadastrosVig();
+      }
+      if(document.getElementById('screen-cliente')&&document.getElementById('screen-cliente').classList.contains('active')&&clienteIdentificacao){
+        renderMeusPreCadastros();
+      }
     }catch(e){}
   }
 }
@@ -1201,7 +1417,7 @@ async function initDemo(){
   document.querySelectorAll('.modal-overlay').forEach(m=>m.classList.add('hidden'));
 
   // 3. Carregar localStorage (síncrono, instantâneo) — mostra algo na tela rápido
-  const cols=['usuarios','vigilantes','contratantes','escala','plantoes','financeiro','equipamentos','itens_veiculo','veiculos','solicitacoes_troca'];
+  const cols=['usuarios','vigilantes','contratantes','escala','plantoes','financeiro','equipamentos','itens_veiculo','veiculos','solicitacoes_troca','pre_cadastros','solicitacoes_cadastro'];
   cols.forEach(k=>{
     try{
       const v=localStorage.getItem('rm_'+k);
@@ -1263,13 +1479,8 @@ async function initDemo(){
     console.log('⚠️ Nenhum usuário encontrado (local ou nuvem) — admin padrão criado.');
   }
 
-  // 6. Verificar plantão aberto
-  const plantoes=DB.get('plantoes');
-  const aberto=plantoes.find(p=>!p.fim);
-  if(aberto){
-    const el=document.getElementById('aviso-plantao-aberto');
-    if(el) el.classList.remove('hidden');
-  }
+  // 6. O retomar de plantão é feito de forma individual, por vigilante, direto no login
+  //    (ver bloco "plantaoAberto" dentro de fazerLogin) — não é um aviso genérico aqui.
 
   console.log('✅ Sistema pronto. Usuários:',DB.get('usuarios').length);
 
@@ -1305,6 +1516,8 @@ let tipoPortaria='entrega';
 let escalaMes=new Date();
 let escalaDiaSel=null;
 let checklistSalvo=false;
+let clienteIdentificacao=null;
+let tipoPreCadastro='visitante';
 
 // ═══════════════════════════════════════════
 // PERSISTÊNCIA DO PLANTÃO ATIVO
@@ -1410,7 +1623,7 @@ function fazerLogin(){
   const senha=document.getElementById('login-senha').value;
 
   // Garantir que os dados do localStorage estão no CACHE antes de validar
-  ['usuarios','vigilantes','contratantes','escala','plantoes','financeiro','equipamentos','itens_veiculo','veiculos','solicitacoes_troca'].forEach(k=>{
+  ['usuarios','vigilantes','contratantes','escala','plantoes','financeiro','equipamentos','itens_veiculo','veiculos','solicitacoes_troca','pre_cadastros','solicitacoes_cadastro'].forEach(k=>{
     if(CACHE[k]===undefined){
       try{const v=localStorage.getItem('rm_'+k);if(v)CACHE[k]=JSON.parse(v);}catch(e){}
     }
@@ -1422,12 +1635,30 @@ function fazerLogin(){
   document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
   document.getElementById('tb-nome').textContent=u.nome;
-  const perfilLabel={admin:'👔 Admin',gerente:'📊 Gerente',vigilante:'🦺 Vigilante'}[u.perfil]||u.perfil;
+  const perfilLabel={admin:'👔 Admin',gerente:'📊 Gerente',vigilante:'🦺 Vigilante',cliente:'🏠 Cliente'}[u.perfil]||u.perfil;
   document.getElementById('tb-perfil').textContent=perfilLabel;
   montarNav();
   sincronizarDadosAdmin(true); // busca dados novos da nuvem em segundo plano, sem re-renderizar nada ainda
 
   if(u.perfil==='admin') irPara('screen-dashboard');
+  else if(u.perfil==='cliente'){
+    if(u.cpf){
+      // Login individual do morador — já sabemos quem é, pula a identificação manual
+      clienteIdentificacao={nome:u.nome,cpf:u.cpf,telefone:u.telefone||''};
+      document.getElementById('cliente-identificacao').classList.add('hidden');
+      document.getElementById('cliente-form').classList.remove('hidden');
+      document.getElementById('cli-identificado-nome').textContent=u.nome;
+      document.getElementById('cli-identificado-cpf').textContent='CPF: '+u.cpf;
+      selTipoCliente('visitante');
+    } else {
+      // Login compartilhado antigo (por contratante) — precisa identificar quem está usando
+      clienteIdentificacao=null;
+      document.getElementById('cliente-form').classList.add('hidden');
+      document.getElementById('cliente-identificacao').classList.remove('hidden');
+      ['cli-nome','cli-cpf','cli-telefone'].forEach(id=>document.getElementById(id).value='');
+    }
+    irPara('screen-cliente');
+  }
   else if(u.perfil==='gerente'){
     const perms=u.perms||{};
     if(perms.dashboard!==false) irPara('screen-dashboard');
@@ -1494,6 +1725,11 @@ function montarNav(){
     if(perms.vigilantes)itens.push({id:'screen-vigilantes',icon:'👤',label:'Vigilantes'});
     if(perms.contratantes)itens.push({id:'screen-contratantes',icon:'🏢',label:'Contratantes'});
     if(perms.veiculos)itens.push({id:'screen-veiculos',icon:'🏍️',label:'Veículos'});
+  } else if(U.perfil==='cliente'){
+    itens=[
+      {id:'screen-cliente',icon:'📇',label:'Cadastros'},
+      {id:'screen-cliente-relatorios',icon:'📋',label:'Relatórios'},
+    ];
   } else {
     itens=[
       {id:'screen-plantao',icon:'🛡️',label:'Plantão'},
@@ -1519,6 +1755,10 @@ function irPara(s){
   if(s==='screen-meus-relatorios')renderMeusRelatorios();
   if(s==='screen-substituicoes')renderSubstVig();
   if(s==='screen-config')renderConfig();
+  if(s==='screen-cliente'){if(clienteIdentificacao)renderMeusPreCadastros();}
+  if(s==='screen-cliente-relatorios')renderRelatoriosCliente();
+  if(s==='screen-precadastros')renderPreCadastrosAdmin();
+  if(s==='screen-moradores')renderMoradoresAdmin();
   window.scrollTo(0,0);
 }
 
@@ -1536,6 +1776,19 @@ function atualizarDashboard(){
   document.getElementById('st-relatorios').textContent=plantoes.filter(p=>p.fim).length;
   const saldo=rec-pago;
   document.getElementById('st-saldo').textContent=fmtMoeda(saldo);
+
+  // Alerta de moradores aguardando aprovação
+  const moradoresPend=DB.get('solicitacoes_cadastro').filter(s=>s.status==='pendente');
+  const alertaMorEl=document.getElementById('alerta-moradores-dash');
+  if(alertaMorEl){
+    if(moradoresPend.length){
+      alertaMorEl.classList.remove('hidden');
+      alertaMorEl.innerHTML=`🏠 <strong>${moradoresPend.length} solicitação(ões) de acesso pendente(s)</strong>
+        <button class="btn btn-teal btn-sm mt-2" style="display:block;width:100%;" onclick="irPara('screen-moradores')">Ver Solicitações</button>`;
+    }else{
+      alertaMorEl.classList.add('hidden');
+    }
+  }
 
   // Alerta de manutenção — visível SOMENTE para admin/gestor no dashboard
   const veicVencidos=veiculosComManutencaoVencida();
@@ -1569,7 +1822,7 @@ function atualizarDashboard(){
             <div class="mt-1">${s.badge}${calcularHoraExtra(p)>0?`<span class="badge badge-amber"> ⏱️ HE: ${fmtMoeda(calcularHoraExtra(p))}</span>`:''}${kmR!==null?`<span class="badge badge-blue"> 🛣️ ${kmR} km</span>`:''}</div>
           </div>
           <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;">
-            ${p.fim?`<button class="btn btn-primary btn-sm" onclick="verRelatorio('${p.id}')">Ver</button>`:`<button class="btn btn-red btn-sm" onclick="abrirFinalizarAdmin('${p.id}')">🔴 Encerrar</button>`}
+            ${p.fim?`<button class="btn btn-primary btn-sm" onclick="verRelatorio('${p.id}')">Ver</button>`:`<button class="btn btn-outline btn-sm" onclick="verRelatorio('${p.id}')">Ver</button><button class="btn btn-red btn-sm" onclick="abrirFinalizarAdmin('${p.id}')">🔴 Encerrar</button>`}
           </div>
         </div>`;
       }).join('')}
@@ -1639,7 +1892,7 @@ function renderContratantes(){
     </div>`).join('');
 }
 function abrirModalContratante(){
-  ['mc-id','mc-nome','mc-contato','mc-locais','mc-valor'].forEach(id=>document.getElementById(id).value='');
+  ['mc-id','mc-nome','mc-contato','mc-locais','mc-valor','mc-cliente-email','mc-cliente-senha'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('mc-title').textContent='Novo Contratante';abrirModal('modal-contratante');
 }
 function editarContratante(id){
@@ -1647,6 +1900,10 @@ function editarContratante(id){
   document.getElementById('mc-id').value=c.id;document.getElementById('mc-nome').value=c.nome;
   document.getElementById('mc-contato').value=c.contato||'';document.getElementById('mc-locais').value=c.locais||'';
   document.getElementById('mc-valor').value=c.valor?'R$ '+Number(c.valor).toLocaleString('pt-BR',{minimumFractionDigits:2}):'';
+  // Carregar login do cliente, se existir
+  const userCliente=DB.get('usuarios').find(u=>u.perfil==='cliente'&&u.contratanteId===id);
+  document.getElementById('mc-cliente-email').value=userCliente?userCliente.email:'';
+  document.getElementById('mc-cliente-senha').value=userCliente?userCliente.senha:'';
   document.getElementById('mc-title').textContent='Editar Contratante';abrirModal('modal-contratante');
 }
 function salvarContratante(){
@@ -1655,7 +1912,20 @@ function salvarContratante(){
   if(!nome){toast('⚠️ Informe o nome');return;}
   const lista=DB.get('contratantes').filter(x=>x.id!==id);
   lista.push({id,nome,contato:document.getElementById('mc-contato').value,locais:document.getElementById('mc-locais').value,valor:parseMoeda(document.getElementById('mc-valor').value)});
-  DB.set('contratantes',lista);fecharModal('modal-contratante');renderContratantes();popularLocais();toast('✅ Contratante salvo!');
+  DB.set('contratantes',lista);
+
+  // Criar/atualizar login do cliente, se preenchido
+  const clienteEmail=document.getElementById('mc-cliente-email').value.trim();
+  const clienteSenha=document.getElementById('mc-cliente-senha').value.trim();
+  if(clienteEmail&&clienteSenha){
+    if(clienteSenha.length<6){toast('⚠️ Senha do cliente precisa ter no mínimo 6 caracteres');return;}
+    const emailEmUso=DB.get('usuarios').find(u=>u.email===clienteEmail&&!(u.perfil==='cliente'&&u.contratanteId===id));
+    if(emailEmUso){toast('⚠️ Esse e-mail já está em uso por outro usuário');return;}
+    const usuarios=DB.get('usuarios').filter(u=>!(u.perfil==='cliente'&&u.contratanteId===id));
+    usuarios.push({id:'ucli'+id,nome,email:clienteEmail,senha:clienteSenha,perfil:'cliente',contratanteId:id});
+    DB.set('usuarios',usuarios);
+  }
+  fecharModal('modal-contratante');renderContratantes();popularLocais();toast('✅ Contratante salvo!');
 }
 
 // ═══════════════════════════════════════════
@@ -2661,6 +2931,11 @@ function abaPlantao(aba,el){
     restaurarEstadoChecklistVisual();
     sincronizarDadosAdmin();
   }
+  // Ao abrir portaria, mostrar pré-cadastros do cliente e buscar novidades
+  if(aba==='portaria'){
+    renderPreCadastrosVig();
+    sincronizarDadosAdmin(true).then(()=>renderPreCadastrosVig());
+  }
 }
 function encerrarPlantao(){
   // ── VALIDAÇÃO 1: Checklist obrigatório ──
@@ -2808,8 +3083,10 @@ function selTipo(tipo){
   tipoPortaria=tipo;
   document.getElementById('campos-entrega').classList.toggle('hidden',tipo!=='entrega');
   document.getElementById('campos-visitante').classList.toggle('hidden',tipo!=='visitante');
+  document.getElementById('campos-prestador').classList.toggle('hidden',tipo!=='prestador');
   document.getElementById('pt-btn-entrega').classList.toggle('selected',tipo==='entrega');
   document.getElementById('pt-btn-visitante').classList.toggle('selected',tipo==='visitante');
+  document.getElementById('pt-btn-prestador').classList.toggle('selected',tipo==='prestador');
 }
 function salvarPortaria(){
   let reg={id:'pt'+Date.now(),tipo:tipoPortaria,hora:fmtH(new Date().toISOString()),dataHora:new Date().toISOString()};
@@ -2819,6 +3096,13 @@ function salvarPortaria(){
     const dest=document.getElementById('pt-destino').value.trim();
     if(!nome||!placa||!dest){toast('⚠️ Preencha todos os campos');return;}
     reg={...reg,empresa:document.getElementById('pt-empresa').value,entregador:nome,placa,destino:dest};
+  } else if(tipoPortaria==='prestador'){
+    const nome=document.getElementById('pt-prestador-nome').value.trim();
+    const servico=document.getElementById('pt-prestador-servico').value.trim();
+    const placa=document.getElementById('pt-placa-p').value.trim().toUpperCase();
+    const dest=document.getElementById('pt-prestador-dest').value.trim();
+    if(!nome||!dest){toast('⚠️ Preencha nome e local');return;}
+    reg={...reg,prestador:nome,servico,placa,destino:dest,horaSaida:null};
   } else {
     const nome=document.getElementById('pt-visitante').value.trim();
     const placa=document.getElementById('pt-placa-v').value.trim().toUpperCase();
@@ -2838,13 +3122,16 @@ function renderPortariaPlantao(){
   if(!portariaP.length){div.innerHTML='<div class="empty-state"><div class="es-icon">🚦</div><div>Nenhum registro</div></div>';return;}
   div.innerHTML=[...portariaP].reverse().map(r=>{
     if(r.tipo==='entrega')return`<div class="list-item"><div class="li-main"><div class="li-title">📦 ${r.empresa} — ${r.entregador}</div><div class="li-sub">🚗 ${r.placa} · Para: ${r.destino} · ${r.hora}</div></div><span class="badge badge-purple">Entrega</span></div>`;
+    const ehPrestador=r.tipo==='prestador';
+    const nomeExib=ehPrestador?r.prestador:r.visitante;
+    const iconExib=ehPrestador?'🔧':'🚗';
     const semSaida=!r.horaSaida;
     const avisoSemSaida=semSaida?'<div style="font-size:10px;color:var(--amber);margin-top:2px;">⚠️ Ainda não registrou saída</div>':'';
     return`<div class="list-item" style="flex-direction:column;align-items:flex-start;gap:6px;">
       <div class="flex items-center justify-between w-full">
         <div class="li-main">
-          <div class="li-title">🚗 ${r.visitante}</div>
-          <div class="li-sub">${r.placa} · Visita: ${r.destino} · Entrada: ${r.hora}${r.horaSaida?' · Saída: '+r.horaSaida:''}</div>
+          <div class="li-title">${iconExib} ${nomeExib}${ehPrestador&&r.servico?' — '+r.servico:''}</div>
+          <div class="li-sub">${r.placa?r.placa+' · ':''}Local: ${r.destino} · Entrada: ${r.hora}${r.horaSaida?' · Saída: '+r.horaSaida:''}</div>
           ${avisoSemSaida}
         </div>
         ${semSaida
@@ -2855,6 +3142,400 @@ function renderPortariaPlantao(){
     </div>`;
   }).join('');
 }
+
+// ═══════════════════════════════════════════
+// PRÉ-CADASTROS DO VIGIA (visualizar/usar o que o cliente cadastrou)
+// ═══════════════════════════════════════════
+function renderPreCadastrosVig(){
+  const div=document.getElementById('bloco-precadastros-vig');
+  if(!div||!plantaoAtivo)return;
+  const hoje=new Date().toDateString();
+  const cont=DB.get('contratantes').find(c=>c.nome===plantaoAtivo.contratanteNome);
+  const contId=cont?cont.id:null;
+  const relevantes=DB.get('pre_cadastros').filter(p=>
+    (contId?p.contratanteId===contId:p.contratanteNome===plantaoAtivo.contratanteNome)
+    &&new Date(p.criadoEm).toDateString()===hoje
+    &&!p.usado
+  );
+  if(!relevantes.length){div.innerHTML='';return;}
+  const icones={visitante:'🚗',entrega:'📦',prestador:'🔧'};
+  div.innerHTML=`<div class="card" style="border-color:var(--purple);margin-bottom:12px;">
+    <div class="card-title">📇 Pré-cadastros de hoje (${relevantes.length})</div>
+    ${relevantes.map(p=>{
+      const nomeExib=p.nome||(p.tipo==='entrega'?'Entregador não informado':'—');
+      const localExib=p.destino||'';
+      return`<div style="background:var(--slate2);border-radius:8px;padding:10px;margin-bottom:6px;">
+        <div style="font-weight:700;font-size:13px;">${icones[p.tipo]||''} ${p.empresa?p.empresa+' — ':''}${nomeExib}${p.servico?' — '+p.servico:''}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px;">${p.placa?p.placa+' · ':''}${localExib}${p.obs?' · '+p.obs:''}</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:2px;">Cadastrado por ${p.clienteNome}</div>
+        <button class="btn btn-teal btn-sm mt-2" style="width:100%" onclick="usarPreCadastro('${p.id}')">✅ Usar / Registrar entrada</button>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+function usarPreCadastro(id){
+  const p=DB.get('pre_cadastros').find(x=>x.id===id);
+  if(!p)return;
+  abrirModalPortaria();
+  setTimeout(()=>{
+    if(p.tipo==='visitante'){
+      selTipo('visitante');
+      document.getElementById('pt-visitante').value=p.nome||'';
+      document.getElementById('pt-placa-v').value=p.placa||'';
+      document.getElementById('pt-visita-dest').value=p.destino||'';
+    } else if(p.tipo==='entrega'){
+      selTipo('entrega');
+      if(p.empresa){
+        const selEmp=document.getElementById('pt-empresa');
+        const opt=Array.from(selEmp.options).find(o=>o.text===p.empresa);
+        if(opt)selEmp.value=p.empresa;
+      }
+      document.getElementById('pt-entregador').value=p.nome||'';
+      document.getElementById('pt-placa-e').value=p.placa||'';
+      document.getElementById('pt-destino').value=p.destino||'';
+    } else {
+      selTipo('prestador');
+      document.getElementById('pt-prestador-nome').value=p.nome||'';
+      document.getElementById('pt-prestador-servico').value=p.servico||'';
+      document.getElementById('pt-placa-p').value=p.placa||'';
+      document.getElementById('pt-prestador-dest').value=p.destino||p.obs||'';
+    }
+  },150);
+  const lista=DB.get('pre_cadastros').map(x=>x.id===id?{...x,usado:true}:x);
+  DB.set('pre_cadastros',lista);
+  renderPreCadastrosVig();
+}
+window.usarPreCadastro=usarPreCadastro;
+window.renderPreCadastrosVig=renderPreCadastrosVig;
+
+// ═══════════════════════════════════════════
+// PORTAL DO CLIENTE
+// ═══════════════════════════════════════════
+function confirmarIdentificacaoCliente(){
+  const nome=document.getElementById('cli-nome').value.trim();
+  const cpf=document.getElementById('cli-cpf').value.trim();
+  const telefone=document.getElementById('cli-telefone').value.trim();
+  if(!nome||!cpf){toast('⚠️ Informe nome e CPF');return;}
+  clienteIdentificacao={nome,cpf,telefone};
+  document.getElementById('cli-identificado-nome').textContent=nome;
+  document.getElementById('cli-identificado-cpf').textContent='CPF: '+cpf;
+  document.getElementById('cliente-identificacao').classList.add('hidden');
+  document.getElementById('cliente-form').classList.remove('hidden');
+  selTipoCliente('visitante');
+  renderMeusPreCadastros();
+}
+function selTipoCliente(tipo){
+  tipoPreCadastro=tipo;
+  ['visitante','entrega','prestador'].forEach(t=>{
+    document.getElementById('cli-campos-'+t).classList.toggle('hidden',t!==tipo);
+    document.getElementById('cli-btn-'+t).classList.toggle('selected',t===tipo);
+  });
+}
+function salvarPreCadastro(){
+  if(!clienteIdentificacao){toast('⚠️ Identifique-se primeiro');return;}
+  const c=DB.get('contratantes').find(x=>x.id===U.contratanteId);
+  let reg={
+    id:'pc'+Date.now(),
+    tipo:tipoPreCadastro,
+    contratanteId:U.contratanteId,
+    contratanteNome:c?c.nome:'—',
+    clienteNome:clienteIdentificacao.nome,
+    clienteCpf:clienteIdentificacao.cpf,
+    clienteTelefone:clienteIdentificacao.telefone,
+    usado:false,
+    criadoEm:new Date().toISOString()
+  };
+  if(tipoPreCadastro==='visitante'){
+    const nome=document.getElementById('cli-visitante-nome').value.trim();
+    if(!nome){toast('⚠️ Informe o nome do visitante');return;}
+    reg.nome=nome;
+    reg.placa=document.getElementById('cli-visitante-placa').value.trim().toUpperCase();
+    reg.destino=document.getElementById('cli-visitante-dest').value.trim();
+    reg.obs=document.getElementById('cli-visitante-obs').value.trim();
+  } else if(tipoPreCadastro==='entrega'){
+    const local=document.getElementById('cli-entrega-local').value.trim();
+    if(!local){toast('⚠️ Informe o local da entrega');return;}
+    reg.empresa=document.getElementById('cli-entrega-empresa').value;
+    reg.nome=document.getElementById('cli-entrega-nome').value.trim();
+    reg.placa=document.getElementById('cli-entrega-placa').value.trim().toUpperCase();
+    reg.destino=local;
+    reg.obs=document.getElementById('cli-entrega-obs').value.trim();
+  } else {
+    const nome=document.getElementById('cli-prestador-nome').value.trim();
+    if(!nome){toast('⚠️ Informe o nome do prestador');return;}
+    reg.nome=nome;
+    reg.servico=document.getElementById('cli-prestador-servico').value.trim();
+    reg.placa=document.getElementById('cli-prestador-placa').value.trim().toUpperCase();
+    reg.destino=document.getElementById('cli-prestador-dest').value.trim();
+    reg.obs=document.getElementById('cli-prestador-obs').value.trim();
+  }
+  const lista=DB.get('pre_cadastros');
+  lista.push(reg);
+  DB.set('pre_cadastros',lista);
+  ['cli-visitante-nome','cli-visitante-placa','cli-visitante-dest','cli-visitante-obs','cli-entrega-nome','cli-entrega-placa','cli-entrega-local','cli-entrega-obs','cli-prestador-nome','cli-prestador-servico','cli-prestador-placa','cli-prestador-dest','cli-prestador-obs'].forEach(id=>{
+    const el=document.getElementById(id);if(el)el.value='';
+  });
+  document.getElementById('cli-entrega-empresa').selectedIndex=0;
+  renderMeusPreCadastros();
+  toast('✅ Cadastro salvo! O vigia e o administrador já podem ver.');
+}
+function renderMeusPreCadastros(){
+  const div=document.getElementById('lista-meus-precadastros');
+  if(!div||!U)return;
+  const hoje=new Date().toDateString();
+  const meus=DB.get('pre_cadastros').filter(p=>p.contratanteId===U.contratanteId&&new Date(p.criadoEm).toDateString()===hoje).sort((a,b)=>new Date(b.criadoEm)-new Date(a.criadoEm));
+  if(!meus.length){div.innerHTML='<div class="empty-state"><div class="es-icon">📋</div><div>Nenhum cadastro hoje</div></div>';return;}
+  const icones={visitante:'🚗',entrega:'📦',prestador:'🔧'};
+  div.innerHTML=meus.map(p=>{
+    const nomeExib=p.nome||(p.tipo==='entrega'?'':'—');
+    const localExib=p.destino||p.obs||'';
+    return`<div class="list-item">
+      <div class="li-main">
+        <div class="li-title">${icones[p.tipo]||''} ${p.empresa?p.empresa+' — ':''}${nomeExib}${p.servico?' — '+p.servico:''}</div>
+        <div class="li-sub">${p.placa?p.placa+' · ':''}${localExib} · por ${p.clienteNome} · ${fmtH(p.criadoEm)}</div>
+      </div>
+      ${p.usado?'<span class="badge badge-green">✅ Já entrou</span>':'<span class="badge badge-amber">⏳ Aguardando</span>'}
+    </div>`;
+  }).join('');
+}
+window.confirmarIdentificacaoCliente=confirmarIdentificacaoCliente;
+window.selTipoCliente=selTipoCliente;
+window.salvarPreCadastro=salvarPreCadastro;
+window.renderMeusPreCadastros=renderMeusPreCadastros;
+
+// ═══════════════════════════════════════════
+// PRÉ-CADASTROS — VISÃO DO ADMIN
+// ═══════════════════════════════════════════
+function renderPreCadastrosAdmin(){
+  const div=document.getElementById('lista-precadastros-admin');
+  if(!div)return;
+  const filtroEl=document.getElementById('filtro-precadastros');
+  const filtro=filtroEl?filtroEl.value.trim().toLowerCase():'';
+  let todos=[...DB.get('pre_cadastros')].sort((a,b)=>new Date(b.criadoEm)-new Date(a.criadoEm)).slice(0,100);
+  if(filtro){
+    todos=todos.filter(p=>[p.nome,p.empresa,p.servico,p.destino,p.contratanteNome,p.clienteNome,p.placa].some(c=>(c||'').toLowerCase().includes(filtro)));
+  }
+  if(!todos.length){div.innerHTML=`<div class="empty-state"><div class="es-icon">📇</div><div>${filtro?'Nenhum resultado encontrado':'Nenhum pré-cadastro ainda'}</div></div>`;return;}
+  const icones={visitante:'🚗',entrega:'📦',prestador:'🔧'};
+  const grupos=agruparPorData(todos,'criadoEm');
+  div.innerHTML=Object.entries(grupos).map(([data,items])=>`
+    <div class="date-group">
+      <div class="date-group-header">📅 ${data}</div>
+      ${items.map(p=>{
+        const nomeExib=p.nome||(p.tipo==='entrega'?'':'—');
+        const localExib=p.destino||p.obs||'';
+        return`<div class="list-item">
+          <div class="li-main">
+            <div class="li-title">${icones[p.tipo]||''} ${p.empresa?p.empresa+' — ':''}${nomeExib}${p.servico?' — '+p.servico:''}</div>
+            <div class="li-sub">🏢 ${p.contratanteNome} · ${p.placa?p.placa+' · ':''}${localExib}</div>
+            <div class="li-sub">👤 ${p.clienteNome} (CPF ${p.clienteCpf})${p.clienteTelefone?' · '+p.clienteTelefone:''} · ${fmtH(p.criadoEm)}</div>
+          </div>
+          ${p.usado?'<span class="badge badge-green">✅ Usado</span>':'<span class="badge badge-amber">⏳ Pendente</span>'}
+        </div>`;
+      }).join('')}
+    </div>`).join('');
+}
+window.renderPreCadastrosAdmin=renderPreCadastrosAdmin;
+
+// ═══════════════════════════════════════════
+// MORADORES — GESTÃO PELO ADMIN
+// ═══════════════════════════════════════════
+function gerarSenhaAleatoria(){
+  return Math.random().toString().slice(2,8);
+}
+function sugerirEmailMorador(nome,telefone){
+  const base=(nome||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z\s]/g,'').trim().split(/\s+/).slice(0,2).join('.');
+  const digitos=(telefone||'').replace(/\D/g,'').slice(-4);
+  return (base||'morador')+digitos+'@rondamaster.cliente';
+}
+function renderMoradoresAdmin(){
+  const filtroEl=document.getElementById('filtro-moradores');
+  const filtro=filtroEl?filtroEl.value.trim().toLowerCase():'';
+  const bate=(...campos)=>!filtro||campos.some(c=>(c||'').toLowerCase().includes(filtro));
+
+  const solicitacoes=DB.get('solicitacoes_cadastro');
+  const pendentes=solicitacoes.filter(s=>s.status==='pendente'&&bate(s.nome,s.endereco,s.telefone,s.cpf));
+  const divPend=document.getElementById('bloco-moradores-pendentes');
+  if(divPend){
+    if(!pendentes.length){
+      divPend.innerHTML=`<div class="empty-state"><div class="es-icon">🏠</div><div>${filtro?'Nenhum resultado encontrado':'Nenhuma solicitação pendente'}</div></div>`;
+    } else {
+      divPend.innerHTML=pendentes.map(s=>`
+        <div class="list-item" style="flex-direction:column;align-items:flex-start;gap:8px;border-left:3px solid var(--amber);">
+          <div>
+            <div class="li-title">${s.nome}</div>
+            <div class="li-sub">📄 CPF ${s.cpf} · 📱 ${s.telefone}</div>
+            <div class="li-sub">📍 ${s.endereco}</div>
+          </div>
+          <div class="flex gap-2 w-full">
+            <button class="btn btn-green btn-sm" style="flex:1" onclick="abrirAprovarMorador('${s.id}')">✅ Aprovar</button>
+            <button class="btn btn-outline btn-sm btn-icon" onclick="abrirEditarMoradorPendente('${s.id}')">✏️</button>
+            <button class="btn btn-red btn-sm btn-icon" onclick="negarSolicitacaoMorador('${s.id}')">🗑️</button>
+          </div>
+        </div>`).join('');
+    }
+  }
+
+  const aprovados=DB.get('usuarios').filter(u=>u.perfil==='cliente'&&u.cpf&&bate(u.nome,u.contratanteNome,u.telefone,u.email));
+  const divApr=document.getElementById('bloco-moradores-aprovados');
+  if(divApr){
+    if(!aprovados.length){
+      divApr.innerHTML=`<div class="empty-state"><div class="es-icon">👥</div><div>${filtro?'Nenhum resultado encontrado':'Nenhum morador com acesso ainda'}</div></div>`;
+    } else {
+      divApr.innerHTML=aprovados.map(u=>`
+        <div class="list-item" style="flex-direction:column;align-items:flex-start;gap:8px;">
+          <div>
+            <div class="li-title">${u.nome}</div>
+            <div class="li-sub">🏢 ${u.contratanteNome||'—'} · 📱 ${u.telefone||'—'}</div>
+            <div class="li-sub">✉️ ${u.email}</div>
+          </div>
+          <div class="flex gap-2 w-full">
+            <button class="btn btn-teal btn-sm" style="flex:1" onclick="enviarWhatsappMorador('${u.id}')">📱 Enviar acesso</button>
+            <button class="btn btn-outline btn-sm btn-icon" onclick="abrirEditarMoradorAprovado('${u.id}')">✏️</button>
+            <button class="btn btn-red btn-sm btn-icon" onclick="excluirMoradorAprovado('${u.id}')">🗑️</button>
+          </div>
+        </div>`).join('');
+    }
+  }
+}
+window.renderMoradoresAdmin=renderMoradoresAdmin;
+
+function abrirAprovarMorador(id){
+  const s=DB.get('solicitacoes_cadastro').find(x=>x.id===id);
+  if(!s)return;
+  document.getElementById('am-solicitacao-id').value=id;
+  document.getElementById('am-info').innerHTML=`<strong>${s.nome}</strong><br>📄 CPF ${s.cpf} · 📱 ${s.telefone}<br>📍 ${s.endereco}`;
+  const sel=document.getElementById('am-contratante');
+  const contratantes=DB.get('contratantes');
+  sel.innerHTML='<option value="">Selecione...</option>'+contratantes.map(c=>`<option value="${c.id}">${c.nome}</option>`).join('');
+  document.getElementById('am-email').value=sugerirEmailMorador(s.nome,s.telefone);
+  document.getElementById('am-senha').value=gerarSenhaAleatoria();
+  abrirModal('modal-aprovar-morador');
+}
+function confirmarAprovacaoMorador(){
+  const id=document.getElementById('am-solicitacao-id').value;
+  const contratanteId=document.getElementById('am-contratante').value;
+  const email=document.getElementById('am-email').value.trim();
+  const senha=document.getElementById('am-senha').value.trim();
+  if(!contratanteId){toast('⚠️ Selecione o local do morador');return;}
+  if(!email||!senha){toast('⚠️ Preencha e-mail e senha');return;}
+  const emailEmUso=DB.get('usuarios').find(u=>u.email===email);
+  if(emailEmUso){toast('⚠️ Esse e-mail já está em uso, escolha outro');return;}
+
+  const s=DB.get('solicitacoes_cadastro').find(x=>x.id===id);
+  if(!s)return;
+  const cont=DB.get('contratantes').find(c=>c.id===contratanteId);
+
+  const usuarios=DB.get('usuarios');
+  usuarios.push({
+    id:'umor'+id,nome:s.nome,email,senha,perfil:'cliente',
+    contratanteId,contratanteNome:cont?cont.nome:'—',
+    cpf:s.cpf,telefone:s.telefone,endereco:s.endereco
+  });
+  DB.set('usuarios',usuarios);
+
+  const listaSolic=DB.get('solicitacoes_cadastro').map(x=>x.id===id?{...x,status:'aprovado',contratanteId,contratanteNome:cont?cont.nome:'—',aprovadoEm:new Date().toISOString(),aprovadoPor:U.nome}:x);
+  DB.set('solicitacoes_cadastro',listaSolic);
+
+  fecharModal('modal-aprovar-morador');
+  renderMoradoresAdmin();
+  toast('✅ Acesso criado! Agora clique em "Enviar acesso" para mandar pelo WhatsApp.');
+}
+window.abrirAprovarMorador=abrirAprovarMorador;
+window.confirmarAprovacaoMorador=confirmarAprovacaoMorador;
+
+function enviarWhatsappMorador(userId){
+  const u=DB.get('usuarios').find(x=>x.id===userId);
+  if(!u)return;
+  const numero=(u.telefone||'').replace(/\D/g,'');
+  const numeroCompleto=numero.length<=11?'55'+numero:numero; // adiciona DDI Brasil se faltar
+  const msg=`Olá, ${u.nome}! Seu acesso ao sistema *RondaMaster* foi liberado.\n\n🔗 Link: [cole aqui o link do seu GitHub Pages]\n📧 Login: ${u.email}\n🔑 Senha: ${u.senha}\n\nUse para cadastrar visitantes, entregas e prestadores de serviço no seu endereço.`;
+  const link='https://wa.me/'+numeroCompleto+'?text='+encodeURIComponent(msg);
+  window.open(link,'_blank');
+}
+window.enviarWhatsappMorador=enviarWhatsappMorador;
+
+function negarSolicitacaoMorador(id){
+  if(!confirm('Excluir esta solicitação de acesso?'))return;
+  DB.set('solicitacoes_cadastro',DB.get('solicitacoes_cadastro').filter(x=>x.id!==id));
+  renderMoradoresAdmin();
+  toast('🗑️ Solicitação removida.');
+}
+window.negarSolicitacaoMorador=negarSolicitacaoMorador;
+
+function abrirEditarMoradorPendente(id){
+  const s=DB.get('solicitacoes_cadastro').find(x=>x.id===id);
+  if(!s)return;
+  document.getElementById('em-id').value=id;
+  document.getElementById('em-tipo').value='pendente';
+  document.getElementById('em-nome').value=s.nome;
+  document.getElementById('em-cpf').value=s.cpf;
+  document.getElementById('em-telefone').value=s.telefone;
+  document.getElementById('em-endereco').value=s.endereco;
+  document.getElementById('em-bloco-endereco').classList.remove('hidden');
+  document.getElementById('em-bloco-login').classList.add('hidden');
+  abrirModal('modal-editar-morador');
+}
+function abrirEditarMoradorAprovado(userId){
+  const u=DB.get('usuarios').find(x=>x.id===userId);
+  if(!u)return;
+  document.getElementById('em-id').value=userId;
+  document.getElementById('em-tipo').value='aprovado';
+  document.getElementById('em-nome').value=u.nome;
+  document.getElementById('em-cpf').value=u.cpf||'';
+  document.getElementById('em-telefone').value=u.telefone||'';
+  document.getElementById('em-bloco-endereco').classList.add('hidden');
+  document.getElementById('em-bloco-login').classList.remove('hidden');
+  document.getElementById('em-email').value=u.email;
+  document.getElementById('em-senha').value=u.senha;
+  abrirModal('modal-editar-morador');
+}
+function salvarEdicaoMorador(){
+  const id=document.getElementById('em-id').value;
+  const tipo=document.getElementById('em-tipo').value;
+  const nome=document.getElementById('em-nome').value.trim();
+  const cpf=document.getElementById('em-cpf').value.trim();
+  const telefone=document.getElementById('em-telefone').value.trim();
+  if(!nome||!cpf||!telefone){toast('⚠️ Preencha nome, CPF e telefone');return;}
+
+  if(tipo==='pendente'){
+    const endereco=document.getElementById('em-endereco').value.trim();
+    const lista=DB.get('solicitacoes_cadastro').map(x=>x.id===id?{...x,nome,cpf,telefone,endereco}:x);
+    DB.set('solicitacoes_cadastro',lista);
+  } else {
+    const email=document.getElementById('em-email').value.trim();
+    const senha=document.getElementById('em-senha').value.trim();
+    if(!email||!senha){toast('⚠️ Preencha e-mail e senha');return;}
+    const lista=DB.get('usuarios').map(x=>x.id===id?{...x,nome,cpf,telefone,email,senha}:x);
+    DB.set('usuarios',lista);
+  }
+  fecharModal('modal-editar-morador');
+  renderMoradoresAdmin();
+  toast('✅ Dados atualizados!');
+}
+function excluirMoradorAprovado(userId){
+  if(!confirm('Remover o acesso deste morador? Ele não vai mais conseguir entrar no sistema.'))return;
+  DB.set('usuarios',DB.get('usuarios').filter(x=>x.id!==userId));
+  renderMoradoresAdmin();
+  toast('🗑️ Acesso removido.');
+}
+window.abrirEditarMoradorPendente=abrirEditarMoradorPendente;
+window.abrirEditarMoradorAprovado=abrirEditarMoradorAprovado;
+window.salvarEdicaoMorador=salvarEdicaoMorador;
+window.excluirMoradorAprovado=excluirMoradorAprovado;
+
+// ═══════════════════════════════════════════
+// RELATÓRIOS — VISÃO DO CLIENTE
+// ═══════════════════════════════════════════
+function renderRelatoriosCliente(){
+  const div=document.getElementById('lista-relatorios-cliente');
+  if(!div||!U)return;
+  const cont=DB.get('contratantes').find(c=>c.id===U.contratanteId);
+  if(!cont){div.innerHTML='<div class="empty-state"><div class="es-icon">📋</div><div>Local não encontrado</div></div>';return;}
+  const plantoes=DB.get('plantoes').filter(p=>p.fim&&p.contratanteNome===cont.nome);
+  renderRelatoriosPorData(plantoes,'lista-relatorios-cliente');
+}
+window.renderRelatoriosCliente=renderRelatoriosCliente;
 
 // ═══════════════════════════════════════════
 // CHECKLIST
@@ -3084,6 +3765,37 @@ function gerarHtmlRelatorio(p, opcoes){
       </div>`).join('')}
     </div>`:'';
 
+  // Pré-cadastros do cliente naquele dia/local
+  const dataPlantao=new Date(p.inicio).toDateString();
+  const preCads=DB.get('pre_cadastros').filter(pc=>pc.contratanteNome===p.contratanteNome&&new Date(pc.criadoEm).toDateString()===dataPlantao);
+  const iconesPC={visitante:'🚗',entrega:'📦',prestador:'🔧'};
+  const preCadHtml=preCads.length?`
+    <div style="${S.section}">
+      <h4 style="${S.h4}">📇 Pré-Cadastros do Cliente (${preCads.length})</h4>
+      ${preCads.map(pc=>`<div style="${S.row}">
+        <span style="${S.lbl}">${iconesPC[pc.tipo]||''} ${pc.empresa?pc.empresa+' — ':''}${pc.nome||'—'}${pc.servico?' — '+pc.servico:''}</span>
+        <span style="${S.val}">${pc.placa?pc.placa+' · ':''}${pc.destino||pc.obs||''}<br><small style="color:#64748B;">por ${pc.clienteNome} · ${fmtH(pc.criadoEm)}${pc.usado?' · ✅ usado':' · ⏳ não usado'}</small></span>
+      </div>`).join('')}
+    </div>`:'';
+
+  // Observações do administrador
+  const obsAdminArr=Array.isArray(p.obsAdmin)?p.obsAdmin:[];
+  const obsAdminHtml=obsAdminArr.length?`
+    <div style="${S.section}">
+      <h4 style="${S.h4}">📝 Observações do Administrador</h4>
+      ${obsAdminArr.map((o,i)=>`<div style="background:#EFF6FF;border-radius:4px;padding:6px 10px;margin-bottom:4px;border-left:3px solid #2E8BF7;">
+        <span style="font-weight:700;">#${i+1}</span> ${o.texto}
+        <div style="font-size:10px;color:#1e40af;margin-top:2px;">👤 ${o.autor} · 📅 ${o.data} · ⏰ ${o.hora}</div>
+      </div>`).join('')}
+    </div>`:'';
+  const podeAdicionarObs=opcoes.podeEditar===true;
+  const addObsHtml=podeAdicionarObs?`
+    <div style="${S.section};background:#F8FAFC;border:1px dashed #CBD5E1;border-radius:8px;padding:12px;">
+      <h4 style="${S.h4}">➕ Adicionar Observação</h4>
+      <textarea id="ra-obs-nova" placeholder="Alguma situação para registrar sobre este plantão..." style="width:100%;min-height:60px;border:1px solid #CBD5E1;border-radius:6px;padding:8px;font-family:inherit;font-size:12px;margin-bottom:8px;"></textarea>
+      <button onclick="adicionarObsAdmin()" style="background:#1A4FAF;color:#fff;border:none;padding:8px 16px;border-radius:6px;font-weight:700;font-size:12px;cursor:pointer;">💾 Salvar Observação</button>
+    </div>`:'';
+
   return `<div style="${S.card}">
     <div style="${S.header}">
       <div>
@@ -3117,6 +3829,9 @@ function gerarHtmlRelatorio(p, opcoes){
     ${obsHtml}
     ${entHtml}
     ${visHtml}
+    ${preCadHtml}
+    ${obsAdminHtml}
+    ${addObsHtml}
     <div style="${S.footer}">RondaMaster · ID: ${id}</div>
   </div>`;
 }
@@ -3182,6 +3897,26 @@ function limparEscala(){
   DB.set('escala',DB.get('escala').filter(e=>{const d=new Date(e.data+'T12:00');return!(d.getFullYear()===ano&&d.getMonth()===mes);}));
   renderEscala();fecharListaDia();toast('🗑️ Escala do mês apagada.');
 }
+function limparPreCadastros(){
+  if(!confirm('⚠️ Apagar TODOS os pré-cadastros de visitantes, entregas e prestadores?'))return;
+  DB.set('pre_cadastros',[]);renderPreCadastrosAdmin();
+  toast('🗑️ Pré-cadastros apagados.');
+}
+function limparSolicitacoesMoradores(){
+  if(!confirm('⚠️ Apagar TODAS as solicitações de acesso pendentes? Isso não afeta moradores já aprovados.'))return;
+  DB.set('solicitacoes_cadastro',DB.get('solicitacoes_cadastro').filter(s=>s.status!=='pendente'));
+  renderMoradoresAdmin();
+  toast('🗑️ Solicitações pendentes apagadas.');
+}
+function limparMoradoresAprovados(){
+  if(!confirm('⚠️ ATENÇÃO: isso remove o ACESSO de TODOS os moradores aprovados — ninguém mais vai conseguir entrar com esses logins. Confirma?'))return;
+  DB.set('usuarios',DB.get('usuarios').filter(u=>!(u.perfil==='cliente'&&u.cpf)));
+  renderMoradoresAdmin();
+  toast('🗑️ Acesso de todos os moradores removido.');
+}
+window.limparPreCadastros=limparPreCadastros;
+window.limparSolicitacoesMoradores=limparSolicitacoesMoradores;
+window.limparMoradoresAprovados=limparMoradoresAprovados;
 // EMPRESA
 function salvarEmpresa(){
   const emp={
@@ -3305,6 +4040,44 @@ window.salvarOcorrenciaVisitante=salvarOcorrenciaVisitante;
 
 function abrirModal(id){document.getElementById(id).classList.remove('hidden');}
 function fecharModal(id){document.getElementById(id).classList.add('hidden');}
+
+// ═══════════════════════════════════════════
+// CADASTRO DE MORADOR — TELA DE LOGIN
+// ═══════════════════════════════════════════
+function abrirCadastroMorador(){
+  ['sm-nome','sm-cpf','sm-telefone','sm-endereco'].forEach(id=>document.getElementById(id).value='');
+  abrirModal('modal-cadastro-morador');
+}
+function salvarCadastroMorador(){
+  const nome=document.getElementById('sm-nome').value.trim();
+  const cpf=document.getElementById('sm-cpf').value.trim();
+  const telefone=document.getElementById('sm-telefone').value.trim();
+  const endereco=document.getElementById('sm-endereco').value.trim();
+  if(!nome||!cpf||!telefone||!endereco){toast('⚠️ Preencha todos os campos');return;}
+
+  // Garantir que os dados atuais estão no CACHE antes de gravar (mesmo sem estar logado)
+  ['solicitacoes_cadastro','usuarios'].forEach(k=>{
+    if(CACHE[k]===undefined){
+      try{const v=localStorage.getItem('rm_'+k);if(v)CACHE[k]=JSON.parse(v);}catch(e){}
+    }
+  });
+
+  const nova={
+    id:'sc'+Date.now(),
+    nome,cpf,telefone,endereco,
+    status:'pendente',
+    contratanteId:null,contratanteNome:null,
+    criadoEm:new Date().toISOString(),
+    aprovadoEm:null,aprovadoPor:null
+  };
+  const lista=DB.get('solicitacoes_cadastro');
+  lista.push(nova);
+  DB.set('solicitacoes_cadastro',lista);
+  fecharModal('modal-cadastro-morador');
+  toast('✅ Solicitação enviada! Você vai receber o login pelo WhatsApp assim que for aprovado.');
+}
+window.abrirCadastroMorador=abrirCadastroMorador;
+window.salvarCadastroMorador=salvarCadastroMorador;
 document.querySelectorAll('.modal-overlay').forEach(el=>{el.addEventListener('click',e=>{if(e.target===el)el.classList.add('hidden');});});
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2600);}
 
@@ -3527,6 +4300,28 @@ function montarCorpoHTML(p,emp){
   if(obsArr.length) html+='<div class="sec"><div class="sec-tit">📝 Observações</div>'+obsHtml+'</div>';
   if(portariaTbl) html+='<div class="sec"><div class="sec-tit">🚦 Portaria</div>'+portariaTbl+'</div>';
 
+  // Pré-cadastros do cliente naquele dia
+  const dataPlantaoPdf=new Date(p.inicio).toDateString();
+  const preCadsPdf=DB.get('pre_cadastros').filter(pc=>pc.contratanteNome===p.contratanteNome&&new Date(pc.criadoEm).toDateString()===dataPlantaoPdf);
+  if(preCadsPdf.length){
+    const iconesPCpdf={visitante:'🚗',entrega:'📦',prestador:'🔧'};
+    html+='<div class="sec"><div class="sec-tit">📇 Pré-Cadastros do Cliente ('+preCadsPdf.length+')</div>';
+    preCadsPdf.forEach(pc=>{
+      html+='<div class="ln"><span class="ln-l">'+(iconesPCpdf[pc.tipo]||'')+' '+(pc.empresa?pc.empresa+' — ':'')+(pc.nome||'—')+(pc.servico?' — '+pc.servico:'')+'</span><span class="ln-v">'+(pc.placa?pc.placa+' · ':'')+(pc.destino||pc.obs||'')+'</span></div>';
+    });
+    html+='</div>';
+  }
+
+  // Observações do administrador
+  const obsAdminArrPdf=Array.isArray(p.obsAdmin)?p.obsAdmin:[];
+  if(obsAdminArrPdf.length){
+    html+='<div class="sec"><div class="sec-tit">📝 Observações do Administrador</div>';
+    obsAdminArrPdf.forEach((o,i)=>{
+      html+='<div class="obs" style="border-left-color:#2E8BF7;background:#EFF6FF;"><b>#'+(i+1)+'</b> '+o.texto+' <span class="obs-hr">· '+o.autor+' · '+o.data+' '+o.hora+'</span></div>';
+    });
+    html+='</div>';
+  }
+
   html+='<div class="rodape">RondaMaster · ID '+id+' · Gerado em '+new Date().toLocaleString('pt-BR')+'</div>';
   return html;
 }
@@ -3535,9 +4330,29 @@ let _relatorioAtualId=null;
 function verRelatorio(id){
   _relatorioAtualId=id;
   const p=DB.get('plantoes').find(x=>x.id===id);if(!p)return;
-  document.getElementById('relatorio-conteudo').innerHTML=gerarHtmlRelatorio(p,{mostrarFotos:true});
+  const podeEditar=U&&(U.perfil==='admin'||U.perfil==='gerente');
+  document.getElementById('relatorio-conteudo').innerHTML=gerarHtmlRelatorio(p,{mostrarFotos:true,podeEditar});
   abrirModal('modal-relatorio');
 }
+function adicionarObsAdmin(){
+  if(!_relatorioAtualId)return;
+  const campo=document.getElementById('ra-obs-nova');
+  const texto=campo?campo.value.trim():'';
+  if(!texto){toast('⚠️ Digite a observação');return;}
+  const agora=new Date();
+  const nota={texto,autor:U.nome,data:fmtData(agora.toISOString()),hora:fmtH(agora.toISOString())};
+  const lista=DB.get('plantoes').map(p=>{
+    if(p.id===_relatorioAtualId){
+      const obsAdmin=Array.isArray(p.obsAdmin)?[...p.obsAdmin,nota]:[nota];
+      return{...p,obsAdmin};
+    }
+    return p;
+  });
+  DB.set('plantoes',lista);
+  toast('✅ Observação registrada!');
+  verRelatorio(_relatorioAtualId); // re-renderiza o modal com a nova observação
+}
+window.adicionarObsAdmin=adicionarObsAdmin;
 function gerarPDFAtual(){
   if(_relatorioAtualId) gerarPDF(_relatorioAtualId);
   else toast('❌ Nenhum relatório selecionado');
@@ -3697,8 +4512,19 @@ window.removerObsCk=removerObsCk;
 // ═══════════════════════════════════════════
 // FINALIZAR PLANTÃO PELO ADMIN
 // ═══════════════════════════════════════════
-function abrirFinalizarAdmin(plantaoId){
-  const p=DB.get('plantoes').find(x=>x.id===plantaoId);if(!p)return;
+async function abrirFinalizarAdmin(plantaoId){
+  // Buscar dados frescos antes de agir — evita encerrar/sobrescrever um plantão
+  // que o vigia já fechou do próprio celular, mas que ainda não chegou aqui
+  toast('🔄 Verificando plantão...');
+  await sincronizarDadosAdmin(true);
+  const p=DB.get('plantoes').find(x=>x.id===plantaoId);
+  if(!p)return;
+  if(p.fim){
+    // Já foi encerrado (pelo próprio vigia) — só faltava sincronizar
+    toast('✅ Esse plantão já foi encerrado pelo vigia! Atualizando a tela...');
+    atualizarDashboard();
+    return;
+  }
   document.getElementById('fa-plantao-id').value=plantaoId;
   document.getElementById('fa-info').innerHTML=`<strong>${p.vigilanteNome}</strong><br>📍 ${p.localNome}<br>⏰ Entrada: ${fmtH(p.inicio)}`;
   document.getElementById('fa-motivo').value='';
