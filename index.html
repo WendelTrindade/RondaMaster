@@ -342,6 +342,7 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var
           <button class="btn btn-amber btn-sm" style="width:100%;color:#000" onclick="irPara('screen-contratantes')">🏢 Contratantes</button>
           <button class="btn btn-purple btn-sm" style="width:100%" onclick="irPara('screen-escala')">📅 Escala</button>
           <button class="btn btn-outline btn-sm" style="width:100%" onclick="irPara('screen-financeiro')">💰 Financeiro</button>
+          <button class="btn btn-teal btn-sm" style="width:100%;grid-column:1 / -1;" onclick="irPara('screen-veiculos')">🏍️ Veículos</button>
         </div>
       </div>
       <div class="section-header mt-3"><h2>📋 Plantões recentes</h2></div>
@@ -370,8 +371,22 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var
       <div id="lista-contratantes"></div>
     </div>
 
+    <!-- VEÍCULOS -->
+    <div id="screen-veiculos" class="screen">
+      <div class="section-header"><h2>🏍️ Veículos</h2>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-outline btn-sm" onclick="sincronizarDadosAdmin().then(()=>{renderVeiculos();toast('🔄 Atualizado!');})" title="Buscar atualizações da nuvem">🔄</button>
+          <button class="btn btn-outline btn-sm" onclick="limparVeiculos()" style="color:var(--red);border-color:var(--red);">🗑️ Limpar</button>
+          <button class="btn btn-primary btn-sm" onclick="abrirModalVeiculo()">+ Novo</button>
+        </div>
+      </div>
+      <div class="text-xs mb-3" style="color:var(--muted);">Se houver mais de um veículo cadastrado, o vigia poderá escolher qual está usando no plantão. Se houver só um, ele é usado automaticamente.</div>
+      <div id="lista-veiculos"></div>
+    </div>
+
     <!-- ESCALA -->
     <div id="screen-escala" class="screen">
+      <div id="bloco-solicitacoes-admin"></div>
       <div class="escala-nav">
         <button class="btn btn-outline btn-sm btn-icon" onclick="navMes(-1)">‹</button>
         <span class="mes-label" id="escala-mes-label">—</span>
@@ -468,16 +483,14 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var
         <button class="btn btn-primary" onclick="salvarHoraExtra()">💾 Salvar valor</button>
       </div>
 
-      <!-- MANUTENÇÃO DA MOTO -->
+      <!-- VEÍCULOS -->
       <div class="card mt-3">
-        <div class="card-title">🔧 Manutenção da Moto</div>
-        <div id="manutencao-status" style="margin-bottom:12px;"></div>
-        <div class="field"><label>Trocar óleo a cada (km)</label>
-          <input type="number" id="cfg-limite-km" placeholder="Ex: 1000">
+        <div class="flex items-center justify-between mb-3">
+          <div class="card-title" style="margin-bottom:0">🚗 Veículos</div>
+          <button class="btn btn-primary btn-sm" onclick="abrirModalVeiculo()">+ Novo</button>
         </div>
-        <button class="btn btn-primary" onclick="salvarLimiteManutencao()">💾 Salvar limite</button>
-        <button class="btn btn-green mt-2" style="width:100%;" onclick="marcarTrocaOleoFeita()">✅ Marcar troca de óleo realizada</button>
-        <div class="text-xs mt-2" style="color:var(--muted);">Esse alerta aparece apenas aqui, no painel administrativo. O vigia não vê essa informação.</div>
+        <div id="lista-veiculos-config"></div>
+        <div class="text-xs mt-2" style="color:var(--muted);">Se houver mais de um veículo cadastrado, o vigia poderá escolher qual está usando no checklist. O alerta de troca de óleo aparece só aqui, no painel administrativo.</div>
       </div>
 
       <!-- CREDENCIAIS ADMIN -->
@@ -587,8 +600,8 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var
             <button class="btn btn-outline btn-sm" id="btn-editar-ck" onclick="toggleEditarChecklist()" style="display:none">✏️ Editar</button>
           </div>
           <div id="checklist-form">
-            <div class="field"><label>Tipo de veículo</label>
-              <select id="ck-veiculo"><option>🏍️ Moto</option><option>🚗 Carro</option><option>🚲 Bicicleta</option><option>🚶 A pé</option></select>
+            <div id="ck-veiculo-wrap">
+              <!-- Preenchido dinamicamente por renderSelecaoVeiculoChecklist() -->
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
               <div class="field"><label>KM Entrada</label><input type="number" id="ck-km-entrada" placeholder="Ex: 12500"></div>
@@ -642,8 +655,15 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var
 
     <!-- SUBSTITUIÇÕES VIGILANTE -->
     <div id="screen-substituicoes" class="screen">
-      <div class="section-header"><h2>🔄 Substituições</h2></div>
-      <div id="lista-substituicoes-vig"></div>
+      <div class="section-header"><h2>🔄 Substituições</h2>
+        <button class="btn btn-primary btn-sm" onclick="abrirModalSolicitarTroca()">+ Solicitar Troca</button>
+      </div>
+
+      <div id="bloco-pedidos-admin"></div>
+      <div id="bloco-pedidos-colega"></div>
+
+      <div class="section-header mt-3"><h3 style="font-size:14px;">📤 Minhas solicitações</h3></div>
+      <div id="bloco-minhas-solicitacoes"></div>
     </div>
 
     <!-- MEUS RELATÓRIOS -->
@@ -696,6 +716,24 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var
   </div>
 </div>
 
+<!-- MODAL VEÍCULO -->
+<div class="modal-overlay hidden" id="modal-veiculo">
+  <div class="modal"><div class="modal-handle"></div>
+    <div class="modal-title" id="mv2-title">Novo Veículo</div>
+    <input type="hidden" id="mv2-id">
+    <div class="field"><label>Placa</label><input type="text" id="mv2-placa" placeholder="ABC1234" style="text-transform:uppercase;"></div>
+    <div class="field"><label>Nome / Modelo</label><input type="text" id="mv2-nome" placeholder="Ex: Moto CG 160 — Preta"></div>
+    <div class="field"><label>Tipo</label>
+      <select id="mv2-tipo"><option>🏍️ Moto</option><option>🚗 Carro</option><option>🚲 Bicicleta</option><option>🔧 Outro</option></select>
+    </div>
+    <div class="field"><label>Trocar óleo a cada (km)</label><input type="number" id="mv2-limite-km" placeholder="Ex: 1000" value="1000"></div>
+    <div class="flex gap-3 mt-2">
+      <button class="btn btn-outline" onclick="fecharModal('modal-veiculo')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarVeiculo()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL ESCALA -->
 <div class="modal-overlay hidden" id="modal-escala">
   <div class="modal"><div class="modal-handle"></div>
@@ -743,6 +781,25 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var
     <div class="flex gap-3 mt-2">
       <button class="btn btn-outline" onclick="fecharModal('modal-substituicao')">Cancelar</button>
       <button class="btn btn-amber" style="color:#000" onclick="salvarSubstituicao()">🔄 Registrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL SOLICITAR TROCA (vigia-iniciado) -->
+<div class="modal-overlay hidden" id="modal-solicitar-troca">
+  <div class="modal"><div class="modal-handle"></div>
+    <div class="modal-title">🔄 Solicitar Troca de Plantão</div>
+    <div class="field"><label>Qual plantão seu você quer trocar?</label>
+      <select id="st-escala-id"><option value="">Selecione...</option></select>
+    </div>
+    <div class="field"><label>Trocar com qual vigia?</label>
+      <select id="st-colega-id"><option value="">Selecione...</option></select>
+    </div>
+    <div class="field"><label>Motivo (opcional)</label><textarea id="st-motivo" placeholder="Ex: compromisso pessoal, consulta médica..."></textarea></div>
+    <div class="text-xs" style="color:var(--muted);margin-bottom:8px;">O colega escolhido e o administrador precisam aprovar. A troca só vale depois que o administrador validar.</div>
+    <div class="flex gap-3 mt-2">
+      <button class="btn btn-outline" onclick="fecharModal('modal-solicitar-troca')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarSolicitacaoTroca()">📤 Enviar Solicitação</button>
     </div>
   </div>
 </div>
@@ -933,6 +990,7 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var
       <div class="perm-item"><span class="perm-label">💰 Ver Financeiro</span><button class="toggle" id="perm-financeiro" onclick="togglePerm(this)"></button></div>
       <div class="perm-item"><span class="perm-label">👤 Ver Vigilantes</span><button class="toggle" id="perm-vigilantes" onclick="togglePerm(this)"></button></div>
       <div class="perm-item"><span class="perm-label">🏢 Ver Contratantes</span><button class="toggle" id="perm-contratantes" onclick="togglePerm(this)"></button></div>
+      <div class="perm-item"><span class="perm-label">🏍️ Ver Veículos</span><button class="toggle" id="perm-veiculos" onclick="togglePerm(this)"></button></div>
     </div>
     <div class="flex gap-3 mt-2">
       <button class="btn btn-outline" onclick="fecharModal('modal-gerente')">Cancelar</button>
@@ -998,7 +1056,7 @@ const DB={
     return CACHE[k]||[];
   },
   async loadAll(){
-    const cols=['usuarios','vigilantes','contratantes','escala','plantoes','financeiro','equipamentos','itens_veiculo','manutencao'];
+    const cols=['usuarios','vigilantes','contratantes','escala','plantoes','financeiro','equipamentos','itens_veiculo','veiculos','solicitacoes_troca'];
     cols.forEach(k=>{try{const v=localStorage.getItem('rm_'+k);if(v)CACHE[k]=JSON.parse(v);}catch(e){} });
   }
 };
@@ -1065,7 +1123,66 @@ function _atualizarIndicadorSync(){
 }
 window.flushSyncPendente=flushSyncPendente;
 // Assim que o dispositivo voltar a ter internet, sincroniza tudo automaticamente
-window.addEventListener('online',()=>{console.log('🌐 Internet voltou — sincronizando...');flushSyncPendente();});
+window.addEventListener('online',()=>{console.log('🌐 Internet voltou — sincronizando...');flushSyncPendente();sincronizarDadosAdmin();});
+
+// ═══════════════════════════════════════════
+// SINCRONIZAÇÃO PERIÓDICA DE DADOS DA NUVEM
+// ═══════════════════════════════════════════
+// A fila de sincronização (acima) só cuida de ENVIAR dados pendentes.
+// Esta função busca ATUALIZAÇÕES feitas por outros dispositivos (ex: admin
+// cadastrou um veículo novo enquanto o celular do vigia já estava aberto).
+// Sem isso, o vigia só veria novidades ao fechar e abrir o app de novo.
+let _sincronizandoAdmin=false;
+async function sincronizarDadosAdmin(silencioso){
+  if(!window._fbGet||!navigator.onLine||_sincronizandoAdmin)return;
+  _sincronizandoAdmin=true;
+  const colsAdmin=['veiculos','contratantes','vigilantes','escala','itens_veiculo','equipamentos','solicitacoes_troca'];
+  let algoMudou=false;
+  try{
+    await Promise.all(colsAdmin.map(async k=>{
+      try{
+        const v=await Promise.race([window._fbGet(k),new Promise(r=>setTimeout(()=>r(null),5000))]);
+        if(v!==null&&Array.isArray(v)){
+          const localAtual=CACHE[k]||[];
+          // Compara conteúdo (não só tamanho) pra detectar qualquer mudança, inclusive edições
+          const mudou=JSON.stringify(v)!==JSON.stringify(localAtual);
+          if(mudou&&v.length>=localAtual.length){
+            CACHE[k]=v;
+            localStorage.setItem('rm_'+k,JSON.stringify(v));
+            algoMudou=true;
+          }
+        }
+      }catch(e){}
+    }));
+  }finally{_sincronizandoAdmin=false;}
+
+  if(algoMudou&&!silencioso){
+    // Re-renderizar telas que dependem desses dados, se estiverem visíveis
+    try{
+      if(document.getElementById('aba-checklist')&&!document.getElementById('aba-checklist').classList.contains('hidden')){
+        renderSelecaoVeiculoChecklist();
+      }
+      if(document.getElementById('screen-veiculos')&&document.getElementById('screen-veiculos').classList.contains('active')){
+        renderVeiculos();
+      }
+      if(document.getElementById('screen-contratantes')&&document.getElementById('screen-contratantes').classList.contains('active')){
+        renderContratantes();
+      }
+      if(document.getElementById('screen-vigilantes')&&document.getElementById('screen-vigilantes').classList.contains('active')){
+        renderVigilantes();
+      }
+      if(document.getElementById('screen-substituicoes')&&document.getElementById('screen-substituicoes').classList.contains('active')){
+        renderSubstVig();
+      }
+      if(document.getElementById('screen-escala')&&document.getElementById('screen-escala').classList.contains('active')){
+        renderSolicitacoesAdmin();
+      }
+    }catch(e){}
+  }
+}
+window.sincronizarDadosAdmin=sincronizarDadosAdmin;
+// Verificação periódica: busca novidades da nuvem a cada 20 segundos
+setInterval(()=>{if(navigator.onLine)sincronizarDadosAdmin();},20000);
 // Verificação periódica de segurança (celulares nem sempre disparam o evento 'online' corretamente)
 setInterval(()=>{if(navigator.onLine)flushSyncPendente();},25000);
 function _mostrarLoading(sim){
@@ -1084,7 +1201,7 @@ async function initDemo(){
   document.querySelectorAll('.modal-overlay').forEach(m=>m.classList.add('hidden'));
 
   // 3. Carregar localStorage (síncrono, instantâneo) — mostra algo na tela rápido
-  const cols=['usuarios','vigilantes','contratantes','escala','plantoes','financeiro','equipamentos','itens_veiculo','manutencao'];
+  const cols=['usuarios','vigilantes','contratantes','escala','plantoes','financeiro','equipamentos','itens_veiculo','veiculos','solicitacoes_troca'];
   cols.forEach(k=>{
     try{
       const v=localStorage.getItem('rm_'+k);
@@ -1152,11 +1269,6 @@ async function initDemo(){
   if(aberto){
     const el=document.getElementById('aviso-plantao-aberto');
     if(el) el.classList.remove('hidden');
-  }
-
-  // Criar configuração de manutenção padrão se não existir
-  if(!DB.get('manutencao').length){
-    DB.set('manutencao',[{id:'m1',limiteKm:1000,kmDesdeTroca:0,ultimaTrocaEm:null}]);
   }
 
   console.log('✅ Sistema pronto. Usuários:',DB.get('usuarios').length);
@@ -1233,7 +1345,7 @@ function fmtData(iso){if(!iso)return'—';const d=new Date(iso);return pad(d.get
 function fmtDataStr(s){if(!s)return'—';const[y,m,d]=s.split('-');return`${d}/${m}/${y}`;}
 
 // ═══════════════════════════════════════════
-// KM RODADOS / MANUTENÇÃO DO VEÍCULO
+// KM RODADOS / MANUTENÇÃO POR VEÍCULO
 // ═══════════════════════════════════════════
 function calcularKmRodados(ck){
   if(!ck)return null;
@@ -1242,38 +1354,19 @@ function calcularKmRodados(ck){
   if(isNaN(e)||isNaN(s)||s<e)return null;
   return s-e;
 }
-function getManutencao(){
-  const m=DB.get('manutencao');
-  return m[0]||{id:'m1',limiteKm:1000,kmDesdeTroca:0,ultimaTrocaEm:null};
+// Registra o KM rodado no veículo específico usado no plantão (se houver)
+function registrarKmVeiculo(veiculoId,kmRodados){
+  if(!veiculoId||!kmRodados||kmRodados<=0)return;
+  const lista=DB.get('veiculos').map(v=>{
+    if(v.id===veiculoId) return{...v,kmDesdeTroca:(v.kmDesdeTroca||0)+kmRodados};
+    return v;
+  });
+  DB.set('veiculos',lista);
 }
-function registrarKmManutencao(kmRodados){
-  if(!kmRodados||kmRodados<=0)return;
-  const m=getManutencao();
-  m.kmDesdeTroca=(m.kmDesdeTroca||0)+kmRodados;
-  DB.set('manutencao',[m]);
+// Lista veículos que atingiram o limite de troca de óleo (para o alerta do admin)
+function veiculosComManutencaoVencida(){
+  return DB.get('veiculos').filter(v=>v.ativo!==false&&(v.kmDesdeTroca||0)>=(v.limiteKmOleo||1000));
 }
-function marcarTrocaOleoFeita(){
-  if(!confirm('Confirma que a troca de óleo foi realizada agora? O contador de KM será zerado.'))return;
-  const m=getManutencao();
-  m.kmDesdeTroca=0;
-  m.ultimaTrocaEm=new Date().toISOString();
-  DB.set('manutencao',[m]);
-  renderManutencao();
-  atualizarDashboard();
-  toast('✅ Troca de óleo registrada! Contador zerado.');
-}
-function salvarLimiteManutencao(){
-  const v=parseFloat(document.getElementById('cfg-limite-km').value);
-  if(!v||v<=0){toast('⚠️ Informe um valor válido de KM');return;}
-  const m=getManutencao();
-  m.limiteKm=v;
-  DB.set('manutencao',[m]);
-  toast('✅ Limite de manutenção salvo: '+v+' km');
-  renderManutencao();
-  atualizarDashboard();
-}
-window.marcarTrocaOleoFeita=marcarTrocaOleoFeita;
-window.salvarLimiteManutencao=salvarLimiteManutencao;
 function fmtMoeda(v){return'R$ '+Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
 function parseMoeda(s){
   if(!s&&s!==0)return 0;
@@ -1317,7 +1410,7 @@ function fazerLogin(){
   const senha=document.getElementById('login-senha').value;
 
   // Garantir que os dados do localStorage estão no CACHE antes de validar
-  ['usuarios','vigilantes','contratantes','escala','plantoes','financeiro','equipamentos','itens_veiculo'].forEach(k=>{
+  ['usuarios','vigilantes','contratantes','escala','plantoes','financeiro','equipamentos','itens_veiculo','veiculos','solicitacoes_troca'].forEach(k=>{
     if(CACHE[k]===undefined){
       try{const v=localStorage.getItem('rm_'+k);if(v)CACHE[k]=JSON.parse(v);}catch(e){}
     }
@@ -1332,6 +1425,7 @@ function fazerLogin(){
   const perfilLabel={admin:'👔 Admin',gerente:'📊 Gerente',vigilante:'🦺 Vigilante'}[u.perfil]||u.perfil;
   document.getElementById('tb-perfil').textContent=perfilLabel;
   montarNav();
+  sincronizarDadosAdmin(true); // busca dados novos da nuvem em segundo plano, sem re-renderizar nada ainda
 
   if(u.perfil==='admin') irPara('screen-dashboard');
   else if(u.perfil==='gerente'){
@@ -1399,6 +1493,7 @@ function montarNav(){
     if(perms.financeiro)itens.push({id:'screen-financeiro',icon:'💰',label:'Financeiro'});
     if(perms.vigilantes)itens.push({id:'screen-vigilantes',icon:'👤',label:'Vigilantes'});
     if(perms.contratantes)itens.push({id:'screen-contratantes',icon:'🏢',label:'Contratantes'});
+    if(perms.veiculos)itens.push({id:'screen-veiculos',icon:'🏍️',label:'Veículos'});
   } else {
     itens=[
       {id:'screen-plantao',icon:'🛡️',label:'Plantão'},
@@ -1417,7 +1512,8 @@ function irPara(s){
   if(s==='screen-dashboard')atualizarDashboard();
   if(s==='screen-vigilantes')renderVigilantes();
   if(s==='screen-contratantes')renderContratantes();
-  if(s==='screen-escala')renderEscala();
+  if(s==='screen-veiculos')renderVeiculos();
+  if(s==='screen-escala'){renderEscala();renderSolicitacoesAdmin();}
   if(s==='screen-financeiro'){renderFinanceiro();abaFin('resumo',null);}
   if(s==='screen-relatorios')renderRelatoriosAdmin();
   if(s==='screen-meus-relatorios')renderMeusRelatorios();
@@ -1442,14 +1538,14 @@ function atualizarDashboard(){
   document.getElementById('st-saldo').textContent=fmtMoeda(saldo);
 
   // Alerta de manutenção — visível SOMENTE para admin/gestor no dashboard
-  const manut=getManutencao();
+  const veicVencidos=veiculosComManutencaoVencida();
   const alertaEl=document.getElementById('alerta-manutencao-dash');
   if(alertaEl){
-    if((manut.kmDesdeTroca||0)>=(manut.limiteKm||1000)){
+    if(veicVencidos.length){
       alertaEl.classList.remove('hidden');
-      alertaEl.innerHTML=`⚠️ <strong>Troca de óleo da moto necessária!</strong><br>
-        <span style="font-size:12px;">${manut.kmDesdeTroca} km rodados desde a última troca (limite: ${manut.limiteKm} km)</span>
-        <button class="btn btn-amber btn-sm mt-2" style="color:#000;display:block;width:100%;" onclick="irPara('screen-config')">Ver em Configurações</button>`;
+      alertaEl.innerHTML=`⚠️ <strong>${veicVencidos.length>1?'Veículos precisam':'Veículo precisa'} de troca de óleo!</strong>
+        ${veicVencidos.map(v=>`<div style="font-size:12px;margin-top:4px;">${v.tipo||''} ${v.nome||''} (${(v.placa||'—').toUpperCase()}) — ${v.kmDesdeTroca||0}/${v.limiteKmOleo||1000} km</div>`).join('')}
+        <button class="btn btn-amber btn-sm mt-2" style="color:#000;display:block;width:100%;" onclick="irPara('screen-veiculos')">Ver Veículos</button>`;
     }else{
       alertaEl.classList.add('hidden');
     }
@@ -1561,6 +1657,97 @@ function salvarContratante(){
   lista.push({id,nome,contato:document.getElementById('mc-contato').value,locais:document.getElementById('mc-locais').value,valor:parseMoeda(document.getElementById('mc-valor').value)});
   DB.set('contratantes',lista);fecharModal('modal-contratante');renderContratantes();popularLocais();toast('✅ Contratante salvo!');
 }
+
+// ═══════════════════════════════════════════
+// VEÍCULOS
+// ═══════════════════════════════════════════
+function renderVeiculos(){
+  const lista=DB.get('veiculos');
+  const div=document.getElementById('lista-veiculos');
+  if(!lista.length){div.innerHTML='<div class="empty-state"><div class="es-icon">🏍️</div><div>Nenhum veículo cadastrado</div></div>';return;}
+  div.innerHTML=lista.map(v=>{
+    const limite=v.limiteKmOleo||1000;
+    const acum=v.kmDesdeTroca||0;
+    const vencido=acum>=limite;
+    const pct=Math.min(100,Math.round((acum/limite)*100));
+    return`<div class="list-item" style="align-items:flex-start;flex-direction:column;gap:8px;">
+      <div style="display:flex;justify-content:space-between;width:100%;">
+        <div class="li-main">
+          <div class="li-title">${v.tipo||'🏍️ Moto'} ${v.nome||''}</div>
+          <div class="li-sub">Placa: <strong>${(v.placa||'—').toUpperCase()}</strong>${v.ativo===false?' · <span style="color:var(--red)">Inativo</span>':''}</div>
+        </div>
+        <button class="btn btn-outline btn-sm btn-icon" onclick="editarVeiculo('${v.id}')">✏️</button>
+      </div>
+      <div style="width:100%;">
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:${vencido?'var(--red)':'var(--muted)'};margin-bottom:4px;">
+          <span>${vencido?'⚠️ Troca de óleo necessária':'🛣️ KM desde a troca'}</span>
+          <span>${acum} / ${limite} km</span>
+        </div>
+        <div style="background:var(--border);border-radius:6px;height:6px;overflow:hidden;">
+          <div style="background:${vencido?'var(--red)':'var(--green)'};height:100%;width:${pct}%;"></div>
+        </div>
+        <button class="btn btn-outline btn-sm mt-2" style="width:100%;" onclick="marcarTrocaOleoVeiculo('${v.id}')">✅ Marcar troca de óleo</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+function abrirModalVeiculo(){
+  ['mv2-id','mv2-placa','mv2-nome'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('mv2-tipo').selectedIndex=0;
+  document.getElementById('mv2-limite-km').value=1000;
+  document.getElementById('mv2-title').textContent='Novo Veículo';
+  abrirModal('modal-veiculo');
+}
+function editarVeiculo(id){
+  const v=DB.get('veiculos').find(x=>x.id===id);if(!v)return;
+  document.getElementById('mv2-id').value=v.id;
+  document.getElementById('mv2-placa').value=v.placa||'';
+  document.getElementById('mv2-nome').value=v.nome||'';
+  document.getElementById('mv2-tipo').value=v.tipo||'🏍️ Moto';
+  document.getElementById('mv2-limite-km').value=v.limiteKmOleo||1000;
+  document.getElementById('mv2-title').textContent='Editar Veículo';
+  abrirModal('modal-veiculo');
+}
+function salvarVeiculo(){
+  const id=document.getElementById('mv2-id').value||'v'+Date.now();
+  const placa=document.getElementById('mv2-placa').value.trim().toUpperCase();
+  const nome=document.getElementById('mv2-nome').value.trim();
+  if(!placa){toast('⚠️ Informe a placa');return;}
+  const existente=DB.get('veiculos').find(x=>x.id===id);
+  const lista=DB.get('veiculos').filter(x=>x.id!==id);
+  lista.push({
+    id,placa,nome,
+    tipo:document.getElementById('mv2-tipo').value,
+    limiteKmOleo:parseFloat(document.getElementById('mv2-limite-km').value)||1000,
+    kmDesdeTroca:existente?(existente.kmDesdeTroca||0):0,
+    ultimaTrocaEm:existente?existente.ultimaTrocaEm:null,
+    ativo:true
+  });
+  DB.set('veiculos',lista);
+  fecharModal('modal-veiculo');
+  renderVeiculos();
+  toast('✅ Veículo salvo!');
+}
+function marcarTrocaOleoVeiculo(id){
+  if(!confirm('Confirma que a troca de óleo deste veículo foi realizada agora?'))return;
+  const lista=DB.get('veiculos').map(v=>v.id===id?{...v,kmDesdeTroca:0,ultimaTrocaEm:new Date().toISOString()}:v);
+  DB.set('veiculos',lista);
+  renderVeiculos();
+  atualizarDashboard();
+  toast('✅ Troca de óleo registrada! Contador zerado.');
+}
+function limparVeiculos(){
+  if(!confirm('Tem certeza que deseja excluir TODOS os veículos cadastrados?'))return;
+  DB.set('veiculos',[]);
+  renderVeiculos();
+  toast('🗑️ Veículos removidos!');
+}
+window.abrirModalVeiculo=abrirModalVeiculo;
+window.editarVeiculo=editarVeiculo;
+window.salvarVeiculo=salvarVeiculo;
+window.marcarTrocaOleoVeiculo=marcarTrocaOleoVeiculo;
+window.limparVeiculos=limparVeiculos;
+window.renderVeiculos=renderVeiculos;
 
 // ═══════════════════════════════════════════
 // ESCALA
@@ -1722,21 +1909,177 @@ function salvarSubstituicao(){
   toast('⏳ Substituição registrada! Aguardando confirmação.');
 }
 function renderSubstVig(){
-  const pend=DB.get('escala').filter(e=>e.substitutoId===U.id&&e.status==='pendente');
-  const div=document.getElementById('lista-substituicoes-vig');
-  if(!pend.length){div.innerHTML='<div class="empty-state"><div class="es-icon">🔄</div><div>Nenhuma substituição pendente</div></div>';return;}
-  div.innerHTML=pend.map(e=>`<div class="list-item" style="flex-direction:column;align-items:flex-start;gap:10px;">
-    <div><div class="li-title">Substituição de ${e.vigilanteNome}</div>
-    <div class="li-sub">📍 ${e.localNome} · 📅 ${fmtDataStr(e.data)} · ⏰ ${e.entrada}–${e.saida}</div>
-    ${e.motivo?`<div class="li-sub">📝 ${e.motivo}</div>`:''}</div>
-    <div class="flex gap-2 w-full">
-      <button class="btn btn-green btn-sm" onclick="confSubst('${e.id}')">✅ Aceitar</button>
-      <button class="btn btn-red btn-sm" onclick="recSubst('${e.id}')">❌ Recusar</button>
-    </div>
-  </div>`).join('');
+  // ── BLOCO 1: Pedidos que o ADMIN registrou diretamente (fluxo antigo, já aprovado pelo admin) ──
+  const pendAdmin=DB.get('escala').filter(e=>e.substitutoId===U.id&&e.status==='pendente');
+  const divAdmin=document.getElementById('bloco-pedidos-admin');
+  if(divAdmin){
+    divAdmin.innerHTML=pendAdmin.length?`<div class="section-header"><h3 style="font-size:14px;">📋 Pedidos do administrador</h3></div>`+pendAdmin.map(e=>`
+      <div class="list-item" style="flex-direction:column;align-items:flex-start;gap:10px;">
+        <div><div class="li-title">Substituição de ${e.vigilanteNome}</div>
+        <div class="li-sub">📍 ${e.localNome} · 📅 ${fmtDataStr(e.data)} · ⏰ ${e.entrada}–${e.saida}</div>
+        ${e.motivo?`<div class="li-sub">📝 ${e.motivo}</div>`:''}</div>
+        <div class="flex gap-2 w-full">
+          <button class="btn btn-green btn-sm" onclick="confSubst('${e.id}')">✅ Aceitar</button>
+          <button class="btn btn-red btn-sm" onclick="recSubst('${e.id}')">❌ Recusar</button>
+        </div>
+      </div>`).join(''):'';
+  }
+
+  // ── BLOCO 2: Pedidos de TROCA que outros vigias fizeram, pedindo pra este vigia aceitar ──
+  const trocas=DB.get('solicitacoes_troca');
+  const pendColega=trocas.filter(t=>t.colegaId===U.id&&t.colegaStatus==='pendente'&&t.adminStatus==='pendente');
+  const divColega=document.getElementById('bloco-pedidos-colega');
+  if(divColega){
+    divColega.innerHTML=pendColega.length?`<div class="section-header mt-2"><h3 style="font-size:14px;">🔄 Pedidos de troca de colegas</h3></div>`+pendColega.map(t=>`
+      <div class="list-item" style="flex-direction:column;align-items:flex-start;gap:10px;border-left:3px solid var(--purple);">
+        <div><div class="li-title">${t.vigilanteNome} quer trocar com você</div>
+        <div class="li-sub">📍 ${t.localNome||'—'} · 📅 ${fmtDataStr(t.data)} · ⏰ ${t.entrada||''}–${t.saida||''}</div>
+        ${t.motivo?`<div class="li-sub">📝 ${t.motivo}</div>`:''}
+        <div class="li-sub" style="color:var(--amber);">⏳ Depois da sua resposta, o administrador ainda precisa validar.</div></div>
+        <div class="flex gap-2 w-full">
+          <button class="btn btn-green btn-sm" onclick="responderSolicitacaoTroca('${t.id}','aceito')">✅ Aceitar</button>
+          <button class="btn btn-red btn-sm" onclick="responderSolicitacaoTroca('${t.id}','recusado')">❌ Recusar</button>
+        </div>
+      </div>`).join(''):'';
+  }
+
+  // ── BLOCO 3: Minhas próprias solicitações enviadas (acompanhamento de status) ──
+  const minhas=trocas.filter(t=>t.vigilanteId===U.id).sort((a,b)=>b.criadoEm-a.criadoEm);
+  const divMinhas=document.getElementById('bloco-minhas-solicitacoes');
+  if(divMinhas){
+    if(!minhas.length){
+      divMinhas.innerHTML='<div class="empty-state"><div class="es-icon">🔄</div><div>Nenhuma solicitação enviada</div></div>';
+    } else {
+      divMinhas.innerHTML=minhas.map(t=>{
+        let statusBadge='';
+        if(t.adminStatus==='aprovado') statusBadge='<span class="badge badge-green">✅ Aprovada pelo admin</span>';
+        else if(t.adminStatus==='negado') statusBadge='<span class="badge badge-red">❌ Negada pelo admin</span>';
+        else if(t.colegaStatus==='recusado') statusBadge='<span class="badge badge-red">❌ Colega recusou</span>';
+        else if(t.colegaStatus==='aceito') statusBadge='<span class="badge badge-amber">⏳ Colega aceitou · aguardando admin</span>';
+        else statusBadge='<span class="badge badge-purple">⏳ Aguardando resposta do colega</span>';
+        return`<div class="list-item" style="flex-direction:column;align-items:flex-start;gap:8px;">
+          <div><div class="li-title">Troca com ${t.colegaNome}</div>
+          <div class="li-sub">📍 ${t.localNome||'—'} · 📅 ${fmtDataStr(t.data)}</div></div>
+          <div>${statusBadge}</div>
+        </div>`;
+      }).join('');
+    }
+  }
+
+  if(!pendAdmin.length&&divAdmin)divAdmin.innerHTML='';
 }
+
+// ── Colega aceita ou recusa o pedido de troca ──
+function responderSolicitacaoTroca(id,resposta){
+  const lista=DB.get('solicitacoes_troca').map(t=>t.id===id?{...t,colegaStatus:resposta,colegaRespondidoEm:new Date().toISOString()}:t);
+  DB.set('solicitacoes_troca',lista);
+  renderSubstVig();
+  toast(resposta==='aceito'?'✅ Você aceitou! Aguardando validação do administrador.':'❌ Você recusou a troca.');
+}
+
+// ── Fluxo antigo: admin registra substituição diretamente (mantido como estava) ──
 function confSubst(id){DB.set('escala',DB.get('escala').map(e=>e.id===id?{...e,status:'substituicao'}:e));renderSubstVig();toast('✅ Substituição confirmada!');}
 function recSubst(id){DB.set('escala',DB.get('escala').map(e=>e.id===id?{...e,status:'agendado',substitutoId:null,substituto:null,motivo:null}:e));renderSubstVig();toast('❌ Substituição recusada.');}
+
+// ═══════════════════════════════════════════
+// SOLICITAÇÃO DE TROCA — INICIADA PELO VIGIA
+// ═══════════════════════════════════════════
+function abrirModalSolicitarTroca(){
+  const hoje=new Date().toISOString().split('T')[0];
+  const minhasEscalas=DB.get('escala').filter(e=>e.tipo==='plantao'&&e.vigilanteId===U.id&&e.status==='agendado'&&e.data>=hoje);
+  const selEscala=document.getElementById('st-escala-id');
+  if(!minhasEscalas.length){
+    selEscala.innerHTML='<option value="">Nenhum plantão futuro encontrado</option>';
+  } else {
+    selEscala.innerHTML='<option value="">Selecione...</option>'+minhasEscalas.map(e=>`<option value="${e.id}">${fmtDataStr(e.data)} — ${e.localNome} (${e.entrada}–${e.saida})</option>`).join('');
+  }
+  const selColega=document.getElementById('st-colega-id');
+  const colegas=DB.get('vigilantes').filter(v=>v.id!==U.id&&v.ativo!==false);
+  selColega.innerHTML='<option value="">Selecione...</option>'+colegas.map(v=>`<option value="${v.id}|${v.nome}">${v.nome}</option>`).join('');
+  document.getElementById('st-motivo').value='';
+  abrirModal('modal-solicitar-troca');
+}
+function salvarSolicitacaoTroca(){
+  const escalaId=document.getElementById('st-escala-id').value;
+  const colegaVal=document.getElementById('st-colega-id').value;
+  const motivo=document.getElementById('st-motivo').value.trim();
+  if(!escalaId){toast('⚠️ Selecione qual plantão você quer trocar');return;}
+  if(!colegaVal){toast('⚠️ Selecione com qual colega deseja trocar');return;}
+  const[colegaId,colegaNome]=colegaVal.split('|');
+  const e=DB.get('escala').find(x=>x.id===escalaId);
+  if(!e){toast('❌ Plantão não encontrado');return;}
+
+  const nova={
+    id:'st'+Date.now(),
+    escalaId,
+    data:e.data,localNome:e.localNome,contratanteNome:e.contratanteNome,entrada:e.entrada,saida:e.saida,
+    vigilanteId:U.id,vigilanteNome:U.nome,
+    colegaId,colegaNome,
+    motivo,
+    colegaStatus:'pendente',colegaRespondidoEm:null,
+    adminStatus:'pendente',adminRespondidoPor:null,adminRespondidoEm:null,
+    criadoEm:Date.now()
+  };
+  const lista=DB.get('solicitacoes_troca');
+  lista.push(nova);
+  DB.set('solicitacoes_troca',lista);
+  fecharModal('modal-solicitar-troca');
+  renderSubstVig();
+  toast('📤 Solicitação enviada! Aguardando colega e administrador.');
+}
+
+// ═══════════════════════════════════════════
+// SOLICITAÇÕES DE TROCA — VALIDAÇÃO FINAL DO ADMIN
+// ═══════════════════════════════════════════
+function renderSolicitacoesAdmin(){
+  const div=document.getElementById('bloco-solicitacoes-admin');
+  if(!div)return;
+  const pendentes=DB.get('solicitacoes_troca').filter(t=>t.adminStatus==='pendente');
+  if(!pendentes.length){div.innerHTML='';return;}
+  div.innerHTML=`<div class="card" style="border-color:var(--purple);margin-bottom:14px;">
+    <div class="card-title">🔄 Solicitações de Troca (${pendentes.length})</div>
+    ${pendentes.map(t=>{
+      let colegaInfo='';
+      if(t.colegaStatus==='aceito') colegaInfo='<span class="badge badge-green">✅ Colega aceitou</span>';
+      else if(t.colegaStatus==='recusado') colegaInfo='<span class="badge badge-red">❌ Colega recusou</span>';
+      else colegaInfo='<span class="badge badge-purple">⏳ Colega ainda não respondeu</span>';
+      return`<div style="background:var(--slate2);border-radius:10px;padding:12px;margin-bottom:8px;">
+        <div style="font-weight:700;font-size:13px;">${t.vigilanteNome} ↔ ${t.colegaNome}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px;">📍 ${t.localNome||'—'} · 📅 ${fmtDataStr(t.data)} · ⏰ ${t.entrada||''}–${t.saida||''}</div>
+        ${t.motivo?`<div style="font-size:12px;color:var(--muted);margin-top:2px;">📝 ${t.motivo}</div>`:''}
+        <div style="margin-top:6px;">${colegaInfo}</div>
+        <div class="flex gap-2 mt-2">
+          <button class="btn btn-green btn-sm" style="flex:1" onclick="decidirSolicitacaoTroca('${t.id}','aprovado')">✅ Aprovar</button>
+          <button class="btn btn-red btn-sm" style="flex:1" onclick="decidirSolicitacaoTroca('${t.id}','negado')">❌ Negar</button>
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+function decidirSolicitacaoTroca(id,decisao){
+  const t=DB.get('solicitacoes_troca').find(x=>x.id===id);
+  if(!t)return;
+  if(decisao==='aprovado'&&t.colegaStatus!=='aceito'){
+    if(!confirm('O colega ainda não aceitou (ou recusou) esta troca. Deseja aprovar mesmo assim?'))return;
+  }
+  const listaTrocas=DB.get('solicitacoes_troca').map(x=>x.id===id?{...x,adminStatus:decisao,adminRespondidoPor:U.nome,adminRespondidoEm:new Date().toISOString()}:x);
+  DB.set('solicitacoes_troca',listaTrocas);
+
+  if(decisao==='aprovado'){
+    // Aplica a troca de fato na escala, igual ao fluxo tradicional
+    const listaEscala=DB.get('escala').map(e=>e.id===t.escalaId?{...e,status:'substituicao',substitutoId:t.colegaId,substituto:t.colegaNome,motivo:t.motivo}:e);
+    DB.set('escala',listaEscala);
+  }
+  renderSolicitacoesAdmin();
+  renderEscala();
+  toast(decisao==='aprovado'?'✅ Troca aprovada e aplicada na escala!':'❌ Troca negada.');
+}
+window.abrirModalSolicitarTroca=abrirModalSolicitarTroca;
+window.salvarSolicitacaoTroca=salvarSolicitacaoTroca;
+window.responderSolicitacaoTroca=responderSolicitacaoTroca;
+window.decidirSolicitacaoTroca=decidirSolicitacaoTroca;
+window.renderSolicitacoesAdmin=renderSolicitacoesAdmin;
+
 function abrirFechamento(){
   const ano=escalaMes.getFullYear(),mes=escalaMes.getMonth();
   const escala=DB.get('escala').filter(e=>{const d=new Date(e.data+'T12:00');return e.tipo==='plantao'&&d.getFullYear()===ano&&d.getMonth()===mes;});
@@ -1870,30 +2213,8 @@ function renderConfig(){
   carregarHoraExtra();
   renderEquipConfig();
   renderEquipVeiculoConfig();
-  renderManutencao();
   renderGerentes();
 }
-function renderManutencao(){
-  const m=getManutencao();
-  const inputLimite=document.getElementById('cfg-limite-km');
-  if(inputLimite) inputLimite.value=m.limiteKm||1000;
-  const statusEl=document.getElementById('manutencao-status');
-  if(!statusEl)return;
-  const vencido=(m.kmDesdeTroca||0)>=(m.limiteKm||1000);
-  const pct=Math.min(100,Math.round(((m.kmDesdeTroca||0)/(m.limiteKm||1000))*100));
-  statusEl.innerHTML=`
-    <div style="background:${vencido?'rgba(239,68,68,.1)':'var(--slate2)'};border:1px solid ${vencido?'var(--red)':'var(--border)'};border-radius:10px;padding:12px;">
-      <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;margin-bottom:6px;">
-        <span>${vencido?'⚠️ Troca de óleo necessária!':'🛣️ KM desde a última troca'}</span>
-        <span>${m.kmDesdeTroca||0} / ${m.limiteKm||1000} km</span>
-      </div>
-      <div style="background:var(--border);border-radius:6px;height:8px;overflow:hidden;">
-        <div style="background:${vencido?'var(--red)':'var(--green)'};height:100%;width:${pct}%;"></div>
-      </div>
-      ${m.ultimaTrocaEm?`<div style="font-size:11px;color:var(--muted);margin-top:6px;">Última troca: ${fmtData(m.ultimaTrocaEm)}</div>`:''}
-    </div>`;
-}
-window.renderManutencao=renderManutencao;
 function salvarCredenciaisAdmin(){
   const email=document.getElementById('cfg-email').value.trim();
   const s1=document.getElementById('cfg-senha').value;
@@ -1932,7 +2253,7 @@ function editarGerente(id){
   document.getElementById('mg-id').value=g.id;document.getElementById('mg-nome').value=g.nome;
   document.getElementById('mg-email').value=g.email;document.getElementById('mg-senha').value=g.senha||'';
   const perms=g.perms||{};
-  ['dashboard','escala','relatorios','financeiro','vigilantes','contratantes'].forEach(p=>{
+  ['dashboard','escala','relatorios','financeiro','vigilantes','contratantes','veiculos'].forEach(p=>{
     document.getElementById('perm-'+p).classList.toggle('on',perms[p]!==false&&(perms[p]===true||['dashboard','escala','relatorios'].includes(p)));
   });
   document.getElementById('mg-title').textContent='Editar Gerente';abrirModal('modal-gerente');
@@ -1949,7 +2270,7 @@ function salvarGerente(){
   const senha=document.getElementById('mg-senha').value;
   if(!nome||!email||!senha){toast('⚠️ Preencha nome, e-mail e senha');return;}
   const perms={};
-  ['dashboard','escala','relatorios','financeiro','vigilantes','contratantes'].forEach(p=>{perms[p]=document.getElementById('perm-'+p).classList.contains('on');});
+  ['dashboard','escala','relatorios','financeiro','vigilantes','contratantes','veiculos'].forEach(p=>{perms[p]=document.getElementById('perm-'+p).classList.contains('on');});
   const us=DB.get('usuarios').filter(x=>x.id!==id);
   us.push({id,nome,email,senha,perfil:'gerente',perms});
   DB.set('usuarios',us);fecharModal('modal-gerente');renderGerentes();toast('✅ Gerente salvo!');
@@ -2266,7 +2587,6 @@ function iniciarPlantao(){
   resetEl('ck-km-entrada',el=>el.value='');
   resetEl('ck-km-saida',el=>el.value='');
   resetEl('ck-obs-nova',el=>el.value='');
-  resetEl('ck-veiculo',el=>el.selectedIndex=0);
   resetEl('ck-gasolina',el=>el.selectedIndex=0);
   resetEl('ck-oleo',el=>el.selectedIndex=0);
   resetEl('ronda-ativa-info',el=>el.classList.add('hidden'));
@@ -2288,7 +2608,7 @@ function iniciarPlantao(){
   todosPlantoes.push(plantaoAtivo);
   DB.set('plantoes',todosPlantoes);
 
-  mostrarAtivo();iniciarRelogioSaida();renderEquipamentosChecklist();
+  mostrarAtivo();iniciarRelogioSaida();renderEquipamentosChecklist();renderSelecaoVeiculoChecklist();
   toast('🟢 Plantão iniciado em '+localNome+'!');
 }
 
@@ -2336,8 +2656,11 @@ function abaPlantao(aba,el){
   ['ronda','portaria','checklist'].forEach(a=>document.getElementById('aba-'+a).classList.toggle('hidden',a!==aba));
   document.querySelectorAll('#screen-plantao .tab-item').forEach(t=>t.classList.remove('active'));
   if(el)el.classList.add('active');
-  // Ao abrir checklist, restaurar estado visual dos botões fixos do veículo
-  if(aba==='checklist') restaurarEstadoChecklistVisual();
+  // Ao abrir checklist, restaurar estado visual E buscar veículos/dados atualizados da nuvem
+  if(aba==='checklist'){
+    restaurarEstadoChecklistVisual();
+    sincronizarDadosAdmin();
+  }
 }
 function encerrarPlantao(){
   // ── VALIDAÇÃO 1: Checklist obrigatório ──
@@ -2452,9 +2775,9 @@ function confirmarSaidaAntecipada(){
 function finalizarPlantao(antecipado,motivo){
   plantaoAtivo.fim=new Date().toISOString();plantaoAtivo.saidaAntecipada=antecipado;plantaoAtivo.motivoSaida=motivo;
   plantaoAtivo.fotos=fotosP;plantaoAtivo.portaria=portariaP;plantaoAtivo.ckState=ckState;
-  // Registrar KM rodados no acumulado de manutenção (não visível ao vigia)
+  // Registrar KM rodados no veículo usado (não visível ao vigia)
   const kmR=calcularKmRodados(plantaoAtivo.checklist);
-  if(kmR!==null)registrarKmManutencao(kmR);
+  if(kmR!==null&&plantaoAtivo.checklist&&plantaoAtivo.checklist.veiculoId)registrarKmVeiculo(plantaoAtivo.checklist.veiculoId,kmR);
   DB.set('plantoes',DB.get('plantoes').map(p=>p.id===plantaoAtivo.id?plantaoAtivo:p));
   // Limpar todos os dados de sessão após finalizar
   try{
@@ -2538,8 +2861,32 @@ function renderPortariaPlantao(){
 // ═══════════════════════════════════════════
 function salvarChecklist(){
   if(!plantaoAtivo){toast('⚠️ Nenhum plantão ativo');return;}
+
+  // Capturar dados do veículo (formato depende de quantos veículos estão cadastrados)
+  let veiculoTexto='',veiculoId=null,placa='';
+  const selVeiculoId=document.getElementById('ck-veiculo-id');
+  const selVeiculoTipo=document.getElementById('ck-veiculo');
+  if(selVeiculoId){
+    // Há veículo(s) cadastrado(s) no admin
+    if(selVeiculoId.value==='a_pe'){
+      veiculoTexto='🚶 A pé';
+    } else if(selVeiculoId.value){
+      const v=DB.get('veiculos').find(x=>x.id===selVeiculoId.value);
+      if(v){veiculoTexto=(v.tipo||'')+' '+(v.nome||'');veiculoId=v.id;placa=v.placa||'';}
+    } else {
+      toast('⚠️ Selecione o veículo que você vai usar');return;
+    }
+  } else if(selVeiculoTipo){
+    // Nenhum veículo cadastrado — modo simples (tipo + placa livre)
+    veiculoTexto=selVeiculoTipo.value;
+    const inpPlaca=document.getElementById('ck-placa');
+    placa=inpPlaca?inpPlaca.value.trim().toUpperCase():'';
+  }
+
   const ck={
-    veiculo:document.getElementById('ck-veiculo').value,
+    veiculo:veiculoTexto,
+    veiculoId:veiculoId,
+    placa:placa,
     gasolina:document.getElementById('ck-gasolina').value,
     oleo:document.getElementById('ck-oleo').value,
     kmEntrada:document.getElementById('ck-km-entrada').value,
@@ -2572,10 +2919,12 @@ function renderChecklistSalvo(ck){
     return`<div class="rel-row"><span class="rel-lbl">${item.nome}</span><span class="rel-val"><span class="${v==='ok'?'status-ok':'status-nok'}">${v==='ok'?'✓ OK':'✗ PROBLEMA'}</span></span></div>`;
   }).join('');
   const obsArr=Array.isArray(ck.obs)?ck.obs:[];
+  const kmRod=calcularKmRodados(ck);
   det.innerHTML=`
-    <div class="rel-row"><span class="rel-lbl">Veículo</span><span class="rel-val">${ck.veiculo||'—'}</span></div>
+    <div class="rel-row"><span class="rel-lbl">Veículo</span><span class="rel-val">${ck.veiculo||'—'}${ck.placa?' ('+ck.placa+')':''}</span></div>
     <div class="rel-row"><span class="rel-lbl">KM Entrada</span><span class="rel-val">${ck.kmEntrada||'—'}</span></div>
     <div class="rel-row"><span class="rel-lbl">KM Saída</span><span class="rel-val">${ck.kmSaida||'—'}</span></div>
+    ${kmRod!==null?`<div class="rel-row"><span class="rel-lbl">🛣️ KM Rodados</span><span class="rel-val" style="color:var(--teal);">${kmRod} km</span></div>`:''}
     <div class="rel-row"><span class="rel-lbl">Gasolina</span><span class="rel-val">${ck.gasolina||'—'}</span></div>
     <div class="rel-row"><span class="rel-lbl">Óleo</span><span class="rel-val">${ck.oleo||'—'}</span></div>
     ${eqHtml}
@@ -2698,7 +3047,7 @@ function gerarHtmlRelatorio(p, opcoes){
   const ckHtml=ck.veiculo?`
     <div style="${S.section}">
       <h4 style="${S.h4}">🏍️ Checklist do Veículo</h4>
-      <div style="${S.row}"><span style="${S.lbl}">Veículo</span><span style="${S.val}">${ck.veiculo}</span></div>
+      <div style="${S.row}"><span style="${S.lbl}">Veículo</span><span style="${S.val}">${ck.veiculo}${ck.placa?' — '+ck.placa:''}</span></div>
       <div style="${S.row}"><span style="${S.lbl}">KM Entrada</span><span style="${S.val}">${ck.kmEntrada||'—'}</span></div>
       <div style="${S.row}"><span style="${S.lbl}">KM Saída</span><span style="${S.val}">${ck.kmSaida||'—'}</span></div>
       ${kmRodadosModal!==null?`<div style="${S.row}"><span style="${S.lbl}">🛣️ KM Rodados</span><span style="${S.val};color:#1A4FAF;">${kmRodadosModal} km</span></div>`:''}
@@ -2899,7 +3248,56 @@ function salvarOcorrenciaVisitante(){
 function restaurarEstadoChecklistVisual(){
   renderItensVeiculo();
   renderEquipamentosChecklist();
+  renderSelecaoVeiculoChecklist();
 }
+function renderSelecaoVeiculoChecklist(){
+  const wrap=document.getElementById('ck-veiculo-wrap');
+  if(!wrap)return;
+  const veiculos=DB.get('veiculos').filter(v=>v.ativo!==false);
+  const ckSalvo=plantaoAtivo&&plantaoAtivo.checklist;
+  const veiculoIdSalvo=ckSalvo?ckSalvo.veiculoId:null;
+
+  if(!veiculos.length){
+    // Nenhum veículo cadastrado pelo admin — comportamento simples: tipo genérico + placa opcional
+    wrap.innerHTML=`
+      <div class="field"><label>Tipo de veículo</label>
+        <select id="ck-veiculo"><option>🏍️ Moto</option><option>🚗 Carro</option><option>🚲 Bicicleta</option><option>🚶 A pé</option></select>
+      </div>
+      <div class="field"><label>Placa (opcional)</label><input type="text" id="ck-placa" placeholder="ABC1234" style="text-transform:uppercase;"></div>`;
+    if(ckSalvo){
+      const selTipo=document.getElementById('ck-veiculo');
+      if(selTipo&&ckSalvo.veiculo)selTipo.value=ckSalvo.veiculo;
+      const inpPlaca=document.getElementById('ck-placa');
+      if(inpPlaca&&ckSalvo.placa)inpPlaca.value=ckSalvo.placa;
+    }
+  } else if(veiculos.length===1){
+    // Só um veículo cadastrado — usado automaticamente, sem precisar escolher
+    const v=veiculos[0];
+    wrap.innerHTML=`
+      <input type="hidden" id="ck-veiculo-id" value="${v.id}">
+      <div class="card" style="border-color:var(--teal);margin-bottom:12px;">
+        <div class="card-title">🏍️ Veículo do plantão</div>
+        <div style="font-size:14px;font-weight:700;">${v.tipo||''} ${v.nome||''}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px;">Placa: <strong>${(v.placa||'—').toUpperCase()}</strong></div>
+      </div>`;
+  } else {
+    // Mais de um veículo cadastrado — vigia escolhe qual está usando
+    const opts=veiculos.map(v=>`<option value="${v.id}">${v.tipo||''} ${v.nome||''} — ${(v.placa||'').toUpperCase()}</option>`).join('');
+    wrap.innerHTML=`
+      <div class="field"><label>🏍️ Qual veículo você vai usar?</label>
+        <select id="ck-veiculo-id">
+          <option value="">Selecione...</option>
+          ${opts}
+          <option value="a_pe">🚶 A pé (sem veículo)</option>
+        </select>
+      </div>`;
+    if(veiculoIdSalvo){
+      const sel=document.getElementById('ck-veiculo-id');
+      if(sel)sel.value=veiculoIdSalvo;
+    }
+  }
+}
+window.renderSelecaoVeiculoChecklist=renderSelecaoVeiculoChecklist;
 window.restaurarEstadoChecklistVisual=restaurarEstadoChecklistVisual;
 window.renderItensVeiculo=renderItensVeiculo;
 window.renderEquipVeiculoConfig=renderEquipVeiculoConfig;
@@ -3119,7 +3517,7 @@ function montarCorpoHTML(p,emp){
   if(ck.veiculo){
     const kmRodadosPdf=calcularKmRodados(ck);
     html+='<div class="sec"><div class="sec-tit">🏍️ Checklist do Veículo</div>';
-    html+='<div class="ln"><span class="ln-l">Veículo</span><span class="ln-v">'+ck.veiculo+'</span></div>';
+    html+='<div class="ln"><span class="ln-l">Veículo</span><span class="ln-v">'+ck.veiculo+(ck.placa?' — '+ck.placa:'')+'</span></div>';
     html+='<div class="ln"><span class="ln-l">KM Entrada → Saída</span><span class="ln-v">'+(ck.kmEntrada||'—')+' → '+(ck.kmSaida||'—')+(kmRodadosPdf!==null?' <b style="color:#1A4FAF;">('+kmRodadosPdf+' km rodados)</b>':'')+'</span></div>';
     html+='<div class="ln"><span class="ln-l">Gasolina / Óleo</span><span class="ln-v">'+(ck.gasolina||'—')+' / '+(ck.oleo||'—')+'</span></div>';
     if(chips) html+='<div class="chips">'+chips+'</div>';
@@ -3313,7 +3711,7 @@ function finalizarPlantaoAdmin(){
   const plantoes=DB.get('plantoes').map(p=>{
     if(p.id===id&&!p.fim){
       const kmR=calcularKmRodados(p.checklist);
-      if(kmR!==null)registrarKmManutencao(kmR);
+      if(kmR!==null&&p.checklist&&p.checklist.veiculoId)registrarKmVeiculo(p.checklist.veiculoId,kmR);
       return{...p,fim:new Date().toISOString(),encerradoPeloAdmin:true,motivoAdmin:motivo};
     }
     return p;
