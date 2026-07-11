@@ -82,10 +82,15 @@
           const d=snap.data();
           if(d&&d.dados){
             const fb=JSON.parse(d.dados);
+            const tsMillis=(d.ts&&typeof d.ts.toMillis==='function')?d.ts.toMillis():0;
+            let resultado;
             try{
               const loc=JSON.parse(localStorage.getItem('rm_'+k)||'[]');
-              return mesclar(k,fb,loc);
-            }catch(e){return fb;}
+              resultado=mesclar(k,fb,loc);
+            }catch(e){resultado=fb;}
+            // Anexa o horário da última gravação na nuvem (não entra no JSON, só ajuda a decidir qual versão é mais nova)
+            try{ Object.defineProperty(resultado,'_remoteTs',{value:tsMillis,enumerable:false}); }catch(e){}
+            return resultado;
           }
         }
       }catch(e){console.warn('fbGet erro ('+k+'):',e.message);}
@@ -1227,6 +1232,10 @@ const DB={
       Object.keys(localStorage).filter(k=>k.startsWith('rm_fotos_rascunho_')).forEach(k=>localStorage.removeItem(k));
       try{localStorage.setItem('rm_'+k,JSON.stringify(v));}catch(e2){}
     }
+    // Marcar quando essa coleção foi alterada aqui — usado para decidir,
+    // em sincronizações futuras, se a versão local é mais nova que a da nuvem
+    // (evita que uma exclusão feita aqui seja "desfeita" por um dado antigo remoto)
+    try{localStorage.setItem('rm_ts_'+k,Date.now().toString());}catch(e){}
     // Firebase: enviar agora se online; se falhar/offline, entra na fila pendente
     _syncFirebase(k,v);
   },
@@ -1244,10 +1253,8 @@ const DB={
           new Promise(r=>setTimeout(()=>r(null),4000))
         ]);
         if(v!==null){
-          // Comparar: usar Firebase só se tiver mais dados que o local
           const local=CACHE[k]||[];
-          const usarFB=Array.isArray(v)?(v.length>=local.length):true;
-          if(usarFB){
+          if(_deveUsarRemoto(k,v,local)){
             CACHE[k]=v;
             localStorage.setItem('rm_'+k,JSON.stringify(v));
           }
@@ -1261,6 +1268,27 @@ const DB={
     cols.forEach(k=>{try{const v=localStorage.getItem('rm_'+k);if(v)CACHE[k]=JSON.parse(v);}catch(e){} });
   }
 };
+
+// ═══════════════════════════════════════════
+// DECISÃO: usar dado local ou da nuvem?
+// ═══════════════════════════════════════════
+// Antes usávamos "quem tem mais itens" para decidir — mas isso desfazia
+// exclusões (uma lista limpa fica menor de propósito, e a nuvem "vencia"
+// por ter mais itens). Agora comparamos por DATA DA ÚLTIMA ALTERAÇÃO:
+// quem mudou por último manda, não importa o tamanho.
+function _tsLocal(k){
+  try{return parseInt(localStorage.getItem('rm_ts_'+k)||'0',10);}catch(e){return 0;}
+}
+function _deveUsarRemoto(k,arrRemoto,arrLocal){
+  if(!Array.isArray(arrRemoto))return false;
+  const remoteTs=arrRemoto._remoteTs||0;
+  const localTs=_tsLocal(k);
+  if(remoteTs>0&&localTs>0){
+    return remoteTs>localTs; // quem alterou por último vence, mesmo que tenha menos itens
+  }
+  // Sem timestamp confiável de um dos dois lados (caso raro) — usa o maior como antes, por segurança
+  return arrRemoto.length>=((arrLocal||[]).length);
+}
 
 // ═══════════════════════════════════════════
 // FILA DE SINCRONIZAÇÃO OFFLINE
@@ -1347,7 +1375,7 @@ async function sincronizarDadosAdmin(silencioso){
           const localAtual=CACHE[k]||[];
           // Compara conteúdo (não só tamanho) pra detectar qualquer mudança, inclusive edições
           const mudou=JSON.stringify(v)!==JSON.stringify(localAtual);
-          if(mudou&&v.length>=localAtual.length){
+          if(mudou&&_deveUsarRemoto(k,v,localAtual)){
             CACHE[k]=v;
             localStorage.setItem('rm_'+k,JSON.stringify(v));
             algoMudou=true;
@@ -1437,7 +1465,7 @@ async function initDemo(){
       if(Array.isArray(usuariosFB)&&usuariosFB.length){
         // Firebase tem dados reais — usar como fonte da verdade se tiver mais que o local
         const localAtual=CACHE['usuarios']||[];
-        if(usuariosFB.length>=localAtual.length){
+        if(_deveUsarRemoto('usuarios',usuariosFB,localAtual)){
           CACHE['usuarios']=usuariosFB;
           localStorage.setItem('rm_usuarios',JSON.stringify(usuariosFB));
         }
@@ -1451,8 +1479,7 @@ async function initDemo(){
             ]);
             if(v!==null){
               const local=CACHE[k]||[];
-              const usar=Array.isArray(v)?(v.length>=local.length):true;
-              if(usar){CACHE[k]=v;localStorage.setItem('rm_'+k,JSON.stringify(v));}
+              if(_deveUsarRemoto(k,v,local)){CACHE[k]=v;localStorage.setItem('rm_'+k,JSON.stringify(v));}
             }
           }catch(e){}
         }));
@@ -1499,8 +1526,7 @@ async function initDemo(){
         ]);
         if(v!==null){
           const local=CACHE[k]||[];
-          const usar=Array.isArray(v)?(v.length>=local.length):true;
-          if(usar){CACHE[k]=v;localStorage.setItem('rm_'+k,JSON.stringify(v));}
+          if(_deveUsarRemoto(k,v,local)){CACHE[k]=v;localStorage.setItem('rm_'+k,JSON.stringify(v));}
         }
       }catch(e){}
     });
@@ -3654,7 +3680,10 @@ function renderRelatoriosPorData(plantoes,divId){
           <div class="li-main" style="width:100%">
             <div class="flex items-center justify-between">
               <div class="li-title">${p.vigilanteNome||p.localNome}</div>
-              <button class="btn btn-primary btn-sm" onclick="verRelatorio('${p.id}')">Ver</button>
+              <div style="display:flex;gap:6px;">
+                <button class="btn btn-primary btn-sm" onclick="verRelatorio('${p.id}')">Ver</button>
+                ${isAdmin?`<button class="btn btn-outline btn-sm btn-icon" style="color:var(--red);border-color:var(--red);" onclick="excluirRelatorio('${p.id}')" title="Apagar este relatório">🗑️</button>`:''}
+              </div>
             </div>
             <div class="li-sub">${isAdmin?(p.localNome+' · '):''}Entrada: ${fmtH(p.inicio)} · Saída: ${fmtH(p.fim)}${p.horaPrevistaSaida?' · Prev: '+p.horaPrevistaSaida:''}</div>
             <div class="mt-1">${s.badge}${isAdmin&&fotos.length?` <span class="badge badge-blue">📷 ${fotos.length} foto${fotos.length!==1?'s':''}</span>`:''}</div>
@@ -3665,6 +3694,16 @@ function renderRelatoriosPorData(plantoes,divId){
     </div>`).join('');
 }
 function renderRelatoriosAdmin(){renderRelatoriosPorData(DB.get('plantoes').filter(p=>p.fim),'lista-relatorios-admin');}
+function excluirRelatorio(id){
+  const p=DB.get('plantoes').find(x=>x.id===id);
+  if(!p)return;
+  if(!confirm(`Apagar o relatório de ${p.vigilanteNome||p.localNome} (${fmtData(p.inicio)})?\n\nEssa ação não pode ser desfeita. Só apague depois de já ter enviado o relatório ao cliente.`))return;
+  DB.set('plantoes',DB.get('plantoes').filter(x=>x.id!==id));
+  renderRelatoriosAdmin();
+  atualizarDashboard();
+  toast('🗑️ Relatório apagado.');
+}
+window.excluirRelatorio=excluirRelatorio;
 function renderMeusRelatorios(){renderRelatoriosPorData(DB.get('plantoes').filter(p=>p.fim&&p.vigilanteId===U.id),'lista-meus-relatorios');}
 function gerarHtmlRelatorio(p, opcoes){
   opcoes=opcoes||{};
