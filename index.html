@@ -206,6 +206,14 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var
 .login-box{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:24px;width:100%;max-width:400px;box-shadow:0 16px 50px rgba(0,0,0,.35);}
 .login-box h2{font-size:18px;font-weight:800;margin-bottom:20px;text-align:center;}
 .ponto-btn{border-radius:16px;padding:22px;text-align:center;border:none;cursor:pointer;width:100%;font-weight:900;font-size:17px;transition:transform .15s ease,box-shadow .15s ease;margin-bottom:12px;}
+
+.btn-emergencia{width:100%;border:none;border-radius:14px;padding:18px;margin-bottom:16px;background:linear-gradient(135deg,#dc2626,#7f1d1d);color:#fff;font-weight:900;font-size:15px;letter-spacing:.5px;cursor:pointer;box-shadow:0 4px 18px rgba(220,38,38,.4);animation:pulseEmergencia 1.8s infinite;}
+.btn-emergencia:active{transform:scale(.97);}
+@keyframes pulseEmergencia{0%,100%{box-shadow:0 4px 18px rgba(220,38,38,.4);}50%{box-shadow:0 4px 26px rgba(220,38,38,.75);}}
+.alerta-banner{position:fixed;top:0;left:0;right:0;z-index:500;background:linear-gradient(135deg,#dc2626,#991b1b);color:#fff;padding:14px 16px;box-shadow:0 4px 20px rgba(0,0,0,.4);animation:pulseEmergencia 1.2s infinite;}
+.alerta-banner .ab-title{font-weight:900;font-size:15px;display:flex;align-items:center;gap:8px;}
+.alerta-banner .ab-info{font-size:12px;opacity:.95;margin-top:4px;}
+.alerta-banner button{margin-top:10px;width:100%;background:#fff;color:#7f1d1d;border:none;border-radius:8px;padding:10px;font-weight:800;font-size:13px;cursor:pointer;}
 .ponto-btn:active{transform:scale(.98);}
 .ponto-btn.entrada{background:linear-gradient(135deg,#065f46,var(--green));color:#fff;box-shadow:0 4px 20px rgba(16,185,129,.3);}
 .ponto-btn.saida{background:linear-gradient(135deg,#7f1d1d,var(--red));color:#fff;box-shadow:0 4px 20px rgba(239,68,68,.28);}
@@ -344,7 +352,7 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var
     </div>
     <button class="btn btn-outline" onclick="abrirCadastroMorador()" style="width:100%;">🏠 Sou morador — Solicitar acesso</button>
 
-    <div class="text-center mt-3 text-xs text-muted">Admin: admin@rm.com / 123456<br>Vigilante: joao@rm.com / 123456</div>
+    <div class="text-center mt-3 text-xs text-muted">Admin: admin@rm.com / 123456<br>Vigilante: joao@rm.com / 123456<br>Morador: morador@rm.com / 123456</div>
   </div>
 </div>
 
@@ -367,6 +375,7 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var
 
 <!-- APP -->
 <div id="app" class="hidden">
+  <div id="alerta-emergencia-banner"></div>
   <div id="topbar">
     <div class="logo">🛡️ Ronda<span>Master</span></div>
     <div style="display:flex;align-items:center;gap:10px;">
@@ -387,6 +396,9 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var
         <div class="stat-box"><div class="stat-val" id="st-plantoes">0</div><div class="stat-lbl">Plantões Hoje</div></div>
         <div class="stat-box"><div class="stat-val" id="st-vigilantes">0</div><div class="stat-lbl">Vigilantes</div></div>
         <div class="stat-box"><div class="stat-val" id="st-relatorios">0</div><div class="stat-lbl">Relatórios</div></div>
+        <div class="stat-box"><div class="stat-val" id="st-moradores">0</div><div class="stat-lbl">Moradores</div></div>
+      </div>
+      <div class="stat-row" style="grid-template-columns:1fr;">
         <div class="stat-box"><div class="stat-val" id="st-saldo" style="font-size:16px;color:var(--green)">R$0</div><div class="stat-lbl">Saldo Mês</div></div>
       </div>
       <div class="card">
@@ -733,6 +745,9 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var
 
     <!-- PORTAL DO CLIENTE -->
     <div id="screen-cliente" class="screen">
+      <button class="btn-emergencia" onclick="acionarAlertaEmergencia()">
+        🚨 EMERGÊNCIA — Acionar Alerta
+      </button>
       <div id="cliente-identificacao">
         <div class="card">
           <div class="card-title">👤 Identifique-se</div>
@@ -811,7 +826,7 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var
     <!-- MORADORES / ACESSO DE CLIENTES (Admin) -->
     <div id="screen-moradores" class="screen">
       <button class="back-link" onclick="irPara('screen-dashboard')">← Voltar ao Início</button>
-      <div class="section-header"><h2>🏠 Acesso de Moradores</h2>
+      <div class="section-header"><h2>🏠 Acesso de Moradores <span id="badge-total-moradores" class="badge badge-teal" style="margin-left:6px;">0</span></h2>
         <div style="display:flex;gap:6px;">
           <button class="btn btn-outline btn-sm" onclick="sincronizarDadosAdmin().then(()=>{renderMoradoresAdmin();toast('🔄 Atualizado!');})" title="Buscar novidades">🔄</button>
           <button class="btn btn-outline btn-sm" onclick="limparSolicitacoesMoradores()" style="color:var(--red);border-color:var(--red);" title="Limpar solicitações pendentes">🗑️</button>
@@ -1264,7 +1279,7 @@ const DB={
     return CACHE[k]||[];
   },
   async loadAll(){
-    const cols=['usuarios','vigilantes','contratantes','escala','plantoes','financeiro','equipamentos','itens_veiculo','veiculos','solicitacoes_troca','pre_cadastros','solicitacoes_cadastro'];
+    const cols=['usuarios','vigilantes','contratantes','escala','plantoes','financeiro','equipamentos','itens_veiculo','veiculos','solicitacoes_troca','pre_cadastros','solicitacoes_cadastro','alertas_emergencia'];
     cols.forEach(k=>{try{const v=localStorage.getItem('rm_'+k);if(v)CACHE[k]=JSON.parse(v);}catch(e){} });
   }
 };
@@ -1289,6 +1304,170 @@ function _deveUsarRemoto(k,arrRemoto,arrLocal){
   // Sem timestamp confiável de um dos dois lados (caso raro) — usa o maior como antes, por segurança
   return arrRemoto.length>=((arrLocal||[]).length);
 }
+
+// ═══════════════════════════════════════════
+// ALERTA DE EMERGÊNCIA (botão de pânico do morador)
+// ═══════════════════════════════════════════
+// IMPORTANTE (leia antes de confiar cegamente neste recurso):
+// O alarme sonoro/vibração/notificação SÓ dispara enquanto o navegador
+// consegue rodar o JavaScript da página — ou seja, com o app aberto (em
+// primeiro ou segundo plano, mas ainda "vivo"). Se o celular estiver com a
+// tela apagada por muito tempo ou o navegador for fechado/o sistema
+// operacional suspender a aba (comum em iPhone, e no Android após alguns
+// minutos), o alarme NÃO dispara. Não existe, hoje, garantia de notificação
+// com o app 100% fechado — isso exigiria notificação push de verdade
+// (infraestrutura de servidor separada). Oriente o vigia a manter o app
+// aberto e a tela ligada durante o plantão.
+let _audioCtxAlerta=null;
+let _sireneAtiva=false;
+let _osciladoresSirene=[];
+let _alertaAtualId=null;
+let _vibracaoInterval=null;
+let _sireneTimeout=null;
+
+function _iniciarSirene(){
+  if(_sireneAtiva)return;
+  _sireneAtiva=true;
+  try{
+    if(!_audioCtxAlerta) _audioCtxAlerta=new (window.AudioContext||window.webkitAudioContext)();
+    const ctx=_audioCtxAlerta;
+    if(ctx.state==='suspended') ctx.resume();
+    const tocarBip=(freq,inicio,duracao)=>{
+      const osc=ctx.createOscillator();
+      const gain=ctx.createGain();
+      osc.type='square';
+      osc.frequency.value=freq;
+      gain.gain.setValueAtTime(0.18,ctx.currentTime+inicio);
+      osc.connect(gain);gain.connect(ctx.destination);
+      osc.start(ctx.currentTime+inicio);
+      osc.stop(ctx.currentTime+inicio+duracao);
+      _osciladoresSirene.push(osc);
+    };
+    // Padrão de sirene: dois tons alternados, em loop
+    const loop=()=>{
+      if(!_sireneAtiva)return;
+      tocarBip(880,0,0.35);
+      tocarBip(660,0.4,0.35);
+      _osciladoresSirene=_osciladoresSirene.filter(o=>o);
+      _sireneTimeout=setTimeout(loop,850);
+    };
+    loop();
+  }catch(e){console.warn('Não foi possível iniciar o som do alerta:',e.message);}
+  // Vibração contínua (funciona em navegadores Android; iOS/Safari não suporta)
+  if(navigator.vibrate){
+    navigator.vibrate([500,200,500,200,500,800]);
+    _vibracaoInterval=setInterval(()=>{if(_sireneAtiva)navigator.vibrate([500,200,500,200,500,800]);},2200);
+  }
+}
+function _pararSirene(){
+  _sireneAtiva=false;
+  if(_sireneTimeout){clearTimeout(_sireneTimeout);_sireneTimeout=null;}
+  if(_vibracaoInterval){clearInterval(_vibracaoInterval);_vibracaoInterval=null;}
+  if(navigator.vibrate)navigator.vibrate(0);
+}
+
+function _pedirPermissaoNotificacao(){
+  if('Notification' in window && Notification.permission==='default'){
+    Notification.requestPermission().catch(()=>{});
+  }
+}
+function _dispararNotificacaoOS(titulo,corpo){
+  try{
+    if('Notification' in window && Notification.permission==='granted'){
+      const n=new Notification(titulo,{body:corpo,requireInteraction:true,tag:'rondamaster-emergencia'});
+      n.onclick=()=>{window.focus();};
+    }
+  }catch(e){}
+}
+
+// ── Morador aciona o alerta ──
+function acionarAlertaEmergencia(){
+  if(!confirm('🚨 Confirma o acionamento do alerta de emergência?\n\nIsso vai avisar imediatamente o administrador e o vigia de plantão no seu local.'))return;
+  const cont=DB.get('contratantes').find(c=>c.id===U.contratanteId);
+  const nome=(clienteIdentificacao&&clienteIdentificacao.nome)||U.nome;
+  const telefone=(clienteIdentificacao&&clienteIdentificacao.telefone)||U.telefone||'';
+  const alerta={
+    id:'ae'+Date.now(),
+    contratanteId:U.contratanteId,
+    contratanteNome:cont?cont.nome:'—',
+    moradorNome:nome,
+    moradorTelefone:telefone,
+    moradorEndereco:(U.endereco||cont?.nome||''),
+    status:'ativo',
+    criadoEm:new Date().toISOString(),
+    atendidoPor:null,atendidoEm:null
+  };
+  const lista=DB.get('alertas_emergencia');
+  lista.push(alerta);
+  DB.set('alertas_emergencia',lista);
+  toast('🚨 Alerta enviado! Administrador e vigia foram avisados.');
+}
+window.acionarAlertaEmergencia=acionarAlertaEmergencia;
+
+// ── Admin/Vigia recebem o alerta ──
+function _alertasRelevantes(){
+  const ativos=DB.get('alertas_emergencia').filter(a=>a.status==='ativo');
+  if(!U)return[];
+  if(U.perfil==='admin'||U.perfil==='gerente')return ativos; // admin vê tudo
+  if(U.perfil==='vigilante'&&plantaoAtivo){
+    // vigia só vê alertas do local onde está de plantão agora
+    return ativos.filter(a=>a.contratanteNome===plantaoAtivo.contratanteNome);
+  }
+  return[];
+}
+function verificarAlertasEmergencia(){
+  if(!U||(U.perfil!=='admin'&&U.perfil!=='gerente'&&U.perfil!=='vigilante'))return;
+  const relevantes=_alertasRelevantes();
+  const div=document.getElementById('alerta-emergencia-banner');
+  if(!div)return;
+  if(!relevantes.length){
+    div.innerHTML='';
+    _pararSirene();
+    _alertaAtualId=null;
+    return;
+  }
+  const a=relevantes[relevantes.length-1]; // o mais recente
+  if(_alertaAtualId!==a.id){
+    _alertaAtualId=a.id;
+    _iniciarSirene();
+    _dispararNotificacaoOS('🚨 Alerta de emergência — '+a.moradorNome,a.contratanteNome+' · '+fmtH(a.criadoEm));
+  }
+  div.innerHTML=`<div class="alerta-banner">
+    <div class="ab-title">🚨 ALERTA DE EMERGÊNCIA${relevantes.length>1?' ('+relevantes.length+')':''}</div>
+    <div class="ab-info">👤 ${a.moradorNome}${a.moradorTelefone?' · 📱 '+a.moradorTelefone:''}<br>🏢 ${a.contratanteNome} · ⏰ ${fmtH(a.criadoEm)}</div>
+    <button onclick="atenderAlertaEmergencia('${a.id}')">✅ Já estou atendendo / Encerrar alerta</button>
+  </div>`;
+}
+function atenderAlertaEmergencia(id){
+  const lista=DB.get('alertas_emergencia').map(a=>a.id===id?{...a,status:'atendido',atendidoPor:U.nome,atendidoEm:new Date().toISOString()}:a);
+  DB.set('alertas_emergencia',lista);
+  _pararSirene();
+  _alertaAtualId=null;
+  verificarAlertasEmergencia();
+  toast('✅ Alerta encerrado.');
+}
+window.atenderAlertaEmergencia=atenderAlertaEmergencia;
+window.verificarAlertasEmergencia=verificarAlertasEmergencia;
+
+// Verificação rápida (a cada 6s) — mais frequente que a sincronização geral,
+// porque emergência não pode esperar 20 segundos
+setInterval(()=>{
+  if(!U)return;
+  if(navigator.onLine&&window._fbGet){
+    window._fbGet('alertas_emergencia').then(v=>{
+      if(v!==null){
+        const local=CACHE['alertas_emergencia']||[];
+        if(_deveUsarRemoto('alertas_emergencia',v,local)){
+          CACHE['alertas_emergencia']=v;
+          try{localStorage.setItem('rm_alertas_emergencia',JSON.stringify(v));}catch(e){}
+        }
+      }
+      verificarAlertasEmergencia();
+    }).catch(()=>verificarAlertasEmergencia());
+  } else {
+    verificarAlertasEmergencia();
+  }
+},6000);
 
 // ═══════════════════════════════════════════
 // FILA DE SINCRONIZAÇÃO OFFLINE
@@ -1365,7 +1544,7 @@ let _sincronizandoAdmin=false;
 async function sincronizarDadosAdmin(silencioso){
   if(!window._fbGet||!navigator.onLine||_sincronizandoAdmin)return;
   _sincronizandoAdmin=true;
-  const colsAdmin=['veiculos','contratantes','vigilantes','escala','itens_veiculo','equipamentos','solicitacoes_troca','plantoes','pre_cadastros','solicitacoes_cadastro','usuarios'];
+  const colsAdmin=['veiculos','contratantes','vigilantes','escala','itens_veiculo','equipamentos','solicitacoes_troca','plantoes','pre_cadastros','solicitacoes_cadastro','usuarios','alertas_emergencia'];
   let algoMudou=false;
   try{
     await Promise.all(colsAdmin.map(async k=>{
@@ -1445,7 +1624,7 @@ async function initDemo(){
   document.querySelectorAll('.modal-overlay').forEach(m=>m.classList.add('hidden'));
 
   // 3. Carregar localStorage (síncrono, instantâneo) — mostra algo na tela rápido
-  const cols=['usuarios','vigilantes','contratantes','escala','plantoes','financeiro','equipamentos','itens_veiculo','veiculos','solicitacoes_troca','pre_cadastros','solicitacoes_cadastro'];
+  const cols=['usuarios','vigilantes','contratantes','escala','plantoes','financeiro','equipamentos','itens_veiculo','veiculos','solicitacoes_troca','pre_cadastros','solicitacoes_cadastro','alertas_emergencia'];
   cols.forEach(k=>{
     try{
       const v=localStorage.getItem('rm_'+k);
@@ -1456,12 +1635,16 @@ async function initDemo(){
   // 4. CRÍTICO: tentar buscar do Firebase ANTES de decidir criar dados padrão.
   //    Isso evita que um dispositivo novo (sem localStorage) sobrescreva os
   //    dados reais da nuvem com um admin "zerado".
+  let _firebaseConfirmadoAtual=false; // só true se realmente confirmamos o estado mais atual da nuvem (sem timeout/erro)
   if(window._fbGet){
     try{
       const usuariosFB=await Promise.race([
         window._fbGet('usuarios'),
         new Promise(r=>setTimeout(()=>r(null),6000))
       ]);
+      if(Array.isArray(usuariosFB)){
+        _firebaseConfirmadoAtual=true; // resposta real da nuvem (não foi timeout)
+      }
       if(Array.isArray(usuariosFB)&&usuariosFB.length){
         // Firebase tem dados reais — usar como fonte da verdade se tiver mais que o local
         const localAtual=CACHE['usuarios']||[];
@@ -1493,7 +1676,9 @@ async function initDemo(){
   //    criar o admin padrão. Isso só acontece na primeiríssima vez do sistema.
   const usuarios=DB.get('usuarios');
   if(!usuarios.length){
-    DB.set('usuarios',[{id:'u1',nome:'Administrador',email:'admin@rm.com',senha:'123456',perfil:'admin'}]);
+    DB.set('usuarios',[
+      {id:'u1',nome:'Administrador',email:'admin@rm.com',senha:'123456',perfil:'admin'}
+    ]);
     DB.set('equipamentos',[
       {id:'eq1',nome:'🔦 Lanterna'},{id:'eq2',nome:'🔧 Ferramentas'},
       {id:'eq3',nome:'📡 Rádio / Comunicação'},{id:'eq4',nome:'🦺 Colete / EPI'}
@@ -1504,6 +1689,26 @@ async function initDemo(){
       {id:'iv5',nome:'🔦 Lanternas'}
     ]);
     console.log('⚠️ Nenhum usuário encontrado (local ou nuvem) — admin padrão criado.');
+  }
+
+  // 5b. Garantir que o LOGIN DE TESTE DO MORADOR sempre exista — mesmo em
+  //     sistemas que já tinham admin/vigilantes cadastrados antes dessa
+  //     função existir. Roda toda vez, mas só cria se ainda não existir —
+  //     e SÓ quando confirmamos que estamos vendo o estado mais atual da
+  //     nuvem (evita gravar por cima com uma cópia local desatualizada,
+  //     o que já causou perda de senha alterada em outro dispositivo).
+  if(_firebaseConfirmadoAtual&&!DB.get('usuarios').find(u=>u.email==='morador@rm.com')){
+    if(!DB.get('contratantes').find(c=>c.id==='c_exemplo')){
+      DB.set('contratantes',[...DB.get('contratantes'),
+        {id:'c_exemplo',nome:'Residencial Modelo (exemplo)',contato:'',locais:'Portaria Principal',valor:0}
+      ]);
+    }
+    DB.set('usuarios',[...DB.get('usuarios'),
+      {id:'u_morador_exemplo',nome:'Morador Exemplo',email:'morador@rm.com',senha:'123456',perfil:'cliente',
+        contratanteId:'c_exemplo',contratanteNome:'Residencial Modelo (exemplo)',
+        cpf:'000.000.000-00',telefone:'(00) 00000-0000',endereco:'Apto Exemplo'}
+    ]);
+    console.log('✅ Login de teste do morador criado (morador@rm.com).');
   }
 
   // 6. O retomar de plantão é feito de forma individual, por vigilante, direto no login
@@ -1649,7 +1854,7 @@ function fazerLogin(){
   const senha=document.getElementById('login-senha').value;
 
   // Garantir que os dados do localStorage estão no CACHE antes de validar
-  ['usuarios','vigilantes','contratantes','escala','plantoes','financeiro','equipamentos','itens_veiculo','veiculos','solicitacoes_troca','pre_cadastros','solicitacoes_cadastro'].forEach(k=>{
+  ['usuarios','vigilantes','contratantes','escala','plantoes','financeiro','equipamentos','itens_veiculo','veiculos','solicitacoes_troca','pre_cadastros','solicitacoes_cadastro','alertas_emergencia'].forEach(k=>{
     if(CACHE[k]===undefined){
       try{const v=localStorage.getItem('rm_'+k);if(v)CACHE[k]=JSON.parse(v);}catch(e){}
     }
@@ -1665,6 +1870,10 @@ function fazerLogin(){
   document.getElementById('tb-perfil').textContent=perfilLabel;
   montarNav();
   sincronizarDadosAdmin(true); // busca dados novos da nuvem em segundo plano, sem re-renderizar nada ainda
+  if(u.perfil==='admin'||u.perfil==='gerente'||u.perfil==='vigilante'){
+    _pedirPermissaoNotificacao();
+    verificarAlertasEmergencia();
+  }
 
   if(u.perfil==='admin') irPara('screen-dashboard');
   else if(u.perfil==='cliente'){
@@ -1802,6 +2011,9 @@ function atualizarDashboard(){
   document.getElementById('st-relatorios').textContent=plantoes.filter(p=>p.fim).length;
   const saldo=rec-pago;
   document.getElementById('st-saldo').textContent=fmtMoeda(saldo);
+  const totalMoradores=DB.get('usuarios').filter(u=>u.perfil==='cliente'&&u.cpf).length;
+  const elMor=document.getElementById('st-moradores');
+  if(elMor)elMor.textContent=totalMoradores;
 
   // Alerta de moradores aguardando aprovação
   const moradoresPend=DB.get('solicitacoes_cadastro').filter(s=>s.status==='pendente');
@@ -3378,6 +3590,10 @@ function renderMoradoresAdmin(){
   const filtroEl=document.getElementById('filtro-moradores');
   const filtro=filtroEl?filtroEl.value.trim().toLowerCase():'';
   const bate=(...campos)=>!filtro||campos.some(c=>(c||'').toLowerCase().includes(filtro));
+
+  const totalAprovadosBadge=DB.get('usuarios').filter(u=>u.perfil==='cliente'&&u.cpf).length;
+  const badgeEl=document.getElementById('badge-total-moradores');
+  if(badgeEl)badgeEl.textContent=totalAprovadosBadge;
 
   const solicitacoes=DB.get('solicitacoes_cadastro');
   const pendentes=solicitacoes.filter(s=>s.status==='pendente'&&bate(s.nome,s.endereco,s.telefone,s.cpf));
