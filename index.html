@@ -49,6 +49,12 @@
           const ckL=pL.checklist||null;
           const obsFB=(ckFB&&Array.isArray(ckFB.obs))?ckFB.obs.length:0;
           const obsL=(ckL&&Array.isArray(ckL.obs))?ckL.obs.length:0;
+          // Encerramento é uma via de mão única: um plantão nunca volta a ficar
+          // "aberto" depois de fechado. Se QUALQUER um dos lados já tem `fim`
+          // marcado, o resultado da mesclagem tem que continuar fechado — senão
+          // o admin vê o plantão como "não encerrado" mesmo depois do vigia
+          // ter encerrado de verdade (é exatamente isso que estava acontecendo).
+          const ladoQueFechou=pL.fim?pL:(pFB.fim?pFB:null);
           return{...pFB,
             fotos:(pL.fotos||[]).length?(pL.fotos):(pFB.fotos||[]),
             fotoRostoEntrada:pL.fotoRostoEntrada||null,
@@ -58,7 +64,14 @@
             portaria: portariaL.length>=portariaFB.length ? portariaL : portariaFB,
             rondas: rondasL.length>=rondasFB.length ? rondasL : rondasFB,
             checklist: !ckL ? ckFB : (!ckFB ? ckL : (obsL>=obsFB ? ckL : ckFB)),
-            ckState: Object.keys(pL.ckState||{}).length>=Object.keys(pFB.ckState||{}).length ? (pL.ckState||{}) : (pFB.ckState||{})
+            ckState: Object.keys(pL.ckState||{}).length>=Object.keys(pFB.ckState||{}).length ? (pL.ckState||{}) : (pFB.ckState||{}),
+            fim: pL.fim||pFB.fim||null,
+            saidaAntecipada: ladoQueFechou?ladoQueFechou.saidaAntecipada:(pFB.saidaAntecipada||pL.saidaAntecipada||false),
+            motivoSaida: ladoQueFechou?ladoQueFechou.motivoSaida:(pFB.motivoSaida||pL.motivoSaida||null),
+            encerradoPeloAdmin: !!(pFB.encerradoPeloAdmin||pL.encerradoPeloAdmin),
+            motivoAdmin: pFB.motivoAdmin||pL.motivoAdmin||null,
+            horaPrevistaSaida: pFB.horaPrevistaSaida||pL.horaPrevistaSaida||null,
+            obsAdmin: (pL.obsAdmin||[]).length>=(pFB.obsAdmin||[]).length ? (pL.obsAdmin||[]) : (pFB.obsAdmin||[])
           };
         });
         // IMPORTANTE: plantões que existem SÓ localmente (ex: um vigia acabou de
@@ -4115,6 +4128,18 @@ function gerarHtmlRelatorio(p, opcoes){
       </div>`).join('')}
     </div>`:'';
 
+  // Alertas de emergência acionados naquele dia/local
+  const alertasPlantao=DB.get('alertas_emergencia').filter(a=>a.contratanteNome===p.contratanteNome&&new Date(a.criadoEm).toDateString()===dataPlantao);
+  const alertasHtml=alertasPlantao.length?`
+    <div style="${S.section}">
+      <h4 style="${S.h4}">🚨 Alertas de Emergência (${alertasPlantao.length})</h4>
+      ${alertasPlantao.map((a,i)=>`<div style="background:${a.status==='atendido'?'#FEF2F2':'#FEE2E2'};border-radius:4px;padding:8px 10px;margin-bottom:4px;border-left:3px solid #DC2626;">
+        <div style="font-weight:700;">#${i+1} Acionado por ${a.moradorNome}${a.moradorTelefone?' · '+a.moradorTelefone:''}</div>
+        <div style="font-size:11px;margin-top:2px;">⏰ Acionado às ${fmtH(a.criadoEm)} em ${fmtData(a.criadoEm)}</div>
+        <div style="font-size:11px;margin-top:2px;">${a.status==='atendido'?'✅ Atendido às '+fmtH(a.atendidoEm)+' por <b>'+a.atendidoPor+'</b>':'⚠️ <b>Ainda não foi atendido</b>'}</div>
+      </div>`).join('')}
+    </div>`:'';
+
   // Observações do administrador
   const obsAdminArr=Array.isArray(p.obsAdmin)?p.obsAdmin:[];
   const obsAdminHtml=obsAdminArr.length?`
@@ -4167,6 +4192,7 @@ function gerarHtmlRelatorio(p, opcoes){
     ${entHtml}
     ${visHtml}
     ${preCadHtml}
+    ${alertasHtml}
     ${obsAdminHtml}
     ${addObsHtml}
     <div style="${S.footer}">RondaMaster · ID: ${id}</div>
@@ -4645,6 +4671,17 @@ function montarCorpoHTML(p,emp){
     html+='<div class="sec"><div class="sec-tit">📇 Pré-Cadastros do Cliente ('+preCadsPdf.length+')</div>';
     preCadsPdf.forEach(pc=>{
       html+='<div class="ln"><span class="ln-l">'+(iconesPCpdf[pc.tipo]||'')+' '+(pc.empresa?pc.empresa+' — ':'')+(pc.nome||'—')+(pc.servico?' — '+pc.servico:'')+'</span><span class="ln-v">'+(pc.placa?pc.placa+' · ':'')+(pc.destino||pc.obs||'')+'</span></div>';
+    });
+    html+='</div>';
+  }
+
+  // Alertas de emergência acionados naquele dia/local
+  const alertasPdf=DB.get('alertas_emergencia').filter(a=>a.contratanteNome===p.contratanteNome&&new Date(a.criadoEm).toDateString()===dataPlantaoPdf);
+  if(alertasPdf.length){
+    html+='<div class="sec"><div class="sec-tit">🚨 Alertas de Emergência ('+alertasPdf.length+')</div>';
+    alertasPdf.forEach((a,i)=>{
+      const statusTxt=a.status==='atendido'?('Atendido às '+fmtH(a.atendidoEm)+' por '+a.atendidoPor):'Ainda não foi atendido';
+      html+='<div class="obs" style="border-left-color:#DC2626;background:#FEE2E2;"><b>#'+(i+1)+'</b> Acionado por '+a.moradorNome+(a.moradorTelefone?' ('+a.moradorTelefone+')':'')+' <span class="obs-hr">· '+fmtH(a.criadoEm)+' em '+fmtData(a.criadoEm)+'</span><br><span style="font-size:9px;">'+statusTxt+'</span></div>';
     });
     html+='</div>';
   }
