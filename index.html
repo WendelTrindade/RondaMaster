@@ -37,10 +37,24 @@
     function mesclar(k,fb,local){
       if(k==='plantoes'&&Array.isArray(fb)){
         const localArr=local||[];
+        // Lista de IDs que foram INTENCIONALMENTE apagados por aqui (excluir
+        // relatório individual ou "Limpar"). Sem isso, um relatório apagado
+        // "renascia" na próxima sincronização — porque a mesclagem, ao ver
+        // que a nuvem ainda tinha aquele registro (exclusão não chegou lá
+        // ainda) e o local não tinha mais, devolvia de volta a versão da
+        // nuvem, pensando que era um registro novo vindo de outro aparelho.
+        let excluidos=[];
+        try{
+          excluidos=JSON.parse(localStorage.getItem('rm_itens_excluidos')||'[]')
+            .filter(e=>e.colecao==='plantoes').map(e=>e.id);
+        }catch(e){}
         const idsNaFB=new Set(fb.map(p=>p.id));
         const mesclados=fb.map(pFB=>{
           const pL=localArr.find(p=>p.id===pFB.id);
-          if(!pL) return pFB;
+          if(!pL){
+            if(excluidos.includes(pFB.id))return null; // apagado de propósito — não ressuscitar
+            return pFB;
+          }
           const rondasFB=pFB.rondas||[];
           const rondasL=pL.rondas||[];
           const portariaFB=pFB.portaria||[];
@@ -79,7 +93,7 @@
         // nuvem) NUNCA podem ser descartados aqui — senão o plantão "some" caso
         // a versão da nuvem seja considerada mais recente nessa sincronização.
         const somenteLocais=localArr.filter(p=>!idsNaFB.has(p.id));
-        return[...mesclados,...somenteLocais];
+        return[...mesclados.filter(p=>p!==null),...somenteLocais];
       }
       return fb;
     }
@@ -1328,7 +1342,7 @@ const DB={
     return CACHE[k]||[];
   },
   async loadAll(){
-    const cols=['usuarios','vigilantes','contratantes','escala','plantoes','financeiro','equipamentos','itens_veiculo','veiculos','solicitacoes_troca','pre_cadastros','solicitacoes_cadastro','alertas_emergencia'];
+    const cols=['usuarios','vigilantes','contratantes','escala','plantoes','financeiro','equipamentos','itens_veiculo','veiculos','solicitacoes_troca','pre_cadastros','solicitacoes_cadastro','alertas_emergencia','itens_excluidos'];
     cols.forEach(k=>{try{const v=localStorage.getItem('rm_'+k);if(v)CACHE[k]=JSON.parse(v);}catch(e){} });
   }
 };
@@ -1531,12 +1545,29 @@ setInterval(()=>{
 // pré-cadastro etc.). Nessas, gravar "por cima" sem checar a nuvem primeiro
 // pode apagar o que outro dispositivo acabou de escrever — porque cada
 // gravação aqui substitui o documento inteiro, não faz mescla no servidor.
-const _COLECOES_MULTI_GRAVADOR=['plantoes','solicitacoes_troca','pre_cadastros','solicitacoes_cadastro','alertas_emergencia'];
-function _unirPorId(base,incluir){
+const _COLECOES_MULTI_GRAVADOR=['plantoes','solicitacoes_troca','pre_cadastros','solicitacoes_cadastro','alertas_emergencia','itens_excluidos'];
+// Registro genérico de exclusões intencionais (usado por pré-cadastros e
+// solicitações de moradores). Sem isso, apagar um item que a nuvem ainda não
+// tinha recebido a exclusão fazia ele "renascer" na sincronização seguinte —
+// a mesma causa raiz do bug corrigido para os plantões, só que noutras telas.
+function _registrarExclusao(colecao,ids){
+  let excluidos=[];
+  try{excluidos=JSON.parse(localStorage.getItem('rm_itens_excluidos')||'[]');}catch(e){}
+  const agora=new Date().toISOString();
+  ids.forEach(id=>{if(!excluidos.some(e=>e.colecao===colecao&&e.id===id))excluidos.push({colecao,id,excluidoEm:agora});});
+  DB.set('itens_excluidos',excluidos);
+}
+function _idsExcluidos(colecao){
+  let excluidos=[];
+  try{excluidos=JSON.parse(localStorage.getItem('rm_itens_excluidos')||'[]');}catch(e){}
+  return excluidos.filter(e=>e.colecao===colecao).map(e=>e.id);
+}
+function _unirPorId(colecao,base,incluir){
   if(!Array.isArray(incluir))return base;
   if(!Array.isArray(base))return incluir;
+  const excluidos=new Set(_idsExcluidos(colecao));
   const idsBase=new Set(base.map(x=>x&&x.id));
-  const somenteEmIncluir=incluir.filter(x=>x&&!idsBase.has(x.id));
+  const somenteEmIncluir=incluir.filter(x=>x&&!idsBase.has(x.id)&&!excluidos.has(x.id));
   return somenteEmIncluir.length?[...base,...somenteEmIncluir]:base;
 }
 function _syncFirebase(k,v){
@@ -1559,7 +1590,7 @@ function _syncFirebase(k,v){
 async function _syncFirebaseComMerge(k,v){
   const funcaoMesclagem=(local,remoto)=>{
     if(!Array.isArray(remoto))return local;
-    return(k==='plantoes'&&window.mesclar)?window.mesclar('plantoes',remoto,local):_unirPorId(local,remoto);
+    return(k==='plantoes'&&window.mesclar)?window.mesclar('plantoes',remoto,local):_unirPorId(k,local,remoto);
   };
   try{
     if(window._fbSetTransacional){
@@ -1639,7 +1670,7 @@ let _sincronizandoAdmin=false;
 async function sincronizarDadosAdmin(silencioso){
   if(!window._fbGet||!navigator.onLine||_sincronizandoAdmin)return;
   _sincronizandoAdmin=true;
-  const colsAdmin=['veiculos','contratantes','vigilantes','escala','itens_veiculo','equipamentos','solicitacoes_troca','plantoes','pre_cadastros','solicitacoes_cadastro','usuarios','alertas_emergencia'];
+  const colsAdmin=['veiculos','contratantes','vigilantes','escala','itens_veiculo','equipamentos','solicitacoes_troca','plantoes','pre_cadastros','solicitacoes_cadastro','usuarios','alertas_emergencia','itens_excluidos'];
   let algoMudou=false;
   try{
     await Promise.all(colsAdmin.map(async k=>{
@@ -1719,7 +1750,7 @@ async function initDemo(){
   document.querySelectorAll('.modal-overlay').forEach(m=>m.classList.add('hidden'));
 
   // 3. Carregar localStorage (síncrono, instantâneo) — mostra algo na tela rápido
-  const cols=['usuarios','vigilantes','contratantes','escala','plantoes','financeiro','equipamentos','itens_veiculo','veiculos','solicitacoes_troca','pre_cadastros','solicitacoes_cadastro','alertas_emergencia'];
+  const cols=['usuarios','vigilantes','contratantes','escala','plantoes','financeiro','equipamentos','itens_veiculo','veiculos','solicitacoes_troca','pre_cadastros','solicitacoes_cadastro','alertas_emergencia','itens_excluidos'];
   cols.forEach(k=>{
     try{
       const v=localStorage.getItem('rm_'+k);
@@ -1949,7 +1980,7 @@ function fazerLogin(){
   const senha=document.getElementById('login-senha').value;
 
   // Garantir que os dados do localStorage estão no CACHE antes de validar
-  ['usuarios','vigilantes','contratantes','escala','plantoes','financeiro','equipamentos','itens_veiculo','veiculos','solicitacoes_troca','pre_cadastros','solicitacoes_cadastro','alertas_emergencia'].forEach(k=>{
+  ['usuarios','vigilantes','contratantes','escala','plantoes','financeiro','equipamentos','itens_veiculo','veiculos','solicitacoes_troca','pre_cadastros','solicitacoes_cadastro','alertas_emergencia','itens_excluidos'].forEach(k=>{
     if(CACHE[k]===undefined){
       try{const v=localStorage.getItem('rm_'+k);if(v)CACHE[k]=JSON.parse(v);}catch(e){}
     }
@@ -3794,6 +3825,7 @@ window.enviarWhatsappMorador=enviarWhatsappMorador;
 
 function negarSolicitacaoMorador(id){
   if(!confirm('Excluir esta solicitação de acesso?'))return;
+  _registrarExclusao('solicitacoes_cadastro',[id]);
   DB.set('solicitacoes_cadastro',DB.get('solicitacoes_cadastro').filter(x=>x.id!==id));
   renderMoradoresAdmin();
   toast('🗑️ Solicitação removida.');
@@ -4009,6 +4041,7 @@ function excluirRelatorio(id){
   const p=DB.get('plantoes').find(x=>x.id===id);
   if(!p)return;
   if(!confirm(`Apagar o relatório de ${p.vigilanteNome||p.localNome} (${fmtData(p.inicio)})?\n\nEssa ação não pode ser desfeita. Só apague depois de já ter enviado o relatório ao cliente.`))return;
+  _registrarExclusao('plantoes',[id]);
   DB.set('plantoes',DB.get('plantoes').filter(x=>x.id!==id));
   renderRelatoriosAdmin();
   atualizarDashboard();
@@ -4251,6 +4284,8 @@ function limparContratantes(){
 }
 function limparRelatorios(){
   if(!confirm('⚠️ Apagar TODOS os relatórios e plantões encerrados?'))return;
+  const idsApagados=DB.get('plantoes').filter(p=>p.fim).map(p=>p.id);
+  _registrarExclusao('plantoes',idsApagados);
   DB.set('plantoes',DB.get('plantoes').filter(p=>!p.fim));renderRelatoriosAdmin();
   toast('🗑️ Relatórios apagados.');
 }
@@ -4262,11 +4297,14 @@ function limparEscala(){
 }
 function limparPreCadastros(){
   if(!confirm('⚠️ Apagar TODOS os pré-cadastros de visitantes, entregas e prestadores?'))return;
+  _registrarExclusao('pre_cadastros',DB.get('pre_cadastros').map(p=>p.id));
   DB.set('pre_cadastros',[]);renderPreCadastrosAdmin();
   toast('🗑️ Pré-cadastros apagados.');
 }
 function limparSolicitacoesMoradores(){
   if(!confirm('⚠️ Apagar TODAS as solicitações de acesso pendentes? Isso não afeta moradores já aprovados.'))return;
+  const idsApagados=DB.get('solicitacoes_cadastro').filter(s=>s.status==='pendente').map(s=>s.id);
+  _registrarExclusao('solicitacoes_cadastro',idsApagados);
   DB.set('solicitacoes_cadastro',DB.get('solicitacoes_cadastro').filter(s=>s.status!=='pendente'));
   renderMoradoresAdmin();
   toast('🗑️ Solicitações pendentes apagadas.');
