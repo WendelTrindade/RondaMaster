@@ -36,8 +36,10 @@
     // Mescla dados do Firebase com fotos do localStorage local
     function mesclar(k,fb,local){
       if(k==='plantoes'&&Array.isArray(fb)){
-        return fb.map(pFB=>{
-          const pL=(local||[]).find(p=>p.id===pFB.id);
+        const localArr=local||[];
+        const idsNaFB=new Set(fb.map(p=>p.id));
+        const mesclados=fb.map(pFB=>{
+          const pL=localArr.find(p=>p.id===pFB.id);
           if(!pL) return pFB;
           const rondasFB=pFB.rondas||[];
           const rondasL=pL.rondas||[];
@@ -59,9 +61,16 @@
             ckState: Object.keys(pL.ckState||{}).length>=Object.keys(pFB.ckState||{}).length ? (pL.ckState||{}) : (pFB.ckState||{})
           };
         });
+        // IMPORTANTE: plantões que existem SÓ localmente (ex: um vigia acabou de
+        // iniciar um plantão em outro local, e essa gravação ainda não chegou na
+        // nuvem) NUNCA podem ser descartados aqui — senão o plantão "some" caso
+        // a versão da nuvem seja considerada mais recente nessa sincronização.
+        const somenteLocais=localArr.filter(p=>!idsNaFB.has(p.id));
+        return[...mesclados,...somenteLocais];
       }
       return fb;
     }
+    window.mesclar=mesclar;
 
     window._fbSet=function(k,v){
       try{
@@ -73,6 +82,33 @@
           ts:firebase.firestore.FieldValue.serverTimestamp()
         });
       }catch(e){console.warn('fbSet erro:',e.message);return Promise.reject(e);}
+    };
+
+    // Gravação ATÔMICA para coleções onde mais de um dispositivo pode criar
+    // registros ao mesmo tempo (cada vigia inicia seu próprio plantão, cada
+    // morador faz seu próprio pré-cadastro etc). Usa transação de verdade do
+    // Firestore: lê o estado mais atual, mescla com o que esse dispositivo
+    // quer gravar, e escreve — tudo em uma operação só. Se outro dispositivo
+    // escrever no meio do caminho, o Firestore detecta e tenta de novo
+    // sozinho, garantindo que nenhum dos dois lados perca dados.
+    window._fbSetTransacional=function(k,vLocal,funcaoMesclagem){
+      try{
+        const docRef=db.collection('rondamaster').doc(k);
+        return db.runTransaction(async transacao=>{
+          const snap=await transacao.get(docRef);
+          let remoto=null;
+          if(snap.exists){
+            const d=snap.data();
+            if(d&&d.dados){try{remoto=JSON.parse(d.dados);}catch(e){remoto=null;}}
+          }
+          const mesclado=funcaoMesclagem(vLocal,remoto);
+          const dados=limparParaFB(k,mesclado);
+          const json=JSON.stringify(dados);
+          if(json.length>900000){throw new Error('dado_grande');}
+          transacao.set(docRef,{dados:json,ts:firebase.firestore.FieldValue.serverTimestamp()});
+          return mesclado;
+        });
+      }catch(e){console.warn('fbSetTransacional erro:',e.message);return Promise.reject(e);}
     };
 
     window._fbGet=async function(k){
@@ -1477,14 +1513,60 @@ setInterval(()=>{
 // dispositivo detectar internet novamente (evento 'online' ou verificação
 // periódica), o sistema tenta reenviar tudo sozinho, sem o usuário precisar
 // fazer nada.
+// Coleções onde MAIS DE UM dispositivo pode criar registros novos ao mesmo
+// tempo (cada vigia inicia seu próprio plantão, cada morador faz seu próprio
+// pré-cadastro etc.). Nessas, gravar "por cima" sem checar a nuvem primeiro
+// pode apagar o que outro dispositivo acabou de escrever — porque cada
+// gravação aqui substitui o documento inteiro, não faz mescla no servidor.
+const _COLECOES_MULTI_GRAVADOR=['plantoes','solicitacoes_troca','pre_cadastros','solicitacoes_cadastro','alertas_emergencia'];
+function _unirPorId(base,incluir){
+  if(!Array.isArray(incluir))return base;
+  if(!Array.isArray(base))return incluir;
+  const idsBase=new Set(base.map(x=>x&&x.id));
+  const somenteEmIncluir=incluir.filter(x=>x&&!idsBase.has(x.id));
+  return somenteEmIncluir.length?[...base,...somenteEmIncluir]:base;
+}
 function _syncFirebase(k,v){
   if(!window._fbSet)return; // Firebase não configurado neste carregamento
   if(!navigator.onLine){
     _marcarPendente(k);
     return;
   }
+  if(_COLECOES_MULTI_GRAVADOR.includes(k)&&window._fbGet){
+    _syncFirebaseComMerge(k,v);
+    return;
+  }
   try{
     const resultado=window._fbSet(k,v);
+    if(resultado&&typeof resultado.then==='function'){
+      resultado.then(()=>_desmarcarPendente(k)).catch(()=>_marcarPendente(k));
+    }
+  }catch(e){_marcarPendente(k);}
+}
+async function _syncFirebaseComMerge(k,v){
+  const funcaoMesclagem=(local,remoto)=>{
+    if(!Array.isArray(remoto))return local;
+    return(k==='plantoes'&&window.mesclar)?window.mesclar('plantoes',remoto,local):_unirPorId(local,remoto);
+  };
+  try{
+    if(window._fbSetTransacional){
+      // Caminho atômico de verdade: lê + mescla + grava numa transação só do
+      // Firestore. Se outro dispositivo gravar no meio do caminho, o próprio
+      // Firestore repete a operação sozinho — nenhum dos dois lados perde dado.
+      await window._fbSetTransacional(k,v,funcaoMesclagem);
+      _desmarcarPendente(k);
+      return;
+    }
+  }catch(e){/* se a transação falhar (ex: SDK antigo sem suporte), cai no caminho abaixo */}
+  // Caminho de reserva (sem suporte a transação): ler o estado atual, mesclar
+  // e gravar em duas etapas — reduz bastante o risco, mas não é 100% atômico.
+  let paraEnviar=v;
+  try{
+    const remotoAgora=await Promise.race([window._fbGet(k),new Promise(r=>setTimeout(()=>r(null),4000))]);
+    if(Array.isArray(remotoAgora))paraEnviar=funcaoMesclagem(v,remotoAgora);
+  }catch(e){}
+  try{
+    const resultado=window._fbSet(k,paraEnviar);
     if(resultado&&typeof resultado.then==='function'){
       resultado.then(()=>_desmarcarPendente(k)).catch(()=>_marcarPendente(k));
     }
