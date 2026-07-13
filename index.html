@@ -36,9 +36,25 @@
     // Mescla dados do Firebase com fotos do localStorage local
     function mesclar(k,fb,local){
       if(k==='plantoes'&&Array.isArray(fb)){
-        return fb.map(pFB=>{
-          const pL=(local||[]).find(p=>p.id===pFB.id);
-          if(!pL) return pFB;
+        const localArr=local||[];
+        // Lista de IDs que foram INTENCIONALMENTE apagados por aqui (excluir
+        // relatório individual ou "Limpar"). Sem isso, um relatório apagado
+        // "renascia" na próxima sincronização — porque a mesclagem, ao ver
+        // que a nuvem ainda tinha aquele registro (exclusão não chegou lá
+        // ainda) e o local não tinha mais, devolvia de volta a versão da
+        // nuvem, pensando que era um registro novo vindo de outro aparelho.
+        let excluidos=[];
+        try{
+          excluidos=JSON.parse(localStorage.getItem('rm_itens_excluidos')||'[]')
+            .filter(e=>e.colecao==='plantoes').map(e=>e.id);
+        }catch(e){}
+        const idsNaFB=new Set(fb.map(p=>p.id));
+        const mesclados=fb.map(pFB=>{
+          const pL=localArr.find(p=>p.id===pFB.id);
+          if(!pL){
+            if(excluidos.includes(pFB.id))return null; // apagado de propósito — não ressuscitar
+            return pFB;
+          }
           const rondasFB=pFB.rondas||[];
           const rondasL=pL.rondas||[];
           const portariaFB=pFB.portaria||[];
@@ -47,6 +63,12 @@
           const ckL=pL.checklist||null;
           const obsFB=(ckFB&&Array.isArray(ckFB.obs))?ckFB.obs.length:0;
           const obsL=(ckL&&Array.isArray(ckL.obs))?ckL.obs.length:0;
+          // Encerramento é uma via de mão única: um plantão nunca volta a ficar
+          // "aberto" depois de fechado. Se QUALQUER um dos lados já tem `fim`
+          // marcado, o resultado da mesclagem tem que continuar fechado — senão
+          // o admin vê o plantão como "não encerrado" mesmo depois do vigia
+          // ter encerrado de verdade (é exatamente isso que estava acontecendo).
+          const ladoQueFechou=pL.fim?pL:(pFB.fim?pFB:null);
           return{...pFB,
             fotos:(pL.fotos||[]).length?(pL.fotos):(pFB.fotos||[]),
             fotoRostoEntrada:pL.fotoRostoEntrada||null,
@@ -56,12 +78,26 @@
             portaria: portariaL.length>=portariaFB.length ? portariaL : portariaFB,
             rondas: rondasL.length>=rondasFB.length ? rondasL : rondasFB,
             checklist: !ckL ? ckFB : (!ckFB ? ckL : (obsL>=obsFB ? ckL : ckFB)),
-            ckState: Object.keys(pL.ckState||{}).length>=Object.keys(pFB.ckState||{}).length ? (pL.ckState||{}) : (pFB.ckState||{})
+            ckState: Object.keys(pL.ckState||{}).length>=Object.keys(pFB.ckState||{}).length ? (pL.ckState||{}) : (pFB.ckState||{}),
+            fim: pL.fim||pFB.fim||null,
+            saidaAntecipada: ladoQueFechou?ladoQueFechou.saidaAntecipada:(pFB.saidaAntecipada||pL.saidaAntecipada||false),
+            motivoSaida: ladoQueFechou?ladoQueFechou.motivoSaida:(pFB.motivoSaida||pL.motivoSaida||null),
+            encerradoPeloAdmin: !!(pFB.encerradoPeloAdmin||pL.encerradoPeloAdmin),
+            motivoAdmin: pFB.motivoAdmin||pL.motivoAdmin||null,
+            horaPrevistaSaida: pFB.horaPrevistaSaida||pL.horaPrevistaSaida||null,
+            obsAdmin: (pL.obsAdmin||[]).length>=(pFB.obsAdmin||[]).length ? (pL.obsAdmin||[]) : (pFB.obsAdmin||[])
           };
         });
+        // IMPORTANTE: plantões que existem SÓ localmente (ex: um vigia acabou de
+        // iniciar um plantão em outro local, e essa gravação ainda não chegou na
+        // nuvem) NUNCA podem ser descartados aqui — senão o plantão "some" caso
+        // a versão da nuvem seja considerada mais recente nessa sincronização.
+        const somenteLocais=localArr.filter(p=>!idsNaFB.has(p.id));
+        return[...mesclados.filter(p=>p!==null),...somenteLocais];
       }
       return fb;
     }
+    window.mesclar=mesclar;
 
     window._fbSet=function(k,v){
       try{
@@ -75,6 +111,33 @@
       }catch(e){console.warn('fbSet erro:',e.message);return Promise.reject(e);}
     };
 
+    // Gravação ATÔMICA para coleções onde mais de um dispositivo pode criar
+    // registros ao mesmo tempo (cada vigia inicia seu próprio plantão, cada
+    // morador faz seu próprio pré-cadastro etc). Usa transação de verdade do
+    // Firestore: lê o estado mais atual, mescla com o que esse dispositivo
+    // quer gravar, e escreve — tudo em uma operação só. Se outro dispositivo
+    // escrever no meio do caminho, o Firestore detecta e tenta de novo
+    // sozinho, garantindo que nenhum dos dois lados perca dados.
+    window._fbSetTransacional=function(k,vLocal,funcaoMesclagem){
+      try{
+        const docRef=db.collection('rondamaster').doc(k);
+        return db.runTransaction(async transacao=>{
+          const snap=await transacao.get(docRef);
+          let remoto=null;
+          if(snap.exists){
+            const d=snap.data();
+            if(d&&d.dados){try{remoto=JSON.parse(d.dados);}catch(e){remoto=null;}}
+          }
+          const mesclado=funcaoMesclagem(vLocal,remoto);
+          const dados=limparParaFB(k,mesclado);
+          const json=JSON.stringify(dados);
+          if(json.length>900000){throw new Error('dado_grande');}
+          transacao.set(docRef,{dados:json,ts:firebase.firestore.FieldValue.serverTimestamp()});
+          return mesclado;
+        });
+      }catch(e){console.warn('fbSetTransacional erro:',e.message);return Promise.reject(e);}
+    };
+
     window._fbGet=async function(k){
       try{
         const snap=await db.collection('rondamaster').doc(k).get();
@@ -82,10 +145,15 @@
           const d=snap.data();
           if(d&&d.dados){
             const fb=JSON.parse(d.dados);
+            const tsMillis=(d.ts&&typeof d.ts.toMillis==='function')?d.ts.toMillis():0;
+            let resultado;
             try{
               const loc=JSON.parse(localStorage.getItem('rm_'+k)||'[]');
-              return mesclar(k,fb,loc);
-            }catch(e){return fb;}
+              resultado=mesclar(k,fb,loc);
+            }catch(e){resultado=fb;}
+            // Anexa o horário da última gravação na nuvem (não entra no JSON, só ajuda a decidir qual versão é mais nova)
+            try{ Object.defineProperty(resultado,'_remoteTs',{value:tsMillis,enumerable:false}); }catch(e){}
+            return resultado;
           }
         }
       }catch(e){console.warn('fbGet erro ('+k+'):',e.message);}
@@ -201,6 +269,14 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var
 .login-box{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:24px;width:100%;max-width:400px;box-shadow:0 16px 50px rgba(0,0,0,.35);}
 .login-box h2{font-size:18px;font-weight:800;margin-bottom:20px;text-align:center;}
 .ponto-btn{border-radius:16px;padding:22px;text-align:center;border:none;cursor:pointer;width:100%;font-weight:900;font-size:17px;transition:transform .15s ease,box-shadow .15s ease;margin-bottom:12px;}
+
+.btn-emergencia{width:100%;border:none;border-radius:14px;padding:18px;margin-bottom:16px;background:linear-gradient(135deg,#dc2626,#7f1d1d);color:#fff;font-weight:900;font-size:15px;letter-spacing:.5px;cursor:pointer;box-shadow:0 4px 18px rgba(220,38,38,.4);animation:pulseEmergencia 1.8s infinite;}
+.btn-emergencia:active{transform:scale(.97);}
+@keyframes pulseEmergencia{0%,100%{box-shadow:0 4px 18px rgba(220,38,38,.4);}50%{box-shadow:0 4px 26px rgba(220,38,38,.75);}}
+.alerta-banner{position:fixed;top:0;left:0;right:0;z-index:500;background:linear-gradient(135deg,#dc2626,#991b1b);color:#fff;padding:14px 16px;box-shadow:0 4px 20px rgba(0,0,0,.4);animation:pulseEmergencia 1.2s infinite;}
+.alerta-banner .ab-title{font-weight:900;font-size:15px;display:flex;align-items:center;gap:8px;}
+.alerta-banner .ab-info{font-size:12px;opacity:.95;margin-top:4px;}
+.alerta-banner button{margin-top:10px;width:100%;background:#fff;color:#7f1d1d;border:none;border-radius:8px;padding:10px;font-weight:800;font-size:13px;cursor:pointer;}
 .ponto-btn:active{transform:scale(.98);}
 .ponto-btn.entrada{background:linear-gradient(135deg,#065f46,var(--green));color:#fff;box-shadow:0 4px 20px rgba(16,185,129,.3);}
 .ponto-btn.saida{background:linear-gradient(135deg,#7f1d1d,var(--red));color:#fff;box-shadow:0 4px 20px rgba(239,68,68,.28);}
@@ -339,7 +415,7 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var
     </div>
     <button class="btn btn-outline" onclick="abrirCadastroMorador()" style="width:100%;">🏠 Sou morador — Solicitar acesso</button>
 
-    <div class="text-center mt-3 text-xs text-muted">Admin: admin@rm.com / 123456<br>Vigilante: joao@rm.com / 123456</div>
+    <div class="text-center mt-3 text-xs text-muted">Admin: admin@rm.com / 123456<br>Vigilante: joao@rm.com / 123456<br>Morador: morador@rm.com / 123456</div>
   </div>
 </div>
 
@@ -362,6 +438,7 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var
 
 <!-- APP -->
 <div id="app" class="hidden">
+  <div id="alerta-emergencia-banner"></div>
   <div id="topbar">
     <div class="logo">🛡️ Ronda<span>Master</span></div>
     <div style="display:flex;align-items:center;gap:10px;">
@@ -382,6 +459,9 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var
         <div class="stat-box"><div class="stat-val" id="st-plantoes">0</div><div class="stat-lbl">Plantões Hoje</div></div>
         <div class="stat-box"><div class="stat-val" id="st-vigilantes">0</div><div class="stat-lbl">Vigilantes</div></div>
         <div class="stat-box"><div class="stat-val" id="st-relatorios">0</div><div class="stat-lbl">Relatórios</div></div>
+        <div class="stat-box"><div class="stat-val" id="st-moradores">0</div><div class="stat-lbl">Moradores</div></div>
+      </div>
+      <div class="stat-row" style="grid-template-columns:1fr;">
         <div class="stat-box"><div class="stat-val" id="st-saldo" style="font-size:16px;color:var(--green)">R$0</div><div class="stat-lbl">Saldo Mês</div></div>
       </div>
       <div class="card">
@@ -728,6 +808,9 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var
 
     <!-- PORTAL DO CLIENTE -->
     <div id="screen-cliente" class="screen">
+      <button class="btn-emergencia" onclick="acionarAlertaEmergencia()">
+        🚨 EMERGÊNCIA — Acionar Alerta
+      </button>
       <div id="cliente-identificacao">
         <div class="card">
           <div class="card-title">👤 Identifique-se</div>
@@ -806,7 +889,7 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var
     <!-- MORADORES / ACESSO DE CLIENTES (Admin) -->
     <div id="screen-moradores" class="screen">
       <button class="back-link" onclick="irPara('screen-dashboard')">← Voltar ao Início</button>
-      <div class="section-header"><h2>🏠 Acesso de Moradores</h2>
+      <div class="section-header"><h2>🏠 Acesso de Moradores <span id="badge-total-moradores" class="badge badge-teal" style="margin-left:6px;">0</span></h2>
         <div style="display:flex;gap:6px;">
           <button class="btn btn-outline btn-sm" onclick="sincronizarDadosAdmin().then(()=>{renderMoradoresAdmin();toast('🔄 Atualizado!');})" title="Buscar novidades">🔄</button>
           <button class="btn btn-outline btn-sm" onclick="limparSolicitacoesMoradores()" style="color:var(--red);border-color:var(--red);" title="Limpar solicitações pendentes">🗑️</button>
@@ -1227,6 +1310,10 @@ const DB={
       Object.keys(localStorage).filter(k=>k.startsWith('rm_fotos_rascunho_')).forEach(k=>localStorage.removeItem(k));
       try{localStorage.setItem('rm_'+k,JSON.stringify(v));}catch(e2){}
     }
+    // Marcar quando essa coleção foi alterada aqui — usado para decidir,
+    // em sincronizações futuras, se a versão local é mais nova que a da nuvem
+    // (evita que uma exclusão feita aqui seja "desfeita" por um dado antigo remoto)
+    try{localStorage.setItem('rm_ts_'+k,Date.now().toString());}catch(e){}
     // Firebase: enviar agora se online; se falhar/offline, entra na fila pendente
     _syncFirebase(k,v);
   },
@@ -1244,10 +1331,8 @@ const DB={
           new Promise(r=>setTimeout(()=>r(null),4000))
         ]);
         if(v!==null){
-          // Comparar: usar Firebase só se tiver mais dados que o local
           const local=CACHE[k]||[];
-          const usarFB=Array.isArray(v)?(v.length>=local.length):true;
-          if(usarFB){
+          if(_deveUsarRemoto(k,v,local)){
             CACHE[k]=v;
             localStorage.setItem('rm_'+k,JSON.stringify(v));
           }
@@ -1257,10 +1342,195 @@ const DB={
     return CACHE[k]||[];
   },
   async loadAll(){
-    const cols=['usuarios','vigilantes','contratantes','escala','plantoes','financeiro','equipamentos','itens_veiculo','veiculos','solicitacoes_troca','pre_cadastros','solicitacoes_cadastro'];
+    const cols=['usuarios','vigilantes','contratantes','escala','plantoes','financeiro','equipamentos','itens_veiculo','veiculos','solicitacoes_troca','pre_cadastros','solicitacoes_cadastro','alertas_emergencia','itens_excluidos'];
     cols.forEach(k=>{try{const v=localStorage.getItem('rm_'+k);if(v)CACHE[k]=JSON.parse(v);}catch(e){} });
   }
 };
+
+// ═══════════════════════════════════════════
+// DECISÃO: usar dado local ou da nuvem?
+// ═══════════════════════════════════════════
+// Antes usávamos "quem tem mais itens" para decidir — mas isso desfazia
+// exclusões (uma lista limpa fica menor de propósito, e a nuvem "vencia"
+// por ter mais itens). Agora comparamos por DATA DA ÚLTIMA ALTERAÇÃO:
+// quem mudou por último manda, não importa o tamanho.
+function _tsLocal(k){
+  try{return parseInt(localStorage.getItem('rm_ts_'+k)||'0',10);}catch(e){return 0;}
+}
+function _deveUsarRemoto(k,arrRemoto,arrLocal){
+  if(!Array.isArray(arrRemoto))return false;
+  const remoteTs=arrRemoto._remoteTs||0;
+  const localTs=_tsLocal(k);
+  if(remoteTs>0&&localTs>0){
+    return remoteTs>localTs; // quem alterou por último vence, mesmo que tenha menos itens
+  }
+  // Sem timestamp confiável de um dos dois lados (caso raro) — usa o maior como antes, por segurança
+  return arrRemoto.length>=((arrLocal||[]).length);
+}
+
+// ═══════════════════════════════════════════
+// ALERTA DE EMERGÊNCIA (botão de pânico do morador)
+// ═══════════════════════════════════════════
+// IMPORTANTE (leia antes de confiar cegamente neste recurso):
+// O alarme sonoro/vibração/notificação SÓ dispara enquanto o navegador
+// consegue rodar o JavaScript da página — ou seja, com o app aberto (em
+// primeiro ou segundo plano, mas ainda "vivo"). Se o celular estiver com a
+// tela apagada por muito tempo ou o navegador for fechado/o sistema
+// operacional suspender a aba (comum em iPhone, e no Android após alguns
+// minutos), o alarme NÃO dispara. Não existe, hoje, garantia de notificação
+// com o app 100% fechado — isso exigiria notificação push de verdade
+// (infraestrutura de servidor separada). Oriente o vigia a manter o app
+// aberto e a tela ligada durante o plantão.
+let _audioCtxAlerta=null;
+let _sireneAtiva=false;
+let _osciladoresSirene=[];
+let _alertaAtualId=null;
+let _vibracaoInterval=null;
+let _sireneTimeout=null;
+
+function _iniciarSirene(){
+  if(_sireneAtiva)return;
+  _sireneAtiva=true;
+  try{
+    if(!_audioCtxAlerta) _audioCtxAlerta=new (window.AudioContext||window.webkitAudioContext)();
+    const ctx=_audioCtxAlerta;
+    if(ctx.state==='suspended') ctx.resume();
+    const tocarBip=(freq,inicio,duracao)=>{
+      const osc=ctx.createOscillator();
+      const gain=ctx.createGain();
+      osc.type='square';
+      osc.frequency.value=freq;
+      gain.gain.setValueAtTime(0.18,ctx.currentTime+inicio);
+      osc.connect(gain);gain.connect(ctx.destination);
+      osc.start(ctx.currentTime+inicio);
+      osc.stop(ctx.currentTime+inicio+duracao);
+      _osciladoresSirene.push(osc);
+    };
+    // Padrão de sirene: dois tons alternados, em loop
+    const loop=()=>{
+      if(!_sireneAtiva)return;
+      tocarBip(880,0,0.35);
+      tocarBip(660,0.4,0.35);
+      _osciladoresSirene=_osciladoresSirene.filter(o=>o);
+      _sireneTimeout=setTimeout(loop,850);
+    };
+    loop();
+  }catch(e){console.warn('Não foi possível iniciar o som do alerta:',e.message);}
+  // Vibração contínua (funciona em navegadores Android; iOS/Safari não suporta)
+  if(navigator.vibrate){
+    navigator.vibrate([500,200,500,200,500,800]);
+    _vibracaoInterval=setInterval(()=>{if(_sireneAtiva)navigator.vibrate([500,200,500,200,500,800]);},2200);
+  }
+}
+function _pararSirene(){
+  _sireneAtiva=false;
+  if(_sireneTimeout){clearTimeout(_sireneTimeout);_sireneTimeout=null;}
+  if(_vibracaoInterval){clearInterval(_vibracaoInterval);_vibracaoInterval=null;}
+  if(navigator.vibrate)navigator.vibrate(0);
+}
+
+function _pedirPermissaoNotificacao(){
+  if('Notification' in window && Notification.permission==='default'){
+    Notification.requestPermission().catch(()=>{});
+  }
+}
+function _dispararNotificacaoOS(titulo,corpo){
+  try{
+    if('Notification' in window && Notification.permission==='granted'){
+      const n=new Notification(titulo,{body:corpo,requireInteraction:true,tag:'rondamaster-emergencia'});
+      n.onclick=()=>{window.focus();};
+    }
+  }catch(e){}
+}
+
+// ── Morador aciona o alerta ──
+function acionarAlertaEmergencia(){
+  if(!confirm('🚨 Confirma o acionamento do alerta de emergência?\n\nIsso vai avisar imediatamente o administrador e o vigia de plantão no seu local.'))return;
+  const cont=DB.get('contratantes').find(c=>c.id===U.contratanteId);
+  const nome=(clienteIdentificacao&&clienteIdentificacao.nome)||U.nome;
+  const telefone=(clienteIdentificacao&&clienteIdentificacao.telefone)||U.telefone||'';
+  const alerta={
+    id:'ae'+Date.now(),
+    contratanteId:U.contratanteId,
+    contratanteNome:cont?cont.nome:'—',
+    moradorNome:nome,
+    moradorTelefone:telefone,
+    moradorEndereco:(U.endereco||cont?.nome||''),
+    status:'ativo',
+    criadoEm:new Date().toISOString(),
+    atendidoPor:null,atendidoEm:null
+  };
+  const lista=DB.get('alertas_emergencia');
+  lista.push(alerta);
+  DB.set('alertas_emergencia',lista);
+  toast('🚨 Alerta enviado! Administrador e vigia foram avisados.');
+}
+window.acionarAlertaEmergencia=acionarAlertaEmergencia;
+
+// ── Admin/Vigia recebem o alerta ──
+function _alertasRelevantes(){
+  const ativos=DB.get('alertas_emergencia').filter(a=>a.status==='ativo');
+  if(!U)return[];
+  if(U.perfil==='admin'||U.perfil==='gerente')return ativos; // admin vê tudo
+  if(U.perfil==='vigilante'&&plantaoAtivo){
+    // vigia só vê alertas do local onde está de plantão agora
+    return ativos.filter(a=>a.contratanteNome===plantaoAtivo.contratanteNome);
+  }
+  return[];
+}
+function verificarAlertasEmergencia(){
+  if(!U||(U.perfil!=='admin'&&U.perfil!=='gerente'&&U.perfil!=='vigilante'))return;
+  const relevantes=_alertasRelevantes();
+  const div=document.getElementById('alerta-emergencia-banner');
+  if(!div)return;
+  if(!relevantes.length){
+    div.innerHTML='';
+    _pararSirene();
+    _alertaAtualId=null;
+    return;
+  }
+  const a=relevantes[relevantes.length-1]; // o mais recente
+  if(_alertaAtualId!==a.id){
+    _alertaAtualId=a.id;
+    _iniciarSirene();
+    _dispararNotificacaoOS('🚨 Alerta de emergência — '+a.moradorNome,a.contratanteNome+' · '+fmtH(a.criadoEm));
+  }
+  div.innerHTML=`<div class="alerta-banner">
+    <div class="ab-title">🚨 ALERTA DE EMERGÊNCIA${relevantes.length>1?' ('+relevantes.length+')':''}</div>
+    <div class="ab-info">👤 ${a.moradorNome}${a.moradorTelefone?' · 📱 '+a.moradorTelefone:''}<br>🏢 ${a.contratanteNome} · ⏰ ${fmtH(a.criadoEm)}</div>
+    <button onclick="atenderAlertaEmergencia('${a.id}')">✅ Já estou atendendo / Encerrar alerta</button>
+  </div>`;
+}
+function atenderAlertaEmergencia(id){
+  const lista=DB.get('alertas_emergencia').map(a=>a.id===id?{...a,status:'atendido',atendidoPor:U.nome,atendidoEm:new Date().toISOString()}:a);
+  DB.set('alertas_emergencia',lista);
+  _pararSirene();
+  _alertaAtualId=null;
+  verificarAlertasEmergencia();
+  toast('✅ Alerta encerrado.');
+}
+window.atenderAlertaEmergencia=atenderAlertaEmergencia;
+window.verificarAlertasEmergencia=verificarAlertasEmergencia;
+
+// Verificação rápida (a cada 6s) — mais frequente que a sincronização geral,
+// porque emergência não pode esperar 20 segundos
+setInterval(()=>{
+  if(!U)return;
+  if(navigator.onLine&&window._fbGet){
+    window._fbGet('alertas_emergencia').then(v=>{
+      if(v!==null){
+        const local=CACHE['alertas_emergencia']||[];
+        if(_deveUsarRemoto('alertas_emergencia',v,local)){
+          CACHE['alertas_emergencia']=v;
+          try{localStorage.setItem('rm_alertas_emergencia',JSON.stringify(v));}catch(e){}
+        }
+      }
+      verificarAlertasEmergencia();
+    }).catch(()=>verificarAlertasEmergencia());
+  } else {
+    verificarAlertasEmergencia();
+  }
+},6000);
 
 // ═══════════════════════════════════════════
 // FILA DE SINCRONIZAÇÃO OFFLINE
@@ -1270,14 +1540,103 @@ const DB={
 // dispositivo detectar internet novamente (evento 'online' ou verificação
 // periódica), o sistema tenta reenviar tudo sozinho, sem o usuário precisar
 // fazer nada.
+// Coleções onde MAIS DE UM dispositivo pode criar registros novos ao mesmo
+// tempo (cada vigia inicia seu próprio plantão, cada morador faz seu próprio
+// pré-cadastro etc.). Nessas, gravar "por cima" sem checar a nuvem primeiro
+// pode apagar o que outro dispositivo acabou de escrever — porque cada
+// gravação aqui substitui o documento inteiro, não faz mescla no servidor.
+const _COLECOES_MULTI_GRAVADOR=['plantoes','solicitacoes_troca','pre_cadastros','solicitacoes_cadastro','alertas_emergencia','itens_excluidos','usuarios'];
+// Registro genérico de exclusões intencionais (usado por pré-cadastros e
+// solicitações de moradores). Sem isso, apagar um item que a nuvem ainda não
+// tinha recebido a exclusão fazia ele "renascer" na sincronização seguinte —
+// a mesma causa raiz do bug corrigido para os plantões, só que noutras telas.
+function _registrarExclusao(colecao,ids){
+  let excluidos=[];
+  try{excluidos=JSON.parse(localStorage.getItem('rm_itens_excluidos')||'[]');}catch(e){}
+  const agora=new Date().toISOString();
+  ids.forEach(id=>{if(!excluidos.some(e=>e.colecao===colecao&&e.id===id))excluidos.push({colecao,id,excluidoEm:agora});});
+  DB.set('itens_excluidos',excluidos);
+}
+function _idsExcluidos(colecao){
+  let excluidos=[];
+  try{excluidos=JSON.parse(localStorage.getItem('rm_itens_excluidos')||'[]');}catch(e){}
+  return excluidos.filter(e=>e.colecao===colecao).map(e=>e.id);
+}
+function _unirPorId(colecao,base,incluir){
+  if(!Array.isArray(incluir))return base;
+  if(!Array.isArray(base))return incluir;
+  const excluidos=new Set(_idsExcluidos(colecao));
+  const idsBase=new Set(base.map(x=>x&&x.id));
+  const somenteEmIncluir=incluir.filter(x=>x&&!idsBase.has(x.id)&&!excluidos.has(x.id));
+  return somenteEmIncluir.length?[...base,...somenteEmIncluir]:base;
+}
+// Mesclagem especial para USUÁRIOS (login e senha de todo mundo): diferente
+// das outras coleções, aqui não basta "juntar tudo" — se o MESMO usuário foi
+// alterado nos dois lados (ex: senha trocada no computador, e o celular do
+// vigia, desatualizado, cadastra um vigilante novo ao mesmo tempo), o
+// resultado tem que ficar com a alteração mais recente DAQUELE usuário
+// específico — não a lista inteira de um lado ou de outro. Sem isso, uma
+// ação totalmente sem relação (cadastrar vigilante) podia reverter uma
+// senha trocada em outro aparelho, travando o login.
+function mesclarUsuarios(local,remoto){
+  if(!Array.isArray(remoto))return local;
+  if(!Array.isArray(local))return remoto;
+  const excluidos=new Set(_idsExcluidos('usuarios'));
+  const porId={};
+  remoto.forEach(u=>{if(u&&u.id&&!excluidos.has(u.id))porId[u.id]=u;});
+  local.forEach(u=>{
+    if(!u||!u.id||excluidos.has(u.id))return;
+    const existente=porId[u.id];
+    if(!existente){porId[u.id]=u;return;}
+    const tsLocal=u.atualizadoEm?new Date(u.atualizadoEm).getTime():0;
+    const tsRemoto=existente.atualizadoEm?new Date(existente.atualizadoEm).getTime():0;
+    porId[u.id]=(tsLocal>=tsRemoto)?u:existente;
+  });
+  return Object.values(porId);
+}
 function _syncFirebase(k,v){
   if(!window._fbSet)return; // Firebase não configurado neste carregamento
   if(!navigator.onLine){
     _marcarPendente(k);
     return;
   }
+  if(_COLECOES_MULTI_GRAVADOR.includes(k)&&window._fbGet){
+    _syncFirebaseComMerge(k,v);
+    return;
+  }
   try{
     const resultado=window._fbSet(k,v);
+    if(resultado&&typeof resultado.then==='function'){
+      resultado.then(()=>_desmarcarPendente(k)).catch(()=>_marcarPendente(k));
+    }
+  }catch(e){_marcarPendente(k);}
+}
+async function _syncFirebaseComMerge(k,v){
+  const funcaoMesclagem=(local,remoto)=>{
+    if(!Array.isArray(remoto))return local;
+    if(k==='plantoes'&&window.mesclar)return window.mesclar('plantoes',remoto,local);
+    if(k==='usuarios')return mesclarUsuarios(local,remoto);
+    return _unirPorId(k,local,remoto);
+  };
+  try{
+    if(window._fbSetTransacional){
+      // Caminho atômico de verdade: lê + mescla + grava numa transação só do
+      // Firestore. Se outro dispositivo gravar no meio do caminho, o próprio
+      // Firestore repete a operação sozinho — nenhum dos dois lados perde dado.
+      await window._fbSetTransacional(k,v,funcaoMesclagem);
+      _desmarcarPendente(k);
+      return;
+    }
+  }catch(e){/* se a transação falhar (ex: SDK antigo sem suporte), cai no caminho abaixo */}
+  // Caminho de reserva (sem suporte a transação): ler o estado atual, mesclar
+  // e gravar em duas etapas — reduz bastante o risco, mas não é 100% atômico.
+  let paraEnviar=v;
+  try{
+    const remotoAgora=await Promise.race([window._fbGet(k),new Promise(r=>setTimeout(()=>r(null),4000))]);
+    if(Array.isArray(remotoAgora))paraEnviar=funcaoMesclagem(v,remotoAgora);
+  }catch(e){}
+  try{
+    const resultado=window._fbSet(k,paraEnviar);
     if(resultado&&typeof resultado.then==='function'){
       resultado.then(()=>_desmarcarPendente(k)).catch(()=>_marcarPendente(k));
     }
@@ -1337,7 +1696,7 @@ let _sincronizandoAdmin=false;
 async function sincronizarDadosAdmin(silencioso){
   if(!window._fbGet||!navigator.onLine||_sincronizandoAdmin)return;
   _sincronizandoAdmin=true;
-  const colsAdmin=['veiculos','contratantes','vigilantes','escala','itens_veiculo','equipamentos','solicitacoes_troca','plantoes','pre_cadastros','solicitacoes_cadastro','usuarios'];
+  const colsAdmin=['veiculos','contratantes','vigilantes','escala','itens_veiculo','equipamentos','solicitacoes_troca','plantoes','pre_cadastros','solicitacoes_cadastro','usuarios','alertas_emergencia','itens_excluidos'];
   let algoMudou=false;
   try{
     await Promise.all(colsAdmin.map(async k=>{
@@ -1347,7 +1706,7 @@ async function sincronizarDadosAdmin(silencioso){
           const localAtual=CACHE[k]||[];
           // Compara conteúdo (não só tamanho) pra detectar qualquer mudança, inclusive edições
           const mudou=JSON.stringify(v)!==JSON.stringify(localAtual);
-          if(mudou&&v.length>=localAtual.length){
+          if(mudou&&_deveUsarRemoto(k,v,localAtual)){
             CACHE[k]=v;
             localStorage.setItem('rm_'+k,JSON.stringify(v));
             algoMudou=true;
@@ -1417,7 +1776,7 @@ async function initDemo(){
   document.querySelectorAll('.modal-overlay').forEach(m=>m.classList.add('hidden'));
 
   // 3. Carregar localStorage (síncrono, instantâneo) — mostra algo na tela rápido
-  const cols=['usuarios','vigilantes','contratantes','escala','plantoes','financeiro','equipamentos','itens_veiculo','veiculos','solicitacoes_troca','pre_cadastros','solicitacoes_cadastro'];
+  const cols=['usuarios','vigilantes','contratantes','escala','plantoes','financeiro','equipamentos','itens_veiculo','veiculos','solicitacoes_troca','pre_cadastros','solicitacoes_cadastro','alertas_emergencia','itens_excluidos'];
   cols.forEach(k=>{
     try{
       const v=localStorage.getItem('rm_'+k);
@@ -1428,16 +1787,20 @@ async function initDemo(){
   // 4. CRÍTICO: tentar buscar do Firebase ANTES de decidir criar dados padrão.
   //    Isso evita que um dispositivo novo (sem localStorage) sobrescreva os
   //    dados reais da nuvem com um admin "zerado".
+  let _firebaseConfirmadoAtual=false; // só true se realmente confirmamos o estado mais atual da nuvem (sem timeout/erro)
   if(window._fbGet){
     try{
       const usuariosFB=await Promise.race([
         window._fbGet('usuarios'),
         new Promise(r=>setTimeout(()=>r(null),6000))
       ]);
+      if(Array.isArray(usuariosFB)){
+        _firebaseConfirmadoAtual=true; // resposta real da nuvem (não foi timeout)
+      }
       if(Array.isArray(usuariosFB)&&usuariosFB.length){
         // Firebase tem dados reais — usar como fonte da verdade se tiver mais que o local
         const localAtual=CACHE['usuarios']||[];
-        if(usuariosFB.length>=localAtual.length){
+        if(_deveUsarRemoto('usuarios',usuariosFB,localAtual)){
           CACHE['usuarios']=usuariosFB;
           localStorage.setItem('rm_usuarios',JSON.stringify(usuariosFB));
         }
@@ -1451,8 +1814,7 @@ async function initDemo(){
             ]);
             if(v!==null){
               const local=CACHE[k]||[];
-              const usar=Array.isArray(v)?(v.length>=local.length):true;
-              if(usar){CACHE[k]=v;localStorage.setItem('rm_'+k,JSON.stringify(v));}
+              if(_deveUsarRemoto(k,v,local)){CACHE[k]=v;localStorage.setItem('rm_'+k,JSON.stringify(v));}
             }
           }catch(e){}
         }));
@@ -1466,7 +1828,9 @@ async function initDemo(){
   //    criar o admin padrão. Isso só acontece na primeiríssima vez do sistema.
   const usuarios=DB.get('usuarios');
   if(!usuarios.length){
-    DB.set('usuarios',[{id:'u1',nome:'Administrador',email:'admin@rm.com',senha:'123456',perfil:'admin'}]);
+    DB.set('usuarios',[
+      {id:'u1',nome:'Administrador',email:'admin@rm.com',senha:'123456',perfil:'admin',atualizadoEm:new Date().toISOString()}
+    ]);
     DB.set('equipamentos',[
       {id:'eq1',nome:'🔦 Lanterna'},{id:'eq2',nome:'🔧 Ferramentas'},
       {id:'eq3',nome:'📡 Rádio / Comunicação'},{id:'eq4',nome:'🦺 Colete / EPI'}
@@ -1477,6 +1841,27 @@ async function initDemo(){
       {id:'iv5',nome:'🔦 Lanternas'}
     ]);
     console.log('⚠️ Nenhum usuário encontrado (local ou nuvem) — admin padrão criado.');
+  }
+
+  // 5b. Garantir que o LOGIN DE TESTE DO MORADOR sempre exista — mesmo em
+  //     sistemas que já tinham admin/vigilantes cadastrados antes dessa
+  //     função existir. Roda toda vez, mas só cria se ainda não existir —
+  //     e SÓ quando confirmamos que estamos vendo o estado mais atual da
+  //     nuvem (evita gravar por cima com uma cópia local desatualizada,
+  //     o que já causou perda de senha alterada em outro dispositivo).
+  if(_firebaseConfirmadoAtual&&!DB.get('usuarios').find(u=>u.email==='morador@rm.com')){
+    if(!DB.get('contratantes').find(c=>c.id==='c_exemplo')){
+      DB.set('contratantes',[...DB.get('contratantes'),
+        {id:'c_exemplo',nome:'Residencial Modelo (exemplo)',contato:'',locais:'Portaria Principal',valor:0}
+      ]);
+    }
+    DB.set('usuarios',[...DB.get('usuarios'),
+      {id:'u_morador_exemplo',nome:'Morador Exemplo',email:'morador@rm.com',senha:'123456',perfil:'cliente',
+        contratanteId:'c_exemplo',contratanteNome:'Residencial Modelo (exemplo)',
+        cpf:'000.000.000-00',telefone:'(00) 00000-0000',endereco:'Apto Exemplo',
+        atualizadoEm:new Date().toISOString()}
+    ]);
+    console.log('✅ Login de teste do morador criado (morador@rm.com).');
   }
 
   // 6. O retomar de plantão é feito de forma individual, por vigilante, direto no login
@@ -1499,8 +1884,7 @@ async function initDemo(){
         ]);
         if(v!==null){
           const local=CACHE[k]||[];
-          const usar=Array.isArray(v)?(v.length>=local.length):true;
-          if(usar){CACHE[k]=v;localStorage.setItem('rm_'+k,JSON.stringify(v));}
+          if(_deveUsarRemoto(k,v,local)){CACHE[k]=v;localStorage.setItem('rm_'+k,JSON.stringify(v));}
         }
       }catch(e){}
     });
@@ -1623,7 +2007,7 @@ function fazerLogin(){
   const senha=document.getElementById('login-senha').value;
 
   // Garantir que os dados do localStorage estão no CACHE antes de validar
-  ['usuarios','vigilantes','contratantes','escala','plantoes','financeiro','equipamentos','itens_veiculo','veiculos','solicitacoes_troca','pre_cadastros','solicitacoes_cadastro'].forEach(k=>{
+  ['usuarios','vigilantes','contratantes','escala','plantoes','financeiro','equipamentos','itens_veiculo','veiculos','solicitacoes_troca','pre_cadastros','solicitacoes_cadastro','alertas_emergencia','itens_excluidos'].forEach(k=>{
     if(CACHE[k]===undefined){
       try{const v=localStorage.getItem('rm_'+k);if(v)CACHE[k]=JSON.parse(v);}catch(e){}
     }
@@ -1639,6 +2023,10 @@ function fazerLogin(){
   document.getElementById('tb-perfil').textContent=perfilLabel;
   montarNav();
   sincronizarDadosAdmin(true); // busca dados novos da nuvem em segundo plano, sem re-renderizar nada ainda
+  if(u.perfil==='admin'||u.perfil==='gerente'||u.perfil==='vigilante'){
+    _pedirPermissaoNotificacao();
+    verificarAlertasEmergencia();
+  }
 
   if(u.perfil==='admin') irPara('screen-dashboard');
   else if(u.perfil==='cliente'){
@@ -1776,6 +2164,9 @@ function atualizarDashboard(){
   document.getElementById('st-relatorios').textContent=plantoes.filter(p=>p.fim).length;
   const saldo=rec-pago;
   document.getElementById('st-saldo').textContent=fmtMoeda(saldo);
+  const totalMoradores=DB.get('usuarios').filter(u=>u.perfil==='cliente'&&u.cpf).length;
+  const elMor=document.getElementById('st-moradores');
+  if(elMor)elMor.textContent=totalMoradores;
 
   // Alerta de moradores aguardando aprovação
   const moradoresPend=DB.get('solicitacoes_cadastro').filter(s=>s.status==='pendente');
@@ -1870,7 +2261,7 @@ function salvarVigilante(){
   vigs.push({id,nome,email,senha,cpf:document.getElementById('mv-cpf').value,pix:document.getElementById('mv-pix').value,banco:document.getElementById('mv-banco').value,diaria:parseMoeda(document.getElementById('mv-diaria').value),horas:Number(document.getElementById('mv-horas').value)||8,ativo:true});
   DB.set('vigilantes',vigs);
   const us=DB.get('usuarios').filter(x=>x.id!==id);
-  us.push({id,nome,email,senha,perfil:'vigilante'});DB.set('usuarios',us);
+  us.push({id,nome,email,senha,perfil:'vigilante',atualizadoEm:new Date().toISOString()});DB.set('usuarios',us);
   fecharModal('modal-vigilante');renderVigilantes();toast('✅ Vigilante salvo!');
 }
 
@@ -1922,7 +2313,7 @@ function salvarContratante(){
     const emailEmUso=DB.get('usuarios').find(u=>u.email===clienteEmail&&!(u.perfil==='cliente'&&u.contratanteId===id));
     if(emailEmUso){toast('⚠️ Esse e-mail já está em uso por outro usuário');return;}
     const usuarios=DB.get('usuarios').filter(u=>!(u.perfil==='cliente'&&u.contratanteId===id));
-    usuarios.push({id:'ucli'+id,nome,email:clienteEmail,senha:clienteSenha,perfil:'cliente',contratanteId:id});
+    usuarios.push({id:'ucli'+id,nome,email:clienteEmail,senha:clienteSenha,perfil:'cliente',contratanteId:id,atualizadoEm:new Date().toISOString()});
     DB.set('usuarios',usuarios);
   }
   fecharModal('modal-contratante');renderContratantes();popularLocais();toast('✅ Contratante salvo!');
@@ -2492,7 +2883,7 @@ function salvarCredenciaisAdmin(){
   if(!email){toast('⚠️ Informe o e-mail');return;}
   if(s1&&s1!==s2){toast('⚠️ Senhas não conferem');return;}
   const us=DB.get('usuarios').map(u=>{
-    if(u.perfil==='admin') return{...u,email,senha:s1||u.senha};
+    if(u.perfil==='admin') return{...u,email,senha:s1||u.senha,atualizadoEm:new Date().toISOString()};
     return u;
   });
   DB.set('usuarios',us);
@@ -2530,6 +2921,7 @@ function editarGerente(id){
 }
 function excluirGerente(id){
   if(!confirm('Excluir este gerente?'))return;
+  _registrarExclusao('usuarios',[id]);
   DB.set('usuarios',DB.get('usuarios').filter(u=>u.id!==id));renderGerentes();toast('🗑️ Gerente excluído!');
 }
 function togglePerm(el){el.classList.toggle('on');}
@@ -2542,7 +2934,7 @@ function salvarGerente(){
   const perms={};
   ['dashboard','escala','relatorios','financeiro','vigilantes','contratantes','veiculos'].forEach(p=>{perms[p]=document.getElementById('perm-'+p).classList.contains('on');});
   const us=DB.get('usuarios').filter(x=>x.id!==id);
-  us.push({id,nome,email,senha,perfil:'gerente',perms});
+  us.push({id,nome,email,senha,perfil:'gerente',perms,atualizadoEm:new Date().toISOString()});
   DB.set('usuarios',us);fecharModal('modal-gerente');renderGerentes();toast('✅ Gerente salvo!');
 }
 
@@ -3353,6 +3745,10 @@ function renderMoradoresAdmin(){
   const filtro=filtroEl?filtroEl.value.trim().toLowerCase():'';
   const bate=(...campos)=>!filtro||campos.some(c=>(c||'').toLowerCase().includes(filtro));
 
+  const totalAprovadosBadge=DB.get('usuarios').filter(u=>u.perfil==='cliente'&&u.cpf).length;
+  const badgeEl=document.getElementById('badge-total-moradores');
+  if(badgeEl)badgeEl.textContent=totalAprovadosBadge;
+
   const solicitacoes=DB.get('solicitacoes_cadastro');
   const pendentes=solicitacoes.filter(s=>s.status==='pendente'&&bate(s.nome,s.endereco,s.telefone,s.cpf));
   const divPend=document.getElementById('bloco-moradores-pendentes');
@@ -3430,7 +3826,8 @@ function confirmarAprovacaoMorador(){
   usuarios.push({
     id:'umor'+id,nome:s.nome,email,senha,perfil:'cliente',
     contratanteId,contratanteNome:cont?cont.nome:'—',
-    cpf:s.cpf,telefone:s.telefone,endereco:s.endereco
+    cpf:s.cpf,telefone:s.telefone,endereco:s.endereco,
+    atualizadoEm:new Date().toISOString()
   });
   DB.set('usuarios',usuarios);
 
@@ -3457,6 +3854,7 @@ window.enviarWhatsappMorador=enviarWhatsappMorador;
 
 function negarSolicitacaoMorador(id){
   if(!confirm('Excluir esta solicitação de acesso?'))return;
+  _registrarExclusao('solicitacoes_cadastro',[id]);
   DB.set('solicitacoes_cadastro',DB.get('solicitacoes_cadastro').filter(x=>x.id!==id));
   renderMoradoresAdmin();
   toast('🗑️ Solicitação removida.');
@@ -3506,7 +3904,7 @@ function salvarEdicaoMorador(){
     const email=document.getElementById('em-email').value.trim();
     const senha=document.getElementById('em-senha').value.trim();
     if(!email||!senha){toast('⚠️ Preencha e-mail e senha');return;}
-    const lista=DB.get('usuarios').map(x=>x.id===id?{...x,nome,cpf,telefone,email,senha}:x);
+    const lista=DB.get('usuarios').map(x=>x.id===id?{...x,nome,cpf,telefone,email,senha,atualizadoEm:new Date().toISOString()}:x);
     DB.set('usuarios',lista);
   }
   fecharModal('modal-editar-morador');
@@ -3515,6 +3913,7 @@ function salvarEdicaoMorador(){
 }
 function excluirMoradorAprovado(userId){
   if(!confirm('Remover o acesso deste morador? Ele não vai mais conseguir entrar no sistema.'))return;
+  _registrarExclusao('usuarios',[userId]);
   DB.set('usuarios',DB.get('usuarios').filter(x=>x.id!==userId));
   renderMoradoresAdmin();
   toast('🗑️ Acesso removido.');
@@ -3654,7 +4053,10 @@ function renderRelatoriosPorData(plantoes,divId){
           <div class="li-main" style="width:100%">
             <div class="flex items-center justify-between">
               <div class="li-title">${p.vigilanteNome||p.localNome}</div>
-              <button class="btn btn-primary btn-sm" onclick="verRelatorio('${p.id}')">Ver</button>
+              <div style="display:flex;gap:6px;">
+                <button class="btn btn-primary btn-sm" onclick="verRelatorio('${p.id}')">Ver</button>
+                ${isAdmin?`<button class="btn btn-outline btn-sm btn-icon" style="color:var(--red);border-color:var(--red);" onclick="excluirRelatorio('${p.id}')" title="Apagar este relatório">🗑️</button>`:''}
+              </div>
             </div>
             <div class="li-sub">${isAdmin?(p.localNome+' · '):''}Entrada: ${fmtH(p.inicio)} · Saída: ${fmtH(p.fim)}${p.horaPrevistaSaida?' · Prev: '+p.horaPrevistaSaida:''}</div>
             <div class="mt-1">${s.badge}${isAdmin&&fotos.length?` <span class="badge badge-blue">📷 ${fotos.length} foto${fotos.length!==1?'s':''}</span>`:''}</div>
@@ -3665,6 +4067,17 @@ function renderRelatoriosPorData(plantoes,divId){
     </div>`).join('');
 }
 function renderRelatoriosAdmin(){renderRelatoriosPorData(DB.get('plantoes').filter(p=>p.fim),'lista-relatorios-admin');}
+function excluirRelatorio(id){
+  const p=DB.get('plantoes').find(x=>x.id===id);
+  if(!p)return;
+  if(!confirm(`Apagar o relatório de ${p.vigilanteNome||p.localNome} (${fmtData(p.inicio)})?\n\nEssa ação não pode ser desfeita. Só apague depois de já ter enviado o relatório ao cliente.`))return;
+  _registrarExclusao('plantoes',[id]);
+  DB.set('plantoes',DB.get('plantoes').filter(x=>x.id!==id));
+  renderRelatoriosAdmin();
+  atualizarDashboard();
+  toast('🗑️ Relatório apagado.');
+}
+window.excluirRelatorio=excluirRelatorio;
 function renderMeusRelatorios(){renderRelatoriosPorData(DB.get('plantoes').filter(p=>p.fim&&p.vigilanteId===U.id),'lista-meus-relatorios');}
 function gerarHtmlRelatorio(p, opcoes){
   opcoes=opcoes||{};
@@ -3778,6 +4191,18 @@ function gerarHtmlRelatorio(p, opcoes){
       </div>`).join('')}
     </div>`:'';
 
+  // Alertas de emergência acionados naquele dia/local
+  const alertasPlantao=DB.get('alertas_emergencia').filter(a=>a.contratanteNome===p.contratanteNome&&new Date(a.criadoEm).toDateString()===dataPlantao);
+  const alertasHtml=alertasPlantao.length?`
+    <div style="${S.section}">
+      <h4 style="${S.h4}">🚨 Alertas de Emergência (${alertasPlantao.length})</h4>
+      ${alertasPlantao.map((a,i)=>`<div style="background:${a.status==='atendido'?'#FEF2F2':'#FEE2E2'};border-radius:4px;padding:8px 10px;margin-bottom:4px;border-left:3px solid #DC2626;">
+        <div style="font-weight:700;">#${i+1} Acionado por ${a.moradorNome}${a.moradorTelefone?' · '+a.moradorTelefone:''}</div>
+        <div style="font-size:11px;margin-top:2px;">⏰ Acionado às ${fmtH(a.criadoEm)} em ${fmtData(a.criadoEm)}</div>
+        <div style="font-size:11px;margin-top:2px;">${a.status==='atendido'?'✅ Atendido às '+fmtH(a.atendidoEm)+' por <b>'+a.atendidoPor+'</b>':'⚠️ <b>Ainda não foi atendido</b>'}</div>
+      </div>`).join('')}
+    </div>`:'';
+
   // Observações do administrador
   const obsAdminArr=Array.isArray(p.obsAdmin)?p.obsAdmin:[];
   const obsAdminHtml=obsAdminArr.length?`
@@ -3830,6 +4255,7 @@ function gerarHtmlRelatorio(p, opcoes){
     ${entHtml}
     ${visHtml}
     ${preCadHtml}
+    ${alertasHtml}
     ${obsAdminHtml}
     ${addObsHtml}
     <div style="${S.footer}">RondaMaster · ID: ${id}</div>
@@ -3877,6 +4303,8 @@ function limparLancamentos(){
 }
 function limparVigilantes(){
   if(!confirm('⚠️ Apagar TODOS os vigilantes? Os logins também serão removidos.'))return;
+  const idsApagados=DB.get('usuarios').filter(u=>u.perfil==='vigilante').map(u=>u.id);
+  _registrarExclusao('usuarios',idsApagados);
   const us=DB.get('usuarios').filter(u=>u.perfil!=='vigilante');
   DB.set('usuarios',us);DB.set('vigilantes',[]);renderVigilantes();
   toast('🗑️ Vigilantes apagados.');
@@ -3888,6 +4316,8 @@ function limparContratantes(){
 }
 function limparRelatorios(){
   if(!confirm('⚠️ Apagar TODOS os relatórios e plantões encerrados?'))return;
+  const idsApagados=DB.get('plantoes').filter(p=>p.fim).map(p=>p.id);
+  _registrarExclusao('plantoes',idsApagados);
   DB.set('plantoes',DB.get('plantoes').filter(p=>!p.fim));renderRelatoriosAdmin();
   toast('🗑️ Relatórios apagados.');
 }
@@ -3899,17 +4329,22 @@ function limparEscala(){
 }
 function limparPreCadastros(){
   if(!confirm('⚠️ Apagar TODOS os pré-cadastros de visitantes, entregas e prestadores?'))return;
+  _registrarExclusao('pre_cadastros',DB.get('pre_cadastros').map(p=>p.id));
   DB.set('pre_cadastros',[]);renderPreCadastrosAdmin();
   toast('🗑️ Pré-cadastros apagados.');
 }
 function limparSolicitacoesMoradores(){
   if(!confirm('⚠️ Apagar TODAS as solicitações de acesso pendentes? Isso não afeta moradores já aprovados.'))return;
+  const idsApagados=DB.get('solicitacoes_cadastro').filter(s=>s.status==='pendente').map(s=>s.id);
+  _registrarExclusao('solicitacoes_cadastro',idsApagados);
   DB.set('solicitacoes_cadastro',DB.get('solicitacoes_cadastro').filter(s=>s.status!=='pendente'));
   renderMoradoresAdmin();
   toast('🗑️ Solicitações pendentes apagadas.');
 }
 function limparMoradoresAprovados(){
   if(!confirm('⚠️ ATENÇÃO: isso remove o ACESSO de TODOS os moradores aprovados — ninguém mais vai conseguir entrar com esses logins. Confirma?'))return;
+  const idsApagados=DB.get('usuarios').filter(u=>u.perfil==='cliente'&&u.cpf).map(u=>u.id);
+  _registrarExclusao('usuarios',idsApagados);
   DB.set('usuarios',DB.get('usuarios').filter(u=>!(u.perfil==='cliente'&&u.cpf)));
   renderMoradoresAdmin();
   toast('🗑️ Acesso de todos os moradores removido.');
@@ -4308,6 +4743,17 @@ function montarCorpoHTML(p,emp){
     html+='<div class="sec"><div class="sec-tit">📇 Pré-Cadastros do Cliente ('+preCadsPdf.length+')</div>';
     preCadsPdf.forEach(pc=>{
       html+='<div class="ln"><span class="ln-l">'+(iconesPCpdf[pc.tipo]||'')+' '+(pc.empresa?pc.empresa+' — ':'')+(pc.nome||'—')+(pc.servico?' — '+pc.servico:'')+'</span><span class="ln-v">'+(pc.placa?pc.placa+' · ':'')+(pc.destino||pc.obs||'')+'</span></div>';
+    });
+    html+='</div>';
+  }
+
+  // Alertas de emergência acionados naquele dia/local
+  const alertasPdf=DB.get('alertas_emergencia').filter(a=>a.contratanteNome===p.contratanteNome&&new Date(a.criadoEm).toDateString()===dataPlantaoPdf);
+  if(alertasPdf.length){
+    html+='<div class="sec"><div class="sec-tit">🚨 Alertas de Emergência ('+alertasPdf.length+')</div>';
+    alertasPdf.forEach((a,i)=>{
+      const statusTxt=a.status==='atendido'?('Atendido às '+fmtH(a.atendidoEm)+' por '+a.atendidoPor):'Ainda não foi atendido';
+      html+='<div class="obs" style="border-left-color:#DC2626;background:#FEE2E2;"><b>#'+(i+1)+'</b> Acionado por '+a.moradorNome+(a.moradorTelefone?' ('+a.moradorTelefone+')':'')+' <span class="obs-hr">· '+fmtH(a.criadoEm)+' em '+fmtData(a.criadoEm)+'</span><br><span style="font-size:9px;">'+statusTxt+'</span></div>';
     });
     html+='</div>';
   }
