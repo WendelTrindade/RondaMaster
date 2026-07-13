@@ -2234,7 +2234,10 @@ function renderVigilantes(){
         <div class="li-sub">CPF: ${v.cpf||'—'} · Pix: ${v.pix||'—'} (${v.banco||'—'})</div>
         <div class="li-sub">Diária: ${fmtMoeda(v.diaria)} · Plantão: ${v.horas||8}h · ${v.email}</div>
       </div>
-      <button class="btn btn-outline btn-sm btn-icon" onclick="editarVigilante('${v.id}')">✏️</button>
+      <div class="li-actions">
+        <button class="btn btn-outline btn-sm btn-icon" onclick="editarVigilante('${v.id}')">✏️</button>
+        <button class="btn btn-red btn-sm btn-icon" onclick="excluirVigilante('${v.id}')">🗑️</button>
+      </div>
     </div>`).join('');
 }
 function abrirModalVigilante(){
@@ -3783,6 +3786,7 @@ function renderMoradoresAdmin(){
           <div>
             <div class="li-title">${u.nome}</div>
             <div class="li-sub">🏢 ${u.contratanteNome||'—'} · 📱 ${u.telefone||'—'}</div>
+            <div class="li-sub">📄 CPF ${u.cpf||'—'} · 📍 ${u.endereco||'—'}</div>
             <div class="li-sub">✉️ ${u.email}</div>
           </div>
           <div class="flex gap-2 w-full">
@@ -3882,7 +3886,8 @@ function abrirEditarMoradorAprovado(userId){
   document.getElementById('em-nome').value=u.nome;
   document.getElementById('em-cpf').value=u.cpf||'';
   document.getElementById('em-telefone').value=u.telefone||'';
-  document.getElementById('em-bloco-endereco').classList.add('hidden');
+  document.getElementById('em-bloco-endereco').classList.remove('hidden');
+  document.getElementById('em-endereco').value=u.endereco||'';
   document.getElementById('em-bloco-login').classList.remove('hidden');
   document.getElementById('em-email').value=u.email;
   document.getElementById('em-senha').value=u.senha;
@@ -3894,17 +3899,17 @@ function salvarEdicaoMorador(){
   const nome=document.getElementById('em-nome').value.trim();
   const cpf=document.getElementById('em-cpf').value.trim();
   const telefone=document.getElementById('em-telefone').value.trim();
+  const endereco=document.getElementById('em-endereco').value.trim();
   if(!nome||!cpf||!telefone){toast('⚠️ Preencha nome, CPF e telefone');return;}
 
   if(tipo==='pendente'){
-    const endereco=document.getElementById('em-endereco').value.trim();
     const lista=DB.get('solicitacoes_cadastro').map(x=>x.id===id?{...x,nome,cpf,telefone,endereco}:x);
     DB.set('solicitacoes_cadastro',lista);
   } else {
     const email=document.getElementById('em-email').value.trim();
     const senha=document.getElementById('em-senha').value.trim();
     if(!email||!senha){toast('⚠️ Preencha e-mail e senha');return;}
-    const lista=DB.get('usuarios').map(x=>x.id===id?{...x,nome,cpf,telefone,email,senha,atualizadoEm:new Date().toISOString()}:x);
+    const lista=DB.get('usuarios').map(x=>x.id===id?{...x,nome,cpf,telefone,endereco,email,senha,atualizadoEm:new Date().toISOString()}:x);
     DB.set('usuarios',lista);
   }
   fecharModal('modal-editar-morador');
@@ -4301,6 +4306,17 @@ function limparLancamentos(){
   DB.set('financeiro',[]);renderFinanceiro();renderRecebimentos();renderDiarias();
   toast('🗑️ Lançamentos apagados.');
 }
+function excluirVigilante(id){
+  const v=DB.get('vigilantes').find(x=>x.id===id);
+  if(!v)return;
+  if(!confirm(`Excluir o vigilante ${v.nome}? O login dele também será removido — ele não vai mais conseguir entrar no sistema.`))return;
+  _registrarExclusao('usuarios',[id]);
+  DB.set('vigilantes',DB.get('vigilantes').filter(x=>x.id!==id));
+  DB.set('usuarios',DB.get('usuarios').filter(x=>x.id!==id));
+  renderVigilantes();
+  toast('🗑️ Vigilante excluído.');
+}
+window.excluirVigilante=excluirVigilante;
 function limparVigilantes(){
   if(!confirm('⚠️ Apagar TODOS os vigilantes? Os logins também serão removidos.'))return;
   const idsApagados=DB.get('usuarios').filter(u=>u.perfil==='vigilante').map(u=>u.id);
