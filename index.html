@@ -3,10 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>RondaMaster</title>
+<title>Guardião - Ronda Master</title>
 <!-- Firebase compat -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
 (function(){
   try{
@@ -61,8 +62,24 @@
           const portariaL=pL.portaria||[];
           const ckFB=pFB.checklist||null;
           const ckL=pL.checklist||null;
-          const obsFB=(ckFB&&Array.isArray(ckFB.obs))?ckFB.obs.length:0;
-          const obsL=(ckL&&Array.isArray(ckL.obs))?ckL.obs.length:0;
+          // Antes comparávamos por quantidade de "observações" pra decidir
+          // qual checklist é mais completo — só que esse campo foi removido
+          // do sistema, então os dois lados sempre davam 0, e o empate
+          // acabava descartando a versão certa (às vezes perdendo o KM de
+          // saída, que só é preenchido no fim do plantão). Agora comparamos
+          // pelos campos que realmente importam.
+          const _completudeCk=ck=>{
+            if(!ck)return -1;
+            let n=0;
+            if(ck.kmEntrada)n++;
+            if(ck.kmSaida)n++; // o mais importante — nunca pode se perder
+            if(ck.veiculoId)n++;
+            if(ck.gasolina)n++;
+            if(ck.oleo)n++;
+            if(Array.isArray(ck.obs))n+=ck.obs.length;
+            return n;
+          };
+          const compCkL=_completudeCk(ckL),compCkFB=_completudeCk(ckFB);
           // Encerramento é uma via de mão única: um plantão nunca volta a ficar
           // "aberto" depois de fechado. Se QUALQUER um dos lados já tem `fim`
           // marcado, o resultado da mesclagem tem que continuar fechado — senão
@@ -77,7 +94,7 @@
             // Usar sempre a versão com MAIS dados (dados só crescem durante o plantão)
             portaria: portariaL.length>=portariaFB.length ? portariaL : portariaFB,
             rondas: rondasL.length>=rondasFB.length ? rondasL : rondasFB,
-            checklist: !ckL ? ckFB : (!ckFB ? ckL : (obsL>=obsFB ? ckL : ckFB)),
+            checklist: !ckL ? ckFB : (!ckFB ? ckL : (compCkL>=compCkFB ? ckL : ckFB)),
             ckState: Object.keys(pL.ckState||{}).length>=Object.keys(pFB.ckState||{}).length ? (pL.ckState||{}) : (pFB.ckState||{}),
             fim: pL.fim||pFB.fim||null,
             saidaAntecipada: ladoQueFechou?ladoQueFechou.saidaAntecipada:(pFB.saidaAntecipada||pL.saidaAntecipada||false),
@@ -146,6 +163,11 @@
           if(d&&d.dados){
             const fb=JSON.parse(d.dados);
             const tsMillis=(d.ts&&typeof d.ts.toMillis==='function')?d.ts.toMillis():0;
+            // Calibra o relógio local contra o do servidor: se o celular tiver
+            // a hora errada (comum em alguns aparelhos), as comparações de
+            // "quem mudou por último" ficariam erradas sem isso — causando
+            // dados diferentes entre o app e o painel.
+            if(tsMillis>0){window._relogioOffsetServidor=tsMillis-Date.now();}
             let resultado;
             try{
               const loc=JSON.parse(localStorage.getItem('rm_'+k)||'[]');
@@ -181,12 +203,12 @@
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 :root{
-  --navy:#0A1220;--navy2:#0D1726;--blue:#2563EB;--sky:#3B82F6;
-  --gold:#F0B429;--gold-dim:#C9932A;--gold-glow:rgba(240,180,41,.35);
-  --amber:#F0B429;--green:#22C55E;--red:#EF4444;
+  --navy:#0E0E0F;--navy2:#161617;--blue:#2563EB;--sky:#3B82F6;
+  --gold:#E8B84B;--gold-dim:#B37F1A;--gold-bright:#FBE170;--gold-glow:rgba(232,184,75,.38);
+  --amber:#E8B84B;--green:#22C55E;--red:#EF4444;
   --purple:#A855F7;--teal:#14B8A6;--orange:#F97316;
-  --slate:#131E30;--slate2:#1A2740;--muted:#7C8AA0;
-  --border:#253552;--white:#F4F6FA;--card:#131E30;
+  --slate:#1C1C1E;--slate2:#262628;--muted:#8A8A8E;
+  --border:#333335;--white:#F5F5F5;--card:#1C1C1E;--silver:#E4E4E4;
 }
 html,body{height:100%;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--navy);color:var(--white);overflow-x:hidden;-webkit-font-smoothing:antialiased;}
 .hidden{display:none!important;}
@@ -207,11 +229,11 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
 .badge-gray{background:rgba(124,138,160,.14);color:#94A3B8;border-color:rgba(124,138,160,.28);}
 #app{display:flex;flex-direction:column;min-height:100vh;}
 #topbar{background:linear-gradient(180deg,var(--navy2),var(--navy));border-bottom:1px solid var(--border);padding:13px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 2px 14px rgba(0,0,0,.35);}
-#topbar .logo{font-size:17px;font-weight:900;letter-spacing:-.01em;}
-#topbar .logo span{color:var(--gold);}
+#topbar .logo{font-size:16px;font-weight:900;letter-spacing:-.01em;display:flex;align-items:center;white-space:nowrap;}
+#topbar .logo span{color:var(--gold);font-size:11px;font-weight:700;letter-spacing:.03em;}
 #topbar .user-info{font-size:11px;color:var(--muted);text-align:right;text-transform:uppercase;letter-spacing:.05em;}
 #topbar .user-info strong{display:block;color:var(--white);font-size:13px;text-transform:none;letter-spacing:0;}
-#main{flex:1;padding:16px;max-width:800px;margin:0 auto;width:100%;}
+#main{flex:1;padding:16px 16px 90px;max-width:800px;margin:0 auto;width:100%;}
 #bottom-nav{background:linear-gradient(0deg,var(--navy2),var(--navy));border-top:1px solid var(--border);display:flex;position:sticky;bottom:0;z-index:100;overflow-x:auto;box-shadow:0 -2px 14px rgba(0,0,0,.35);padding:4px 4px 0;}
 .nav-btn{flex:1;min-width:52px;padding:8px 2px;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:7.5px;font-weight:700;text-transform:uppercase;letter-spacing:.02em;color:var(--muted);border:none;background:transparent;cursor:pointer;transition:color .2s,transform .15s;white-space:nowrap;border-radius:9px 9px 0 0;margin-bottom:4px;}
 .nav-btn:active{transform:scale(.92);}
@@ -269,8 +291,8 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
 .modal-handle{width:40px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 16px;}
 .modal-title{font-size:16px;font-weight:800;margin-bottom:16px;letter-spacing:-.01em;}
 #login-screen{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;background:radial-gradient(circle at 50% 0%,rgba(240,180,41,.10),transparent 55%),linear-gradient(160deg,var(--navy) 0%,var(--navy2) 100%);}
-.login-logo{font-size:34px;font-weight:900;margin-bottom:4px;letter-spacing:-.02em;text-shadow:0 2px 24px var(--gold-glow);}
-.login-logo span{color:var(--gold);}
+.login-logo{font-size:38px;font-weight:900;letter-spacing:.02em;text-align:center;background:linear-gradient(180deg,#fff 0%,#cfcfd1 55%,#9a9a9d 100%);-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:0 2px 18px rgba(0,0,0,.5);}
+.login-tagline{font-size:13px;font-weight:700;letter-spacing:.35em;text-align:center;color:var(--gold);text-shadow:0 2px 10px var(--gold-glow);margin-top:2px;}
 .login-box{background:linear-gradient(165deg,var(--card),var(--navy2));border:1px solid var(--border);border-radius:18px;padding:24px;width:100%;max-width:400px;box-shadow:0 20px 60px rgba(0,0,0,.5);}
 .login-box h2{font-size:18px;font-weight:800;margin-bottom:20px;text-align:center;letter-spacing:-.01em;}
 .ponto-btn{border-radius:16px;padding:22px;text-align:center;border:none;cursor:pointer;width:100%;font-weight:900;font-size:17px;transition:transform .15s ease,box-shadow .15s ease;margin-bottom:12px;letter-spacing:.02em;}
@@ -373,6 +395,24 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
 .section-header h2{font-size:16px;font-weight:800;letter-spacing:-.01em;}
 .back-link{display:inline-flex;align-items:center;gap:5px;color:var(--muted);font-size:12.5px;font-weight:700;background:none;border:none;cursor:pointer;padding:4px 0;margin-bottom:10px;transition:color .2s;}
 .back-link:hover{color:var(--gold);}
+/* UPLOAD E GALERIA DE FOTOS (Ocorrências / Rondas) */
+.upload-zona{border:2px dashed rgba(240,180,41,.35);background:rgba(240,180,41,.03);border-radius:10px;padding:16px;text-align:center;cursor:pointer;transition:all .2s;display:block;}
+.upload-zona:hover{border-color:var(--gold);background:rgba(240,180,41,.07);}
+.upload-zona .uz-icon{font-size:22px;margin-bottom:4px;}
+.upload-zona .uz-label{font-size:11.5px;color:var(--muted);}
+.input-foto-oculto{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;}
+.input-foto-visivel{display:block;width:100%;padding:14px 10px;border:2px dashed rgba(240,180,41,.35);background:rgba(240,180,41,.03);border-radius:10px;color:var(--muted);font-size:11.5px;cursor:pointer;}
+.input-foto-visivel::file-selector-button,.input-foto-visivel::-webkit-file-upload-button{background:linear-gradient(135deg,var(--gold),var(--gold-dim));color:#1A1206;border:none;border-radius:7px;padding:9px 14px;font-weight:800;font-size:12px;margin-right:10px;cursor:pointer;}
+.preview-galeria{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px;}
+.preview-item{position:relative;aspect-ratio:1;border-radius:8px;overflow:hidden;border:1px solid var(--border);}
+.preview-item img{width:100%;height:100%;object-fit:cover;}
+.btn-remover-foto{position:absolute;top:3px;right:3px;background:var(--red);color:#fff;border:none;width:18px;height:18px;border-radius:50%;cursor:pointer;font-size:11px;display:flex;align-items:center;justify-content:center;line-height:1;}
+.badge-severidade{display:inline-flex;align-items:center;padding:3px 9px;border-radius:6px;font-size:9.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;}
+.badge-severidade.baixa{background:rgba(34,197,94,.16);color:#4ade80;}
+.badge-severidade.média{background:rgba(240,180,41,.18);color:var(--gold);}
+.badge-severidade.alta{background:rgba(249,115,22,.18);color:#fb923c;}
+.badge-severidade.emergência{background:rgba(239,68,68,.2);color:#f87171;animation:pulse 1.6s infinite;}
+.ocorrencia-card{background:linear-gradient(165deg,var(--slate2),var(--slate));border:1px solid var(--border);border-radius:11px;padding:13px 14px;margin-bottom:8px;border-left:3px solid var(--red);}
 #toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--slate);border:1px solid var(--border);border-radius:10px;padding:11px 18px;font-size:13px;font-weight:600;z-index:400;opacity:0;transition:all .3s;pointer-events:none;white-space:nowrap;max-width:90vw;box-shadow:0 8px 24px rgba(0,0,0,.35);}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
 .empty-state{text-align:center;padding:36px 20px;color:var(--muted);animation:screenIn .25s ease;}
@@ -395,18 +435,22 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
 </head>
 <body>
 <!-- CARREGANDO -->
-<div id="loading-screen" style="position:fixed;inset:0;background:linear-gradient(160deg,#0B1D3A,#1E293B);display:none;flex-direction:column;align-items:center;justify-content:center;z-index:999;">
+<div id="loading-screen" style="position:fixed;inset:0;background:radial-gradient(circle at 50% 30%,rgba(232,184,75,.12),transparent 60%),linear-gradient(160deg,#0E0E0F,#1C1C1E);display:none;flex-direction:column;align-items:center;justify-content:center;z-index:999;">
   <div style="font-size:48px;margin-bottom:16px;">🛡️</div>
-  <div style="font-size:22px;font-weight:900;color:#fff;margin-bottom:8px;">Ronda<span style="color:#2E8BF7">Master</span></div>
-  <div style="color:#64748B;font-size:14px;margin-bottom:28px;">Conectando ao banco de dados...</div>
-  <div style="width:48px;height:48px;border:4px solid #2D3F55;border-top-color:#2E8BF7;border-radius:50%;animation:spin .8s linear infinite;"></div>
+  <div style="font-size:22px;font-weight:900;color:#fff;margin-bottom:2px;">GUARDIÃO</div>
+  <div style="font-size:11px;font-weight:700;letter-spacing:.3em;color:#E8B84B;margin-bottom:8px;">RONDA MASTER</div>
+  <div style="color:#8A8A8E;font-size:14px;margin-bottom:28px;">Conectando ao banco de dados...</div>
+  <div style="width:48px;height:48px;border:4px solid #333335;border-top-color:#E8B84B;border-radius:50%;animation:spin .8s linear infinite;"></div>
 </div>
 <style>@keyframes spin{to{transform:rotate(360deg);}}</style>
 
 <!-- LOGIN -->
 <div id="login-screen">
-  <div class="login-logo">🛡️ Ronda<span>Master</span></div>
-  <div style="color:var(--muted);font-size:14px;margin-bottom:32px;">Sistema de Vigilância e Portaria</div>
+  <img src="data:image/jpeg;base64,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" alt="Guardião" style="width:150px;height:auto;margin-bottom:12px;filter:drop-shadow(0 4px 20px var(--gold-glow));">
+  <div class="login-logo">GUARDIÃO</div>
+  <div class="login-tagline">RONDA MASTER</div>
+  <div style="color:var(--muted);font-size:13px;margin-top:6px;">Sistema de Vigilância e Portaria</div>
+  <div style="color:var(--muted);font-size:10px;margin-bottom:24px;opacity:.6;">v2026.07.23-3</div>
   <div class="login-box">
     <h2>Entrar no sistema</h2>
     <div class="field"><label>E-mail</label><input type="email" id="login-email" placeholder="seu@email.com"></div>
@@ -445,7 +489,10 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
 <div id="app" class="hidden">
   <div id="alerta-emergencia-banner"></div>
   <div id="topbar">
-    <div class="logo">🛡️ Ronda<span>Master</span></div>
+    <div>
+    <div class="logo"><img src="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAUDBAQEAwUEBAQFBQUGBwwIBwcHBw8LCwkMEQ8SEhEPERETFhwXExQaFRERGCEYGh0dHx8fExciJCIeJBweHx7/2wBDAQUFBQcGBw4ICA4eFBEUHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh7/wAARCAA+AFADASIAAhEBAxEB/8QAHAAAAgIDAQEAAAAAAAAAAAAAAwQFBwIGCAEA/8QAMxAAAQIEBQMCBAQHAAAAAAAAAQIDAAQFEQYSITFBBxMiUXEIMoGRFCNhwTNCY3KhsbL/xAAaAQACAwEBAAAAAAAAAAAAAAAABQIEBgMB/8QAKREAAQMDAgQGAwAAAAAAAAAAAQACAwQRIQUxEkGBoQYUJGHB0ZHh8f/aAAwDAQACEQMRAD8A5jYah9lrSMJdvxh5lItaPULxpmDBuCNp0tBUp9bWj1CAWtBpr6W1gS0A6cxLUiZXK1JtSDlKwpGbkXHB+lvrEVMzBmKhOOXukPqSk+2h/wAgxXE95zFble/Wyau0wDTBX8Yy8s4eeG3vf9dUq82PtCrqAYec1vAHACI7pUo11AhV1FriJF1IG0KuiBClmBoDeHGhYbQqzDKD72gQmAeYs/BHRHHWKKZLVZDMlTKdMth1mYnH9XEHUKShF1WI9bRVgXbiO4enddpdK6SYElqhUJaTdn6ZLsyqXnAjvOBvNkSToVWG3PEKdYrpKOEOjGSu8EQkdYqm1/D0mVl1OzmL1KebSVgS8j4gp13Uv9PSKyb6eMty4EtWF5rXu9LjUnU/Kr9o63xC6RLTHr21/wDJjnSVWopT7RjKfX657nOL+w+lonUMQiEZGN9zvjKrbEOFqpR5ZU2+GHZVJAU605oLmwuDYjUxrirbxZ3UmZYmundRelZht5CXm0FSFZgFJdSCLjkRVqFXQLxtNIrZayAulFiDbsPtIq6BkEgazYi6wd2hR0Q07biFnYaqmpFsiDpVwIUQbCChYA3gQmcwFo6trnT+U6kfDnhGkvTBlpuUpkvMyLpPgl3tWsscpINrjUaEbWjkvMNDHZXQPEknX+kNGQw4nv0xkU+abB1QtvQX/uTlUPeM34mllghjmjwWu+Ff0+NskhY7mFV/Qir42ZqWJMF4rnHphFHk7tpmfN5lRVly9zdSMuovfixtFV42RiStYsZwlSZgsSzksh13J43Sb5lLVvlFthvtqYsbGWNZHAPxB4mVU5V1UjWqfKJcfb8lMEN2Csv8ybg3tqNxfaNP6cVhjEvUepVaWl1tS0vTUy7RX8yx3B5EcX10hTG1zJXVwiAaWBwxjiIHz1TEkOYKfjzxEe9v4m8Z0CVw30cmqXKKWttlTRK17rUXklSrcXPHEVayr8sRbfXSqy8rg0U4qBmKg+2htHOVCgtSvYWA+sU+2oZP1EO/DjpJKZ0km7nE9gqOqBrZQ1vIBEct7wu7aCqVAHDpD9LU0hVxBAq+kLJXpaCBXMCEwVxsnTLHFQ6f4pTVZYOP0+YAaqMok/xm76KH9RNyUn3GxjVs3EeE5gQY5TwR1EZikFwVON7o3BzdwrE+JSakKtjylVymzCJqSqVFadZdRssJccH31sRwRaEelU9IUCk1+tz7nbl2ksoJHzKPmQkepJsAI0JzuktIU+4plrN2mybpRmN1W9LkX94HOF11pEsp5f4cOd3tX8Su1sx9TbT7wvGm+hFGXYGL+wN/zbCsea9QZ7Z+bI1dq89iWuu1ioeObxYaBullsbJH7nk3MYp2txGCAAmwG0ZKVYQyjjbEwMYLAKs5xeS525XyiIC4Yk6hR5yTa7rq2Cn8O1MeKiTlcNkjbf1/2YiVGJqK/9k=" alt="Guardião" style="height:28px;width:auto;vertical-align:middle;margin-right:7px;border-radius:3px;">Guardião<span> · Ronda Master</span></div>
+    <div id="tb-versao" style="font-size:9px;color:var(--muted);letter-spacing:.02em;margin-top:1px;">v2026.07.23-3</div>
+    </div>
     <div style="display:flex;align-items:center;gap:10px;">
       <span id="sync-indicador" class="hidden" title="Aguardando conexão para sincronizar" style="font-size:16px;animation:pulse 1.5s infinite;">📡</span>
       <div class="user-info"><strong id="tb-nome">—</strong><span id="tb-perfil">—</span></div>
@@ -456,7 +503,7 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
     <!-- DASHBOARD -->
     <div id="screen-dashboard" class="screen">
       <div style="display:flex;justify-content:flex-end;margin-bottom:8px;">
-        <button class="btn btn-outline btn-sm" onclick="sincronizarDadosAdmin().then(()=>{atualizarDashboard();toast('🔄 Atualizado!');})" title="Buscar plantões e atualizações da nuvem agora">🔄 Atualizar</button>
+        <button class="btn btn-outline btn-sm" onclick="_sincronizarDadosAdminReal().then(r=>{atualizarDashboard();toast(r&&r.ok?'✅ Atualizado!':'⚠️ Não consegui buscar novidades agora.');})" title="Buscar plantões e atualizações da nuvem agora">🔄 Atualizar</button>
       </div>
       <div id="alerta-moradores-dash" class="hidden" style="background:rgba(20,184,166,.12);border:1.5px solid var(--teal);border-radius:12px;padding:14px;margin-bottom:14px;color:var(--teal);text-align:center;"></div>
       <div id="alerta-manutencao-dash" class="hidden" style="background:rgba(239,68,68,.1);border:1.5px solid var(--red);border-radius:12px;padding:14px;margin-bottom:14px;color:var(--red);text-align:center;"></div>
@@ -513,7 +560,7 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
       <button class="back-link" onclick="irPara('screen-dashboard')">← Voltar ao Início</button>
       <div class="section-header"><h2>🏍️ Veículos</h2>
         <div style="display:flex;gap:6px;">
-          <button class="btn btn-outline btn-sm" onclick="sincronizarDadosAdmin().then(()=>{renderVeiculos();toast('🔄 Atualizado!');})" title="Buscar atualizações da nuvem">🔄</button>
+          <button class="btn btn-outline btn-sm" onclick="_sincronizarDadosAdminReal().then(()=>{renderVeiculos();toast('🔄 Atualizado!');})" title="Buscar atualizações da nuvem">🔄</button>
           <button class="btn btn-outline btn-sm" onclick="limparVeiculos()" style="color:var(--red);border-color:var(--red);">🗑️ Limpar</button>
           <button class="btn btn-primary btn-sm" onclick="abrirModalVeiculo()">+ Novo</button>
         </div>
@@ -667,12 +714,13 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
     </div>
 
     <!-- PLANTÃO VIGILANTE/GERENTE -->
-    <div id="screen-plantao" class="screen">
+    <div id="screen-escolher-local" class="screen">
       <div id="plantao-sem-turno">
         <div class="text-center mb-3">
           <div style="font-size:44px;">🛡️</div>
           <div style="font-size:18px;font-weight:900;margin-top:8px;" id="plantao-saudacao">Olá!</div>
           <div class="text-muted mt-2" id="plantao-escala-info">Verificando escala...</div>
+          <button class="btn btn-outline btn-sm mt-2" onclick="atualizarAgoraVigia()">🔄 Atualizar agora</button>
         </div>
         <div id="plantao-escala-card" class="hidden">
           <div class="card" style="border-color:var(--green);">
@@ -693,6 +741,9 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
           <div style="font-size:12px;font-weight:400;opacity:.8;margin-top:4px;" id="hora-atual-entrada"></div>
         </button>
       </div>
+    </div>
+
+    <div id="screen-plantao" class="screen">
       <div id="plantao-ativo-view" class="hidden">
         <div class="plantao-ativo-box">
           <div class="flex items-center justify-between mb-2">
@@ -700,14 +751,22 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
               <div style="font-size:10px;color:var(--muted);">PLANTÃO EM ANDAMENTO</div>
               <div style="font-weight:700;" id="plantao-local-nome">—</div>
             </div>
-            <span class="badge badge-green">● AO VIVO</span>
+            <div class="flex items-center gap-2">
+              <button class="btn btn-outline btn-sm btn-icon" id="btn-atualizar-vigia" onclick="atualizarAgoraVigia()" title="Buscar novidades da nuvem agora">🔄</button>
+              <span class="badge badge-green">● AO VIVO</span>
+            </div>
           </div>
           <div style="font-size:12px;color:var(--muted);">Entrada: <span id="hora-entrada-display">—</span> · Previsto sair: <span id="hora-saida-prevista" style="color:var(--amber);font-weight:700;">—</span></div>
+          <div class="mt-2">
+            <div class="flex items-center justify-between" style="font-size:10px;color:var(--muted);margin-bottom:4px;"><span>PREENCHIMENTO DO PLANTÃO</span><span id="plantao-progresso-pct">0%</span></div>
+            <div class="stat-bar"><div class="stat-bar-fill" id="plantao-progresso-bar" style="width:0%"></div></div>
+          </div>
         </div>
         <div class="tab-bar">
           <div class="tab-item active" onclick="abaPlantao('ronda',this)">📷 Rondas</div>
           <div class="tab-item" onclick="abaPlantao('portaria',this)">🚦 Portaria</div>
           <div class="tab-item" onclick="abaPlantao('checklist',this)">🏍️ Veículo</div>
+          <div class="tab-item" onclick="abaPlantao('ocorrencias',this)">⚠️ Ocorrências</div>
         </div>
         <!-- ABA RONDAS -->
         <div id="aba-ronda">
@@ -720,7 +779,19 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
             <div style="font-weight:700;font-size:16px;margin-top:4px;" id="ronda-num-label">Ronda #1</div>
             <div style="font-size:12px;color:var(--muted);margin-top:4px;" id="ronda-inicio-label">—</div>
             <div style="font-size:12px;color:var(--teal);margin-top:4px;" id="ronda-local-label">📍 Aguardando GPS...</div>
+            <div id="checkpoints-progresso" class="mt-3"></div>
             <button class="btn btn-red mt-3" onclick="finalizarRonda()">🏁 Finalizar Ronda</button>
+          </div>
+          <div id="seletor-rota-wrap" class="hidden mb-3">
+            <div class="field"><label>📍 Escolha a rota desta ronda</label>
+              <select id="sel-rota-ronda" onchange="atualizarPreviewRota()"></select>
+            </div>
+            <div id="preview-pontos-rota" class="text-xs" style="color:var(--muted);"></div>
+          </div>
+          <div id="seletor-veiculo-ronda-wrap" class="hidden mb-3">
+            <div class="field"><label>🏍️ Veículo usado nesta ronda</label>
+              <select id="sel-veiculo-ronda"></select>
+            </div>
           </div>
           <button class="btn btn-green mb-3" onclick="iniciarRonda()" id="btn-iniciar-ronda">🚶 Iniciar Ronda</button>
           <!-- Lista de rondas já realizadas -->
@@ -767,14 +838,6 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
               </div>
               <div id="lista-checks-veiculo"></div>
             </div>
-            <div class="card mt-2" style="border-color:var(--amber);">
-              <div class="card-title">📝 Observações / Ocorrências</div>
-              <div id="lista-obs-ck" style="margin-bottom:12px;"></div>
-              <div class="field" style="margin-bottom:8px;">
-                <textarea id="ck-obs-nova" placeholder="Digite uma observação e clique em Adicionar..." style="min-height:60px;"></textarea>
-              </div>
-              <button class="btn btn-amber" style="color:#000;" onclick="adicionarObsCk()">+ Adicionar Observação</button>
-            </div>
             <button class="btn btn-green mt-2" onclick="salvarChecklist()">💾 Salvar Checklist</button>
           </div>
           <div id="checklist-salvo" class="hidden">
@@ -783,6 +846,17 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
               <div id="checklist-salvo-detalhes"></div>
             </div>
           </div>
+        </div>
+        <!-- ABA OCORRÊNCIAS -->
+        <div id="aba-ocorrencias" class="hidden">
+          <div class="section-header">
+            <h2>⚠️ Ocorrências</h2>
+            <button class="btn btn-primary btn-sm" onclick="abrirModalOcorrencia()">+ Nova</button>
+          </div>
+          <div class="text-xs mb-3" style="color:var(--muted);">Registre qualquer desvio, irregularidade ou situação fora do padrão observada no plantão.</div>
+          <div id="lista-ocorrencias-plantao"></div>
+
+          <div class="text-xs mt-3" style="color:var(--muted);text-align:center;padding:8px;">📋 O relatório completo do plantão fica disponível em "Meus Relatórios" assim que encerrar.</div>
         </div>
         <div class="divider mt-3"></div>
         <button class="ponto-btn saida" onclick="encerrarPlantao()">
@@ -829,51 +903,79 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
 
       <div id="cliente-form" class="hidden">
         <div class="card" style="border-color:var(--teal);margin-bottom:14px;">
-          <div style="font-weight:700;" id="cli-identificado-nome"></div>
-          <div class="text-xs" style="color:var(--muted);" id="cli-identificado-cpf"></div>
-          <div class="text-xs" style="color:var(--muted);margin-top:4px;">Esses dados só podem ser alterados pelo administrador.</div>
+          <div class="flex items-center gap-3">
+            <div class="avatar-badge" style="background:linear-gradient(135deg,var(--teal),#0d9488);color:#052e28;" id="cli-identificado-avatar">—</div>
+            <div style="min-width:0;">
+              <div style="font-weight:700;" id="cli-identificado-nome"></div>
+              <div class="text-xs" style="color:var(--muted);" id="cli-identificado-cpf"></div>
+            </div>
+          </div>
         </div>
 
-        <div class="portaria-type-btns">
-          <div class="type-btn selected" id="cli-btn-visitante" onclick="selTipoCliente('visitante')"><div class="tb-icon">🚗</div><div class="tb-label">Visitante</div></div>
-          <div class="type-btn" id="cli-btn-entrega" onclick="selTipoCliente('entrega')"><div class="tb-icon">📦</div><div class="tb-label">Entrega</div></div>
-          <div class="type-btn" id="cli-btn-prestador" onclick="selTipoCliente('prestador')"><div class="tb-icon">🔧</div><div class="tb-label">Prestador</div></div>
+        <div class="tab-bar">
+          <div class="tab-item active" onclick="abaCliente('inicio',this)">🏠 Início</div>
+          <div class="tab-item" onclick="abaCliente('cadastrar',this)">📝 Cadastrar</div>
         </div>
 
-        <div id="cli-campos-visitante">
-          <div class="field"><label>Nome do visitante</label><input type="text" id="cli-visitante-nome"></div>
-          <div class="field"><label>Placa do veículo</label><input type="text" id="cli-visitante-placa" style="text-transform:uppercase" maxlength="8"></div>
-          <div class="field"><label>Visitando (apto/local)</label><input type="text" id="cli-visitante-dest" placeholder="Ex: Apto 302, Casa 5..."></div>
-          <div class="field"><label>Observação (opcional)</label><textarea id="cli-visitante-obs"></textarea></div>
-        </div>
-        <div id="cli-campos-entrega" class="hidden">
-          <div class="field"><label>Empresa</label><select id="cli-entrega-empresa"><option>🛵 iFood</option><option>📦 Mercado Livre</option><option>📫 Amazon</option><option>🛍️ Shopee</option><option>📮 Correios</option><option>Outro</option></select></div>
-          <div class="field"><label>Nome do entregador (se souber)</label><input type="text" id="cli-entrega-nome"></div>
-          <div class="field"><label>Placa do veículo (se souber)</label><input type="text" id="cli-entrega-placa" style="text-transform:uppercase" maxlength="8"></div>
-          <div class="field"><label>Entrega para (apto/local)</label><input type="text" id="cli-entrega-local"></div>
-          <div class="field"><label>Observação (opcional)</label><textarea id="cli-entrega-obs"></textarea></div>
-        </div>
-        <div id="cli-campos-prestador" class="hidden">
-          <div class="field"><label>Nome do prestador</label><input type="text" id="cli-prestador-nome"></div>
-          <div class="field"><label>Empresa / Serviço</label><input type="text" id="cli-prestador-servico" placeholder="Ex: Encanador, Dedetizadora..."></div>
-          <div class="field"><label>Placa (se houver)</label><input type="text" id="cli-prestador-placa" style="text-transform:uppercase" maxlength="8"></div>
-          <div class="field"><label>Local do serviço (apto/local)</label><input type="text" id="cli-prestador-dest" placeholder="Ex: Apto 302, Casa 5..."></div>
-          <div class="field"><label>Observação (opcional)</label><textarea id="cli-prestador-obs"></textarea></div>
+        <!-- ABA INÍCIO: acompanhamento -->
+        <div id="aba-cliente-inicio">
+          <div class="stat-row">
+            <div class="stat-box"><div class="stat-val" id="cli-stat-rondas">0</div><div class="stat-lbl">Rondas Hoje</div></div>
+            <div class="stat-box"><div class="stat-val" id="cli-stat-alertas">0</div><div class="stat-lbl">Alertas Hoje</div></div>
+          </div>
+          <div id="bloco-rondas-hoje" class="mt-3">
+            <div class="section-header" style="margin-bottom:8px;"><h3 style="font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;">🚶 Rondas de Hoje</h3></div>
+            <div id="lista-rondas-hoje-cliente"></div>
+          </div>
+          <div id="bloco-meus-alertas" class="mt-3">
+            <div class="section-header" style="margin-bottom:8px;"><h3 style="font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;">🚨 Meus Alertas</h3></div>
+            <div id="lista-meus-alertas"></div>
+          </div>
         </div>
 
-        <button class="btn btn-primary" style="width:100%" onclick="salvarPreCadastro()">💾 Salvar Cadastro</button>
+        <!-- ABA CADASTRAR: pré-cadastro de visitante/entrega/prestador -->
+        <div id="aba-cliente-cadastrar" class="hidden">
+          <div class="portaria-type-btns">
+            <div class="type-btn selected" id="cli-btn-visitante" onclick="selTipoCliente('visitante')"><div class="tb-icon">🚗</div><div class="tb-label">Visitante</div></div>
+            <div class="type-btn" id="cli-btn-entrega" onclick="selTipoCliente('entrega')"><div class="tb-icon">📦</div><div class="tb-label">Entrega</div></div>
+            <div class="type-btn" id="cli-btn-prestador" onclick="selTipoCliente('prestador')"><div class="tb-icon">🔧</div><div class="tb-label">Prestador</div></div>
+          </div>
 
-        <div class="section-header mt-3"><h3 style="font-size:14px;">📋 Meus cadastros de hoje</h3></div>
-        <div id="lista-meus-precadastros"></div>
+          <div id="cli-campos-visitante">
+            <div class="field"><label>Nome do visitante</label><input type="text" id="cli-visitante-nome"></div>
+            <div class="field"><label>Placa do veículo</label><input type="text" id="cli-visitante-placa" style="text-transform:uppercase" maxlength="8"></div>
+            <div class="field"><label>Visitando (apto/local)</label><input type="text" id="cli-visitante-dest" placeholder="Ex: Apto 302, Casa 5..."></div>
+            <div class="field"><label>Observação (opcional)</label><textarea id="cli-visitante-obs"></textarea></div>
+          </div>
+          <div id="cli-campos-entrega" class="hidden">
+            <div class="field"><label>Empresa</label><select id="cli-entrega-empresa"><option>🛵 iFood</option><option>📦 Mercado Livre</option><option>📫 Amazon</option><option>🛍️ Shopee</option><option>📮 Correios</option><option>Outro</option></select></div>
+            <div class="field"><label>Nome do entregador (se souber)</label><input type="text" id="cli-entrega-nome"></div>
+            <div class="field"><label>Placa do veículo (se souber)</label><input type="text" id="cli-entrega-placa" style="text-transform:uppercase" maxlength="8"></div>
+            <div class="field"><label>Entrega para (apto/local)</label><input type="text" id="cli-entrega-local"></div>
+            <div class="field"><label>Observação (opcional)</label><textarea id="cli-entrega-obs"></textarea></div>
+          </div>
+          <div id="cli-campos-prestador" class="hidden">
+            <div class="field"><label>Nome do prestador</label><input type="text" id="cli-prestador-nome"></div>
+            <div class="field"><label>Empresa / Serviço</label><input type="text" id="cli-prestador-servico" placeholder="Ex: Encanador, Dedetizadora..."></div>
+            <div class="field"><label>Placa (se houver)</label><input type="text" id="cli-prestador-placa" style="text-transform:uppercase" maxlength="8"></div>
+            <div class="field"><label>Local do serviço (apto/local)</label><input type="text" id="cli-prestador-dest" placeholder="Ex: Apto 302, Casa 5..."></div>
+            <div class="field"><label>Observação (opcional)</label><textarea id="cli-prestador-obs"></textarea></div>
+          </div>
+
+          <button class="btn btn-primary" style="width:100%" onclick="salvarPreCadastro()">💾 Salvar Cadastro</button>
+
+          <div class="section-header mt-3"><h3 style="font-size:14px;">📋 Meus cadastros de hoje</h3></div>
+          <div id="lista-meus-precadastros"></div>
+        </div>
       </div>
     </div>
 
     <!-- RELATÓRIOS DO CLIENTE -->
     <div id="screen-cliente-relatorios" class="screen">
       <div class="section-header"><h2>📋 Relatórios do Local</h2>
-        <button class="btn btn-outline btn-sm" onclick="sincronizarDadosAdmin().then(()=>{renderRelatoriosCliente();toast('🔄 Atualizado!');})" title="Buscar novidades">🔄</button>
+        <button class="btn btn-outline btn-sm" onclick="_sincronizarDadosAdminReal().then(()=>{renderRelatoriosCliente();toast('🔄 Atualizado!');})" title="Buscar novidades">🔄</button>
       </div>
-      <div class="text-xs mb-3" style="color:var(--muted);">Relatórios de plantões encerrados no seu local, com rondas, observações e pré-cadastros.</div>
+      <div class="text-xs mb-3" style="color:var(--muted);">Resumo simples de cada plantão no seu local: vigia, horários, rondas, ocorrências e seus próprios pedidos. Mostra só os últimos 7 dias.</div>
       <div id="lista-relatorios-cliente"></div>
     </div>
 
@@ -882,7 +984,7 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
       <button class="back-link" onclick="irPara('screen-dashboard')">← Voltar ao Início</button>
       <div class="section-header"><h2>📇 Pré-Cadastros</h2>
         <div style="display:flex;gap:6px;">
-          <button class="btn btn-outline btn-sm" onclick="sincronizarDadosAdmin().then(()=>{renderPreCadastrosAdmin();toast('🔄 Atualizado!');})" title="Buscar novidades">🔄</button>
+          <button class="btn btn-outline btn-sm" onclick="_sincronizarDadosAdminReal().then(()=>{renderPreCadastrosAdmin();toast('🔄 Atualizado!');})" title="Buscar novidades">🔄</button>
           <button class="btn btn-outline btn-sm" onclick="limparPreCadastros()" style="color:var(--red);border-color:var(--red);">🗑️ Limpar</button>
         </div>
       </div>
@@ -896,7 +998,7 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
       <button class="back-link" onclick="irPara('screen-dashboard')">← Voltar ao Início</button>
       <div class="section-header"><h2>🏠 Acesso de Moradores <span id="badge-total-moradores" class="badge badge-teal" style="margin-left:6px;">0</span></h2>
         <div style="display:flex;gap:6px;">
-          <button class="btn btn-outline btn-sm" onclick="sincronizarDadosAdmin().then(()=>{renderMoradoresAdmin();toast('🔄 Atualizado!');})" title="Buscar novidades">🔄</button>
+          <button class="btn btn-outline btn-sm" onclick="_sincronizarDadosAdminReal().then(()=>{renderMoradoresAdmin();toast('🔄 Atualizado!');})" title="Buscar novidades">🔄</button>
           <button class="btn btn-outline btn-sm" onclick="limparSolicitacoesMoradores()" style="color:var(--red);border-color:var(--red);" title="Limpar solicitações pendentes">🗑️</button>
         </div>
       </div>
@@ -927,7 +1029,14 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
     <div class="field"><label>Senha</label><input type="password" id="mv-senha" placeholder="Mínimo 6 caracteres"></div>
     <div class="field"><label>Chave Pix</label><input type="text" id="mv-pix"></div>
     <div class="field"><label>Banco do Pix</label><input type="text" id="mv-banco" placeholder="Nubank, Bradesco..."></div>
-    <div class="field"><label>💰 Valor da Diária (R$)</label><input type="text" id="mv-diaria" placeholder="R$ 0,00" oninput="mascaraMoeda(this)"></div>
+    <div class="field"><label>💰 Forma de pagamento</label>
+      <select id="mv-tipo-pagamento" onchange="alternarTipoPagamentoVig()">
+        <option value="diaria">Por diária (dias trabalhados × valor)</option>
+        <option value="fixo">Valor fixo mensal</option>
+      </select>
+    </div>
+    <div class="field" id="mv-campo-diaria"><label>💰 Valor da Diária (R$)</label><input type="text" id="mv-diaria" placeholder="R$ 0,00" oninput="mascaraMoeda(this)"></div>
+    <div class="field hidden" id="mv-campo-fixo"><label>💰 Valor Fixo Mensal (R$)</label><input type="text" id="mv-valor-fixo" placeholder="R$ 0,00" oninput="mascaraMoeda(this)"></div>
     <div class="field"><label>⏱️ Horas do plantão padrão</label><input type="number" id="mv-horas" placeholder="Ex: 8" min="1" max="24"></div>
     <div class="flex gap-3 mt-2">
       <button class="btn btn-outline" onclick="fecharModal('modal-vigilante')">Cancelar</button>
@@ -943,17 +1052,104 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
     <input type="hidden" id="mc-id">
     <div class="field"><label>Nome / Empresa</label><input type="text" id="mc-nome"></div>
     <div class="field"><label>Contato</label><input type="tel" id="mc-contato" placeholder="(00) 00000-0000"></div>
-    <div class="field"><label>Locais de ronda (um por linha)</label><textarea id="mc-locais" placeholder="Bloco A — Rua das Flores, 100&#10;Bloco B — Av. Central, 200"></textarea></div>
+    <div class="card mt-2" style="border-color:var(--gold);">
+      <div class="flex items-center justify-between mb-2">
+        <div class="card-title" style="margin:0;">📍 Locais de Ronda</div>
+        <button class="btn btn-amber btn-sm" style="color:#000;" onclick="abrirModalLocal()">+ Novo Local</button>
+      </div>
+      <div class="text-xs mb-2" style="color:var(--muted);">Cada local pode ter sua própria localização e raio, pra travar onde o vigia bate o ponto naquele local específico.</div>
+      <div id="lista-locais-contratante"></div>
+    </div>
     <div class="field"><label>Valor do contrato (R$/mês)</label><input type="text" id="mc-valor" placeholder="R$ 0,00" oninput="mascaraMoeda(this)"></div>
-    <div class="card mt-2" style="border-color:var(--teal);">
-      <div class="card-title">🔑 Acesso do Cliente (opcional)</div>
-      <div class="text-xs" style="color:var(--muted);margin-bottom:8px;">Crie um login para o cliente pré-cadastrar visitantes, entregas e prestadores. Todas as pessoas do local podem usar o mesmo login.</div>
-      <div class="field"><label>E-mail de acesso</label><input type="email" id="mc-cliente-email" placeholder="cliente@exemplo.com"></div>
-      <div class="field"><label>Senha</label><input type="text" id="mc-cliente-senha" placeholder="Mínimo 6 caracteres"></div>
+    <div class="card mt-2" style="border-color:var(--purple);">
+      <div class="flex items-center justify-between mb-2">
+        <div class="card-title" style="margin:0;">🗺️ Rotas de Ronda (opcional)</div>
+        <button class="btn btn-purple btn-sm" onclick="abrirModalRota()">+ Nova Rota</button>
+      </div>
+      <div class="text-xs mb-2" style="color:var(--muted);">Defina pontos de checagem que o vigia precisa visitar durante a ronda nesse local.</div>
+      <div id="lista-rotas-contratante"></div>
     </div>
     <div class="flex gap-3 mt-2">
       <button class="btn btn-outline" onclick="fecharModal('modal-contratante')">Cancelar</button>
       <button class="btn btn-primary" onclick="salvarContratante()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL LOCAL DE RONDA -->
+<div class="modal-overlay hidden" id="modal-local">
+  <div class="modal"><div class="modal-handle"></div>
+    <div class="modal-title" id="ml-title">Novo Local</div>
+    <input type="hidden" id="ml-id">
+    <div class="field"><label>Nome do local</label><input type="text" id="ml-nome" placeholder="Ex: Portaria Principal, Bloco A..."></div>
+    <label class="check-item" style="cursor:pointer;padding:6px 0 10px;">
+      <span class="perm-label">Exigir que o vigia esteja aqui pra bater o ponto</span>
+      <button type="button" class="toggle" id="ml-geo-ativo" onclick="this.classList.toggle('on');document.getElementById('ml-geo-campos').classList.toggle('hidden',!this.classList.contains('on'));"></button>
+    </label>
+    <div id="ml-geo-campos" class="hidden">
+      <button class="btn btn-teal btn-sm mb-2" style="width:100%;" onclick="usarLocalizacaoAtualLocal()">📍 Usar minha localização atual</button>
+      <div class="flex gap-2">
+        <div class="field" style="flex:1;"><label>Latitude</label><input type="text" id="ml-lat" placeholder="-16.60000"></div>
+        <div class="field" style="flex:1;"><label>Longitude</label><input type="text" id="ml-lng" placeholder="-49.40000"></div>
+      </div>
+      <div class="field"><label>Raio permitido (metros)</label><input type="number" id="ml-raio" placeholder="100" value="100"></div>
+      <div class="text-xs" style="color:var(--muted);">O GPS de celular varia um pouco — recomendamos pelo menos 100m de raio pra evitar bloqueios por imprecisão do sinal.</div>
+    </div>
+    <div class="flex gap-3 mt-2">
+      <button class="btn btn-outline" onclick="fecharModal('modal-local')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarLocal()">💾 Salvar Local</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL ROTA DE RONDA -->
+<div class="modal-overlay hidden" id="modal-rota">
+  <div class="modal"><div class="modal-handle"></div>
+    <div class="modal-title" id="mr-title">Nova Rota</div>
+    <input type="hidden" id="mr-id">
+    <div class="field"><label>Nome da rota</label><input type="text" id="mr-nome" placeholder="Ex: Rota Manhã, Rota Noite..."></div>
+    <div class="flex items-center justify-between mt-2 mb-2">
+      <div class="card-title" style="margin:0;">📍 Pontos de checagem</div>
+      <button class="btn btn-teal btn-sm" onclick="abrirModalPonto()">+ Novo Ponto</button>
+    </div>
+    <div id="lista-pontos-rota" class="mb-2"></div>
+    <div class="flex gap-3 mt-2">
+      <button class="btn btn-outline" onclick="fecharModal('modal-rota')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarRota()">💾 Salvar Rota</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL PONTO DE CHECAGEM -->
+<div class="modal-overlay hidden" id="modal-ponto">
+  <div class="modal"><div class="modal-handle"></div>
+    <div class="modal-title" id="mp-title">Novo Ponto de Checagem</div>
+    <input type="hidden" id="mp-id">
+    <div class="field"><label>Nome do ponto</label><input type="text" id="mp-nome" placeholder="Ex: Portão Principal"></div>
+    <button class="btn btn-teal btn-sm mb-2" style="width:100%;" onclick="usarLocalizacaoAtualPonto()">📍 Usar minha localização atual</button>
+    <div class="flex gap-2">
+      <div class="field" style="flex:1;"><label>Latitude</label><input type="text" id="mp-lat" placeholder="-16.60000"></div>
+      <div class="field" style="flex:1;"><label>Longitude</label><input type="text" id="mp-lng" placeholder="-49.40000"></div>
+    </div>
+    <div class="flex gap-2">
+      <div class="field" style="flex:1;"><label>Raio (metros)</label><input type="number" id="mp-raio" placeholder="30" value="30"></div>
+      <div class="field" style="flex:1;"><label>Tempo parado (segundos)</label><input type="number" id="mp-tempo" placeholder="30" value="30"></div>
+    </div>
+    <label class="check-item" style="cursor:pointer;">
+      <span class="perm-label">⚠️ Obrigatório (precisa validar pra fechar a ronda)</span>
+      <button type="button" class="toggle on" id="mp-obrigatorio" onclick="this.classList.toggle('on')"></button>
+    </label>
+    <label class="check-item" style="cursor:pointer;">
+      <span class="perm-label">🟢 Pode iniciar a ronda aqui</span>
+      <button type="button" class="toggle" id="mp-pode-iniciar" onclick="this.classList.toggle('on')"></button>
+    </label>
+    <label class="check-item" style="cursor:pointer;">
+      <span class="perm-label">🔴 Pode encerrar a ronda aqui</span>
+      <button type="button" class="toggle" id="mp-pode-encerrar" onclick="this.classList.toggle('on')"></button>
+    </label>
+    <div class="flex gap-3 mt-2">
+      <button class="btn btn-outline" onclick="fecharModal('modal-ponto')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarPonto()">💾 Salvar Ponto</button>
     </div>
   </div>
 </div>
@@ -1123,6 +1319,25 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
 </div>
 
 <!-- MODAL PORTARIA -->
+<div class="modal-overlay hidden" id="modal-ocorrencia">
+  <div class="modal"><div class="modal-handle"></div>
+    <div class="modal-title">⚠️ Nova Ocorrência</div>
+    <div class="field"><label>Nível de Gravidade</label>
+      <select id="oc-classificacao">
+        <option value="Baixa">🟢 Baixa</option>
+        <option value="Média">🟡 Média</option>
+        <option value="Alta">🟠 Alta</option>
+        <option value="Emergência">🔴 Emergência</option>
+      </select>
+    </div>
+    <div class="field"><label>Descrição</label>
+      <textarea id="oc-descricao" placeholder="Descreva o que aconteceu..." style="min-height:80px;"></textarea>
+    </div>
+    <button class="btn btn-primary mt-2" onclick="salvarOcorrencia()">💾 Salvar Ocorrência</button>
+    <button class="btn btn-outline mt-2" onclick="fecharModal('modal-ocorrencia')">Cancelar</button>
+  </div>
+</div>
+
 <div class="modal-overlay hidden" id="modal-portaria">
   <div class="modal"><div class="modal-handle"></div>
     <div class="modal-title">Registrar na Portaria</div>
@@ -1136,17 +1351,24 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
       <div class="field"><label>Nome do entregador</label><input type="text" id="pt-entregador"></div>
       <div class="field"><label>Placa</label><input type="text" id="pt-placa-e" style="text-transform:uppercase" maxlength="8"></div>
       <div class="field"><label>Entrega para (morador/apto)</label><input type="text" id="pt-destino"></div>
+      <div class="field"><label>Observação (opcional)</label><textarea id="pt-obs-e" placeholder="Qualquer detalhe relevante..."></textarea></div>
     </div>
     <div id="campos-visitante" class="hidden">
       <div class="field"><label>Nome do condutor</label><input type="text" id="pt-visitante"></div>
       <div class="field"><label>Placa</label><input type="text" id="pt-placa-v" style="text-transform:uppercase" maxlength="8"></div>
       <div class="field"><label>Visita para (morador/apto)</label><input type="text" id="pt-visita-dest"></div>
+      <label class="check-item" style="cursor:pointer;padding:10px 0;">
+        <span class="perm-label">🌙 Vai passar a noite (pernoite)</span>
+        <button type="button" class="toggle" id="pt-pernoite" onclick="this.classList.toggle('on')"></button>
+      </label>
+      <div class="field"><label>Observação (opcional)</label><textarea id="pt-obs-v" placeholder="Ex: aguardando o morador confirmar, saiu e voltou, etc."></textarea></div>
     </div>
     <div id="campos-prestador" class="hidden">
       <div class="field"><label>Nome do prestador</label><input type="text" id="pt-prestador-nome"></div>
       <div class="field"><label>Empresa / Serviço</label><input type="text" id="pt-prestador-servico" placeholder="Ex: Encanador, Dedetizadora..."></div>
       <div class="field"><label>Placa (se houver)</label><input type="text" id="pt-placa-p" style="text-transform:uppercase" maxlength="8"></div>
       <div class="field"><label>Local do serviço</label><input type="text" id="pt-prestador-dest"></div>
+      <div class="field"><label>Observação (opcional)</label><textarea id="pt-obs-p" placeholder="Qualquer detalhe relevante..."></textarea></div>
     </div>
     <div class="flex gap-3 mt-2">
       <button class="btn btn-outline" onclick="fecharModal('modal-portaria')">Cancelar</button>
@@ -1232,7 +1454,7 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
     <div id="relatorio-conteudo"></div>
     <div class="flex gap-3 mt-3">
       <button class="btn btn-outline" onclick="fecharModal('modal-relatorio')">Fechar</button>
-      <button class="btn btn-primary" onclick="gerarPDFAtual()">📄 Gerar PDF</button>
+      <button class="btn btn-primary" id="btn-gerar-pdf-relatorio" onclick="gerarPDFAtual()">📄 Gerar PDF</button>
     </div>
   </div>
 </div>
@@ -1318,7 +1540,7 @@ const DB={
     // Marcar quando essa coleção foi alterada aqui — usado para decidir,
     // em sincronizações futuras, se a versão local é mais nova que a da nuvem
     // (evita que uma exclusão feita aqui seja "desfeita" por um dado antigo remoto)
-    try{localStorage.setItem('rm_ts_'+k,Date.now().toString());}catch(e){}
+    try{localStorage.setItem('rm_ts_'+k,(Date.now()+(window._relogioOffsetServidor||0)).toString());}catch(e){}
     // Firebase: enviar agora se online; se falhar/offline, entra na fila pendente
     _syncFirebase(k,v);
   },
@@ -1362,8 +1584,15 @@ const DB={
 function _tsLocal(k){
   try{return parseInt(localStorage.getItem('rm_ts_'+k)||'0',10);}catch(e){return 0;}
 }
+// Coleções que só o administrador edita (o vigia e o morador nunca gravam
+// nelas diretamente). Pra essas, não faz sentido comparar "quem mudou por
+// último" — é sempre o admin, então a nuvem é sempre a verdade. Isso evita
+// o problema de um celular ficar preso numa versão antiga (por relógio
+// errado, ou por ter guardado localmente antes de uma edição no painel).
+const _COLECOES_SO_ADMIN=['itens_veiculo','equipamentos','contratantes','veiculos','escala'];
 function _deveUsarRemoto(k,arrRemoto,arrLocal){
   if(!Array.isArray(arrRemoto))return false;
+  if(_COLECOES_SO_ADMIN.includes(k))return true;
   const remoteTs=arrRemoto._remoteTs||0;
   const localTs=_tsLocal(k);
   if(remoteTs>0&&localTs>0){
@@ -1458,6 +1687,7 @@ function acionarAlertaEmergencia(){
     id:'ae'+Date.now(),
     contratanteId:U.contratanteId,
     contratanteNome:cont?cont.nome:'—',
+    moradorUserId:U.id,
     moradorNome:nome,
     moradorTelefone:telefone,
     moradorEndereco:(U.endereco||cont?.nome||''),
@@ -1468,9 +1698,64 @@ function acionarAlertaEmergencia(){
   const lista=DB.get('alertas_emergencia');
   lista.push(alerta);
   DB.set('alertas_emergencia',lista);
+  renderMeusAlertasEmergencia();
   toast('🚨 Alerta enviado! Administrador e vigia foram avisados.');
 }
 window.acionarAlertaEmergencia=acionarAlertaEmergencia;
+
+function renderMeusAlertasEmergencia(){
+  const div=document.getElementById('lista-meus-alertas');
+  if(!div||!U)return;
+  const meus=DB.get('alertas_emergencia').filter(a=>a.moradorUserId===U.id).sort((a,b)=>new Date(b.criadoEm)-new Date(a.criadoEm));
+  const hoje=new Date().toDateString();
+  const statEl=document.getElementById('cli-stat-alertas');
+  if(statEl)statEl.textContent=meus.filter(a=>new Date(a.criadoEm).toDateString()===hoje).length;
+  if(!meus.length){div.innerHTML='<div class="empty-state"><div class="es-icon">🚨</div><div>Nenhum alerta acionado ainda</div></div>';return;}
+  div.innerHTML=meus.map(a=>`
+    <div class="list-item" style="flex-direction:column;align-items:flex-start;gap:6px;border-left:3px solid ${a.status==='atendido'?'var(--green)':'var(--red)'};">
+      <div style="width:100%;display:flex;justify-content:space-between;align-items:center;">
+        <div class="li-title">🚨 Alerta de Emergência</div>
+        ${a.status==='atendido'?'<span class="badge badge-green">✅ Atendido</span>':'<span class="badge badge-red">⏳ Aguardando</span>'}
+      </div>
+      <div class="li-sub">⏰ Acionado às ${fmtH(a.criadoEm)} em ${fmtData(a.criadoEm)}</div>
+      ${a.status==='atendido'?`<div class="li-sub">✅ Atendido às ${fmtH(a.atendidoEm)} em ${fmtData(a.atendidoEm)} · por <b>${a.atendidoPor}</b></div>`:''}
+    </div>`).join('');
+}
+window.renderMeusAlertasEmergencia=renderMeusAlertasEmergencia;
+
+function renderRondasHojeCliente(){
+  const div=document.getElementById('lista-rondas-hoje-cliente');
+  if(!div||!U)return;
+  const cont=DB.get('contratantes').find(c=>c.id===U.contratanteId);
+  const contratanteNome=cont?cont.nome:(U.contratanteNome||'');
+  const hoje=new Date().toDateString();
+  const plantoesHoje=DB.get('plantoes').filter(p=>p.contratanteNome===contratanteNome&&new Date(p.inicio).toDateString()===hoje);
+
+  let todasRondas=[];
+  plantoesHoje.forEach(p=>{
+    (p.rondas||[]).filter(r=>r.fim).forEach(r=>{
+      todasRondas.push({...r,vigilanteNome:p.vigilanteNome,localNome:p.localNome});
+    });
+  });
+  todasRondas.sort((a,b)=>new Date(b.fim)-new Date(a.fim));
+
+  const statEl=document.getElementById('cli-stat-rondas');
+  if(statEl)statEl.textContent=todasRondas.length;
+
+  if(!todasRondas.length){
+    div.innerHTML='<div class="empty-state"><div class="es-icon">🚶</div><div>Nenhuma ronda registrada hoje ainda</div></div>';
+    return;
+  }
+  div.innerHTML=todasRondas.map(r=>`
+    <div class="list-item">
+      <div class="avatar-badge">${_iniciais(r.vigilanteNome)}</div>
+      <div class="li-main">
+        <div class="li-title">Ronda #${r.num}${r.localNome?' — '+r.localNome:''}</div>
+        <div class="li-sub">👤 ${r.vigilanteNome||'—'} · ⏰ ${r.hora||fmtH(r.inicio)} → ${r.horaFim||fmtH(r.fim)}</div>
+      </div>
+    </div>`).join('');
+}
+window.renderRondasHojeCliente=renderRondasHojeCliente;
 
 // ── Admin/Vigia recebem o alerta ──
 function _alertasRelevantes(){
@@ -1483,8 +1768,40 @@ function _alertasRelevantes(){
   }
   return[];
 }
+async function _verificarPlantaoFechadoRemotamente(){
+  if(!plantaoAtivo||!U||U.perfil!=='vigilante')return;
+  const atual=DB.get('plantoes').find(p=>p.id===plantaoAtivo.id);
+  if(!atual||!atual.fim||plantaoAtivo.fim)return; // continua aberto, ou já foi tratado localmente
+
+  // O plantão foi encerrado em outro lugar (o administrador encerrou remotamente)
+  pararMonitoramentoCheckpoints();
+  plantaoAtivo.fim=atual.fim;
+
+  try{
+    localStorage.removeItem('rm_fotos_rascunho_'+plantaoAtivo.id);
+    localStorage.removeItem('rm_sessao_ativa');
+  }catch(e){}
+  clearInterval(timerHora);
+  plantaoAtivo=null;fotosP=[];portariaP=[];ckState={};
+  checklistSalvo=false;fotosCk=[];rondasAtivas=[];rondaAtualIdx=null;
+  const ativoView=document.getElementById('plantao-ativo-view');
+  const semTurno=document.getElementById('plantao-sem-turno');
+  if(ativoView)ativoView.classList.add('hidden');
+  if(semTurno)semTurno.classList.remove('hidden');
+  try{popularSeletorRota();popularSeletorVeiculoRonda();}catch(e){}
+  toast('🔴 Seu plantão foi encerrado pelo administrador. Confira o relatório em "Meus Relatórios".');
+  setTimeout(()=>irPara('screen-meus-relatorios'),1800);
+}
+
 function verificarAlertasEmergencia(){
-  if(!U||(U.perfil!=='admin'&&U.perfil!=='gerente'&&U.perfil!=='vigilante'))return;
+  if(!U)return;
+  if(U.perfil==='cliente'){
+    renderMeusAlertasEmergencia();
+    renderRondasHojeCliente();
+    return;
+  }
+  if(U.perfil!=='admin'&&U.perfil!=='gerente'&&U.perfil!=='vigilante')return;
+  if(U.perfil==='vigilante')_verificarPlantaoFechadoRemotamente();
   const relevantes=_alertasRelevantes();
   const div=document.getElementById('alerta-emergencia-banner');
   if(!div)return;
@@ -1521,7 +1838,7 @@ window.verificarAlertasEmergencia=verificarAlertasEmergencia;
 // porque emergência não pode esperar 20 segundos
 setInterval(()=>{
   if(!U)return;
-  if(navigator.onLine&&window._fbGet){
+  if(window._fbGet){
     window._fbGet('alertas_emergencia').then(v=>{
       if(v!==null){
         const local=CACHE['alertas_emergencia']||[];
@@ -1601,10 +1918,6 @@ function mesclarUsuarios(local,remoto){
 }
 function _syncFirebase(k,v){
   if(!window._fbSet)return; // Firebase não configurado neste carregamento
-  if(!navigator.onLine){
-    _marcarPendente(k);
-    return;
-  }
   if(_COLECOES_MULTI_GRAVADOR.includes(k)&&window._fbGet){
     _syncFirebaseComMerge(k,v);
     return;
@@ -1661,7 +1974,7 @@ function _desmarcarPendente(k){
   _atualizarIndicadorSync();
 }
 async function flushSyncPendente(){
-  if(!navigator.onLine||!window._fbSet)return;
+  if(!window._fbSet)return;
   let pend=[];
   try{pend=JSON.parse(localStorage.getItem('rm_sync_pendente')||'[]');}catch(e){return;}
   if(!pend.length)return;
@@ -1697,17 +2010,23 @@ window.addEventListener('online',()=>{console.log('🌐 Internet voltou — sinc
 // Esta função busca ATUALIZAÇÕES feitas por outros dispositivos (ex: admin
 // cadastrou um veículo novo enquanto o celular do vigia já estava aberto).
 // Sem isso, o vigia só veria novidades ao fechar e abrir o app de novo.
-let _sincronizandoAdmin=false;
-async function sincronizarDadosAdmin(silencioso){
-  if(!window._fbGet||!navigator.onLine||_sincronizandoAdmin)return;
-  _sincronizandoAdmin=true;
+let _syncEmAndamento=null; // guarda a Promise em andamento, não só um true/false
+function sincronizarDadosAdmin(silencioso){
+  if(_syncEmAndamento)return _syncEmAndamento; // já tem uma rodando — devolve a MESMA promise, não retorna cedo demais
+  _syncEmAndamento=_sincronizarDadosAdminReal(silencioso).finally(()=>{_syncEmAndamento=null;});
+  return _syncEmAndamento;
+}
+async function _sincronizarDadosAdminReal(silencioso){
+  if(!window._fbGet)return{ok:false,motivo:'Firebase não disponível'};
   const colsAdmin=['veiculos','contratantes','vigilantes','escala','itens_veiculo','equipamentos','solicitacoes_troca','plantoes','pre_cadastros','solicitacoes_cadastro','usuarios','alertas_emergencia','itens_excluidos'];
   let algoMudou=false;
+  let algumaColecaoRespondeu=false;
   try{
     await Promise.all(colsAdmin.map(async k=>{
       try{
         const v=await Promise.race([window._fbGet(k),new Promise(r=>setTimeout(()=>r(null),5000))]);
         if(v!==null&&Array.isArray(v)){
+          algumaColecaoRespondeu=true;
           const localAtual=CACHE[k]||[];
           // Compara conteúdo (não só tamanho) pra detectar qualquer mudança, inclusive edições
           const mudou=JSON.stringify(v)!==JSON.stringify(localAtual);
@@ -1719,12 +2038,14 @@ async function sincronizarDadosAdmin(silencioso){
         }
       }catch(e){}
     }));
-  }finally{_sincronizandoAdmin=false;}
+  }catch(e){/* Promise.all já trata erros individuais; isso é só uma rede de segurança */}
 
   if(algoMudou&&!silencioso){
     // Re-renderizar telas que dependem desses dados, se estiverem visíveis
     try{
       if(document.getElementById('aba-checklist')&&!document.getElementById('aba-checklist').classList.contains('hidden')){
+        renderItensVeiculo();
+        renderEquipamentosChecklist();
         renderSelecaoVeiculoChecklist();
       }
       if(document.getElementById('screen-veiculos')&&document.getElementById('screen-veiculos').classList.contains('active')){
@@ -1748,6 +2069,9 @@ async function sincronizarDadosAdmin(silencioso){
       if(document.getElementById('screen-relatorios')&&document.getElementById('screen-relatorios').classList.contains('active')){
         renderRelatoriosAdmin();
       }
+      if(document.getElementById('screen-meus-relatorios')&&document.getElementById('screen-meus-relatorios').classList.contains('active')){
+        renderMeusRelatorios();
+      }
       if(document.getElementById('screen-precadastros')&&document.getElementById('screen-precadastros').classList.contains('active')){
         renderPreCadastrosAdmin();
       }
@@ -1759,12 +2083,41 @@ async function sincronizarDadosAdmin(silencioso){
       }
     }catch(e){}
   }
+  return{ok:algumaColecaoRespondeu,motivo:algumaColecaoRespondeu?'':'Nenhuma coleção respondeu (sem conexão com a nuvem?)'};
 }
 window.sincronizarDadosAdmin=sincronizarDadosAdmin;
+
+async function atualizarAgoraVigia(){
+  const btn=document.getElementById('btn-atualizar-vigia');
+  if(btn){btn.disabled=true;btn.textContent='⏳';}
+  toast('📡 Buscando novidades da nuvem...');
+  // Chama a busca DIRETO (não o wrapper que reaproveita sincronização em
+  // andamento) — quando a pessoa pede uma atualização manual, ela quer uma
+  // busca nova de verdade, não o resultado de uma sincronização que talvez
+  // já tivesse começado antes da mudança que ela quer ver.
+  const resultado=await _sincronizarDadosAdminReal(true);
+  if(btn){btn.disabled=false;btn.textContent='🔄';}
+  try{
+    renderItensVeiculo();
+    renderEquipamentosChecklist();
+    renderSelecaoVeiculoChecklist();
+    popularSeletorRota();
+    popularSeletorVeiculoRonda();
+    if(document.getElementById('screen-meus-relatorios')&&document.getElementById('screen-meus-relatorios').classList.contains('active')){
+      renderMeusRelatorios();
+    }
+  }catch(e){}
+  if(resultado&&resultado.ok){
+    toast('✅ Atualizado com sucesso!');
+  }else{
+    toast('⚠️ Não consegui buscar novidades agora. Verifique sua internet e tente de novo em instantes.');
+  }
+}
+window.atualizarAgoraVigia=atualizarAgoraVigia;
 // Verificação periódica: busca novidades da nuvem a cada 20 segundos
-setInterval(()=>{if(navigator.onLine)sincronizarDadosAdmin();},20000);
-// Verificação periódica de segurança (celulares nem sempre disparam o evento 'online' corretamente)
-setInterval(()=>{if(navigator.onLine)flushSyncPendente();},25000);
+setInterval(()=>{sincronizarDadosAdmin();},20000);
+// Verificação periódica de segurança (celulares nem sempre disparam o evento 'online' corretamente — por isso não pré-checamos onLine aqui, só tentamos)
+setInterval(()=>{flushSyncPendente();},25000);
 function _mostrarLoading(sim){
   const el=document.getElementById('loading-screen');
   if(el) el.style.display=sim?'flex':'none';
@@ -1789,44 +2142,29 @@ async function initDemo(){
     }catch(e){}
   });
 
-  // 4. CRÍTICO: tentar buscar do Firebase ANTES de decidir criar dados padrão.
-  //    Isso evita que um dispositivo novo (sem localStorage) sobrescreva os
-  //    dados reais da nuvem com um admin "zerado".
-  let _firebaseConfirmadoAtual=false; // só true se realmente confirmamos o estado mais atual da nuvem (sem timeout/erro)
+  // 4. Buscar cada coleção da nuvem de forma INDEPENDENTE — se uma demorar
+  //    ou falhar, as outras continuam normalmente. Antes, tudo dependia de
+  //    "usuarios" responder primeiro; se essa demorasse, nada mais era
+  //    buscado, deixando o app preso em dados antigos guardados localmente.
+  let _firebaseConfirmadoAtual=false; // só true se 'usuarios' respondeu de verdade (não foi timeout)
   if(window._fbGet){
-    try{
-      const usuariosFB=await Promise.race([
-        window._fbGet('usuarios'),
-        new Promise(r=>setTimeout(()=>r(null),6000))
-      ]);
-      if(Array.isArray(usuariosFB)){
-        _firebaseConfirmadoAtual=true; // resposta real da nuvem (não foi timeout)
-      }
-      if(Array.isArray(usuariosFB)&&usuariosFB.length){
-        // Firebase tem dados reais — usar como fonte da verdade se tiver mais que o local
-        const localAtual=CACHE['usuarios']||[];
-        if(_deveUsarRemoto('usuarios',usuariosFB,localAtual)){
-          CACHE['usuarios']=usuariosFB;
-          localStorage.setItem('rm_usuarios',JSON.stringify(usuariosFB));
+    await Promise.all(cols.map(async k=>{
+      try{
+        const v=await Promise.race([
+          window._fbGet(k),
+          new Promise(r=>setTimeout(()=>r(null),8000))
+        ]);
+        if(k==='usuarios'&&Array.isArray(v)){
+          _firebaseConfirmadoAtual=true;
         }
-        // Buscar o restante das coleções também antes de prosseguir
-        const outrasCols=cols.filter(k=>k!=='usuarios');
-        await Promise.all(outrasCols.map(async k=>{
-          try{
-            const v=await Promise.race([
-              window._fbGet(k),
-              new Promise(r=>setTimeout(()=>r(null),6000))
-            ]);
-            if(v!==null){
-              const local=CACHE[k]||[];
-              if(_deveUsarRemoto(k,v,local)){CACHE[k]=v;localStorage.setItem('rm_'+k,JSON.stringify(v));}
-            }
-          }catch(e){}
-        }));
+        if(v!==null&&Array.isArray(v)){
+          const local=CACHE[k]||[];
+          if(_deveUsarRemoto(k,v,local)){CACHE[k]=v;localStorage.setItem('rm_'+k,JSON.stringify(v));}
+        }
+      }catch(e){
+        console.warn(`Falha ao buscar "${k}" da nuvem na inicialização:`,e&&e.message);
       }
-    }catch(e){
-      console.warn('Firebase indisponível na inicialização, usando dados locais:',e.message);
-    }
+    }));
   }
 
   // 5. SÓ AGORA, se ainda não há NENHUM usuário (nem local, nem Firebase),
@@ -1942,6 +2280,94 @@ window.atualizarStorage=atualizarStorage;
 // ═══════════════════════════════════════════
 const MESES=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 function pad(n){return String(n).padStart(2,'0');}
+// ═══════════════════════════════════════════
+// COMPRESSÃO DE FOTOS — RELATÓRIO PREMIUM
+// ═══════════════════════════════════════════
+// Gera duas versões de cada foto: miniatura leve (320px, pra tela) e versão
+// maior (1280px, só usada dentro do PDF, onde a qualidade importa). As fotos
+// em si não são salvas em lugar nenhum — ficam só na memória da página
+// enquanto o vigia monta o relatório, e são descartadas depois de gerar.
+function _otimizarImagem(base64Str,maxDimen,qualidade){
+  return new Promise(resolve=>{
+    const img=new Image();
+    img.onload=()=>{
+      const canvas=document.createElement('canvas');
+      let w=img.width,h=img.height;
+      if(w>h){if(w>maxDimen){h*=maxDimen/w;w=maxDimen;}}
+      else{if(h>maxDimen){w*=maxDimen/h;h=maxDimen;}}
+      canvas.width=w;canvas.height=h;
+      canvas.getContext('2d').drawImage(img,0,0,w,h);
+      resolve(canvas.toDataURL('image/jpeg',qualidade));
+    };
+    img.onerror=()=>resolve(base64Str);
+    img.src=base64Str;
+  });
+}
+function lerEComprimirFoto(arquivo){
+  return new Promise((resolve,reject)=>{
+    const leitor=new FileReader();
+    leitor.onerror=()=>reject(new Error('Falha ao ler '+arquivo.name));
+    leitor.onload=async e=>{
+      const dataUrl=e.target.result;
+      const thumb=await _otimizarImagem(dataUrl,320,.55);
+      const full=await _otimizarImagem(dataUrl,1280,.75);
+      resolve({thumb,full});
+    };
+    leitor.readAsDataURL(arquivo);
+  });
+}
+
+function calcularProgressoPlantao(){
+  const bar=document.getElementById('plantao-progresso-bar');
+  const pct=document.getElementById('plantao-progresso-pct');
+  if(!bar||!plantaoAtivo)return;
+  let pontos=0;
+  if(plantaoAtivo.checklist)pontos+=50;
+  if((rondasAtivas||[]).filter(r=>r.fim).length>0)pontos+=30;
+  if((portariaP||[]).length>0||(plantaoAtivo.ocorrencias||[]).length>0)pontos+=20;
+  bar.style.width=pontos+'%';
+  if(pct)pct.textContent=pontos+'%';
+}
+window.calcularProgressoPlantao=calcularProgressoPlantao;
+
+// ═══════════════════════════════════════════
+// CONTROLE DE LOCALIZAÇÃO (geofencing)
+// ═══════════════════════════════════════════
+// Remove emojis de texto que vai pro jsPDF — a fonte padrão dele (Helvetica/
+// WinAnsi) não sabe desenhar emoji, e isso corrompe o PDF inteiro se não tirar.
+function _semEmoji(txt){
+  if(!txt)return txt;
+  return String(txt).replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}\u{FE0F}]/gu,'').trim();
+}
+
+function _distanciaMetros(lat1,lng1,lat2,lng2){
+  const R=6371000;
+  const toRad=x=>x*Math.PI/180;
+  const dLat=toRad(lat2-lat1),dLng=toRad(lng2-lng1);
+  const a=Math.sin(dLat/2)**2+Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLng/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+async function _verificarGeofence(contNome,localNome){
+  const cont=DB.get('contratantes').find(c=>c.nome===contNome);
+  if(!cont)return{ok:true};
+  const local=_locaisContratante(cont).find(l=>l.nome===localNome);
+  if(!local||local.lat==null||local.lng==null)return{ok:true};
+  // Liberação temporária concedida pelo admin (vigia ligou/avisou por fora do app)
+  const vig=DB.get('vigilantes').find(v=>v.id===U.id);
+  if(vig&&vig.geoLiberadoAte&&new Date(vig.geoLiberadoAte)>new Date())return{ok:true,liberado:true};
+  if(!navigator.geolocation)return{ok:true};
+  try{
+    const pos=await new Promise((resolve,reject)=>{
+      navigator.geolocation.getCurrentPosition(resolve,reject,{timeout:10000,enableHighAccuracy:true});
+    });
+    const dist=_distanciaMetros(pos.coords.latitude,pos.coords.longitude,local.lat,local.lng);
+    if(dist>local.raio)return{ok:false,distancia:Math.round(dist),raio:local.raio};
+    return{ok:true};
+  }catch(e){
+    return{ok:false,semGps:true};
+  }
+}
+
 function _iniciais(nome){
   if(!nome)return'?';
   const partes=nome.trim().split(/\s+/);
@@ -2048,6 +2474,7 @@ function fazerLogin(){
       document.getElementById('cliente-form').classList.remove('hidden');
       document.getElementById('cli-identificado-nome').textContent=u.nome;
       document.getElementById('cli-identificado-cpf').textContent='CPF: '+u.cpf;
+      document.getElementById('cli-identificado-avatar').textContent=_iniciais(u.nome);
       selTipoCliente('visitante');
     } else {
       // Login compartilhado antigo (por contratante) — precisa identificar quem está usando
@@ -2072,7 +2499,6 @@ function fazerLogin(){
     document.getElementById('plantao-saudacao').textContent='Olá, '+u.nome.split(' ')[0]+'!';
     popularLocais();
     iniciarRelogioEntrada();
-    irPara('screen-plantao');
 
     // Verificar plantão aberto DIRETAMENTE do localStorage (sem depender do CACHE)
     let plantaoAberto=null;
@@ -2084,10 +2510,13 @@ function fazerLogin(){
     }catch(e){}
 
     if(plantaoAberto){
-      // Retomar plantão sem pedir foto novamente
+      // Já tem plantão em andamento — retoma direto, sem passar pela escolha de local
+      irPara('screen-plantao');
       verificarPlantaoAtivo();
       setTimeout(()=>toast('🔄 Plantão retomado! Bem-vindo de volta, '+u.nome.split(' ')[0]+'.'),400);
     } else {
+      // Sem plantão ainda — primeiro escolhe o local, só depois vai pra tela de ronda
+      irPara('screen-escolher-local');
       verificarEscalaVigilante();
     }
   }
@@ -2154,7 +2583,7 @@ function irPara(s){
   if(s==='screen-meus-relatorios')renderMeusRelatorios();
   if(s==='screen-substituicoes')renderSubstVig();
   if(s==='screen-config')renderConfig();
-  if(s==='screen-cliente'){if(clienteIdentificacao)renderMeusPreCadastros();}
+  if(s==='screen-cliente'){renderMeusAlertasEmergencia();renderRondasHojeCliente();if(clienteIdentificacao)renderMeusPreCadastros();}
   if(s==='screen-cliente-relatorios')renderRelatoriosCliente();
   if(s==='screen-precadastros')renderPreCadastrosAdmin();
   if(s==='screen-moradores')renderMoradoresAdmin();
@@ -2243,32 +2672,58 @@ function renderVigilantes(){
   const lista=DB.get('vigilantes');
   const div=document.getElementById('lista-vigilantes');
   if(!lista.length){div.innerHTML='<div class="empty-state"><div class="es-icon">👤</div><div>Nenhum vigilante</div></div>';return;}
-  div.innerHTML=lista.map(v=>`
+  div.innerHTML=lista.map(v=>{
+    const liberado=v.geoLiberadoAte&&new Date(v.geoLiberadoAte)>new Date();
+    return`
     <div class="list-item">
       <div class="avatar-badge">${_iniciais(v.nome)}</div>
       <div class="li-main">
         <div class="li-title">${v.nome}</div>
         <div class="li-sub">CPF: ${v.cpf||'—'} · Pix: ${v.pix||'—'} (${v.banco||'—'})</div>
-        <div class="li-sub">Diária: ${fmtMoeda(v.diaria)} · Plantão: ${v.horas||8}h · ${v.email}</div>
+        <div class="li-sub">${v.tipoPagamento==='fixo'?'Fixo mensal: '+fmtMoeda(v.valorFixo):'Diária: '+fmtMoeda(v.diaria)} · Plantão: ${v.horas||8}h · ${v.email}</div>
+        ${liberado?`<div class="li-sub" style="color:var(--gold);">🔓 Localização liberada até ${fmtH(v.geoLiberadoAte)}</div>`:''}
       </div>
       <div class="li-actions">
         <button class="btn btn-outline btn-sm btn-icon" onclick="editarVigilante('${v.id}')">✏️</button>
+        <button class="btn btn-amber btn-sm btn-icon" style="color:#000;" onclick="destravarLocalizacaoVigilante('${v.id}')" title="Liberar início/encerramento fora da área por 15 minutos">📍</button>
         <button class="btn btn-red btn-sm btn-icon" onclick="excluirVigilante('${v.id}')">🗑️</button>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
+function destravarLocalizacaoVigilante(id){
+  const v=DB.get('vigilantes').find(x=>x.id===id);if(!v)return;
+  if(!confirm(`Liberar "${v.nome}" pra iniciar/encerrar plantão fora da área por 15 minutos?`))return;
+  const liberadoAte=new Date(Date.now()+15*60000).toISOString();
+  const lista=DB.get('vigilantes').map(x=>x.id===id?{...x,geoLiberadoAte:liberadoAte}:x);
+  DB.set('vigilantes',lista);
+  renderVigilantes();
+  toast(`🔓 ${v.nome} liberado por 15 minutos!`);
+}
+window.destravarLocalizacaoVigilante=destravarLocalizacaoVigilante;
 function abrirModalVigilante(){
-  ['mv-id','mv-nome','mv-cpf','mv-email','mv-senha','mv-pix','mv-banco','mv-diaria','mv-horas'].forEach(id=>document.getElementById(id).value='');
+  ['mv-id','mv-nome','mv-cpf','mv-email','mv-senha','mv-pix','mv-banco','mv-diaria','mv-valor-fixo','mv-horas'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('mv-tipo-pagamento').value='diaria';
+  alternarTipoPagamentoVig();
   document.getElementById('mv-title').textContent='Novo Vigilante';abrirModal('modal-vigilante');
 }
+function alternarTipoPagamentoVig(){
+  const tipo=document.getElementById('mv-tipo-pagamento').value;
+  document.getElementById('mv-campo-diaria').classList.toggle('hidden',tipo!=='diaria');
+  document.getElementById('mv-campo-fixo').classList.toggle('hidden',tipo!=='fixo');
+}
+window.alternarTipoPagamentoVig=alternarTipoPagamentoVig;
 function editarVigilante(id){
   const v=DB.get('vigilantes').find(x=>x.id===id);if(!v)return;
   document.getElementById('mv-id').value=v.id;document.getElementById('mv-nome').value=v.nome;
   document.getElementById('mv-cpf').value=v.cpf||'';document.getElementById('mv-email').value=v.email;
   document.getElementById('mv-senha').value=v.senha||'';document.getElementById('mv-pix').value=v.pix||'';
   document.getElementById('mv-banco').value=v.banco||'';
+  document.getElementById('mv-tipo-pagamento').value=v.tipoPagamento||'diaria';
   document.getElementById('mv-diaria').value=v.diaria?'R$ '+Number(v.diaria).toLocaleString('pt-BR',{minimumFractionDigits:2}):'';
+  document.getElementById('mv-valor-fixo').value=v.valorFixo?'R$ '+Number(v.valorFixo).toLocaleString('pt-BR',{minimumFractionDigits:2}):'';
   document.getElementById('mv-horas').value=v.horas||8;
+  alternarTipoPagamentoVig();
   document.getElementById('mv-title').textContent='Editar Vigilante';abrirModal('modal-vigilante');
 }
 function salvarVigilante(){
@@ -2277,8 +2732,9 @@ function salvarVigilante(){
   const email=document.getElementById('mv-email').value.trim();
   const senha=document.getElementById('mv-senha').value;
   if(!nome||!email||!senha){toast('⚠️ Preencha nome, e-mail e senha');return;}
+  const tipoPagamento=document.getElementById('mv-tipo-pagamento').value;
   const vigs=DB.get('vigilantes').filter(x=>x.id!==id);
-  vigs.push({id,nome,email,senha,cpf:document.getElementById('mv-cpf').value,pix:document.getElementById('mv-pix').value,banco:document.getElementById('mv-banco').value,diaria:parseMoeda(document.getElementById('mv-diaria').value),horas:Number(document.getElementById('mv-horas').value)||8,ativo:true});
+  vigs.push({id,nome,email,senha,cpf:document.getElementById('mv-cpf').value,pix:document.getElementById('mv-pix').value,banco:document.getElementById('mv-banco').value,tipoPagamento,diaria:parseMoeda(document.getElementById('mv-diaria').value),valorFixo:parseMoeda(document.getElementById('mv-valor-fixo').value),horas:Number(document.getElementById('mv-horas').value)||8,ativo:true});
   DB.set('vigilantes',vigs);
   const us=DB.get('usuarios').filter(x=>x.id!==id);
   us.push({id,nome,email,senha,perfil:'vigilante',atualizadoEm:new Date().toISOString()});DB.set('usuarios',us);
@@ -2297,45 +2753,286 @@ function renderContratantes(){
       <div class="li-main">
         <div class="li-title">${c.nome}</div>
         <div class="li-sub">📞 ${c.contato||'—'} · ${fmtMoeda(c.valor)}/mês</div>
-        <div class="li-sub mt-2" style="white-space:pre-line;line-height:1.6">📍 ${c.locais||'—'}</div>
+        <div class="li-sub mt-2" style="white-space:pre-line;line-height:1.6">📍 ${_locaisContratante(c).map(l=>l.nome+(l.lat?' (📍'+l.raio+'m)':'')).join('\n')||'—'}</div>
       </div>
       <button class="btn btn-outline btn-sm btn-icon" onclick="editarContratante('${c.id}')">✏️</button>
     </div>`).join('');
 }
 function abrirModalContratante(){
-  ['mc-id','mc-nome','mc-contato','mc-locais','mc-valor','mc-cliente-email','mc-cliente-senha'].forEach(id=>document.getElementById(id).value='');
+  ['mc-id','mc-nome','mc-contato','mc-valor'].forEach(id=>document.getElementById(id).value='');
+  contratanteLocaisTemp=[];
+  renderListaLocaisContratante();
+  contratanteRotasTemp=[];
+  renderListaRotasContratante();
   document.getElementById('mc-title').textContent='Novo Contratante';abrirModal('modal-contratante');
 }
 function editarContratante(id){
   const c=DB.get('contratantes').find(x=>x.id===id);if(!c)return;
   document.getElementById('mc-id').value=c.id;document.getElementById('mc-nome').value=c.nome;
-  document.getElementById('mc-contato').value=c.contato||'';document.getElementById('mc-locais').value=c.locais||'';
+  document.getElementById('mc-contato').value=c.contato||'';
   document.getElementById('mc-valor').value=c.valor?'R$ '+Number(c.valor).toLocaleString('pt-BR',{minimumFractionDigits:2}):'';
-  // Carregar login do cliente, se existir
-  const userCliente=DB.get('usuarios').find(u=>u.perfil==='cliente'&&u.contratanteId===id);
-  document.getElementById('mc-cliente-email').value=userCliente?userCliente.email:'';
-  document.getElementById('mc-cliente-senha').value=userCliente?userCliente.senha:'';
+  contratanteLocaisTemp=_locaisContratante(c).map(l=>({...l}));
+  renderListaLocaisContratante();
+  contratanteRotasTemp=c.rotas?JSON.parse(JSON.stringify(c.rotas)):[];
+  renderListaRotasContratante();
   document.getElementById('mc-title').textContent='Editar Contratante';abrirModal('modal-contratante');
 }
+// ═══════════════════════════════════════════
+// ROTAS DE RONDA E PONTOS DE CHECAGEM
+// ═══════════════════════════════════════════
+// ═══════════════════════════════════════════
+// LOCAIS DE RONDA (cada um com sua própria localização/raio)
+// ═══════════════════════════════════════════
+let contratanteLocaisTemp=[];
+
+// Suporta os dois formatos: array novo (estruturado, com lat/lng/raio) e
+// string antiga (um nome de local por linha, sem geolocalização) — assim
+// contratantes já cadastrados antes dessa mudança continuam funcionando.
+function _locaisContratante(c){
+  if(Array.isArray(c.locais))return c.locais;
+  if(typeof c.locais==='string'){
+    return(c.locais||'').split('\n').filter(l=>l.trim()).map((nome,i)=>({id:'legado'+i,nome:nome.trim(),lat:null,lng:null,raio:null}));
+  }
+  return[];
+}
+
+function renderListaLocaisContratante(){
+  const div=document.getElementById('lista-locais-contratante');
+  if(!div)return;
+  if(!contratanteLocaisTemp.length){div.innerHTML='<div class="text-xs" style="color:var(--muted);">Nenhum local cadastrado ainda.</div>';return;}
+  div.innerHTML=contratanteLocaisTemp.map((l,idx)=>`
+    <div class="list-item">
+      <div class="li-main">
+        <div class="li-title">${l.nome}${l.lat?' <span class="badge badge-green">📍 '+l.raio+'m</span>':''}</div>
+        ${!l.lat?'<div class="li-sub" style="color:var(--muted);">Sem controle de localização</div>':''}
+      </div>
+      <div class="li-actions">
+        <button class="btn btn-outline btn-sm btn-icon" onclick="abrirModalLocal(${idx})">✏️</button>
+        <button class="btn btn-red btn-sm btn-icon" onclick="excluirLocalTemp(${idx})">🗑️</button>
+      </div>
+    </div>`).join('');
+}
+function excluirLocalTemp(idx){
+  if(!confirm('Excluir este local?'))return;
+  contratanteLocaisTemp.splice(idx,1);
+  renderListaLocaisContratante();
+}
+window.excluirLocalTemp=excluirLocalTemp;
+
+let _localEditandoIdx=null;
+function abrirModalLocal(idx){
+  _localEditandoIdx=(idx!==undefined)?idx:null;
+  if(_localEditandoIdx!==null){
+    const l=contratanteLocaisTemp[_localEditandoIdx];
+    document.getElementById('ml-title').textContent='Editar Local';
+    document.getElementById('ml-nome').value=l.nome;
+    document.getElementById('ml-geo-ativo').classList.toggle('on',!!l.lat);
+    document.getElementById('ml-geo-campos').classList.toggle('hidden',!l.lat);
+    document.getElementById('ml-lat').value=l.lat||'';
+    document.getElementById('ml-lng').value=l.lng||'';
+    document.getElementById('ml-raio').value=l.raio||100;
+  }else{
+    document.getElementById('ml-title').textContent='Novo Local';
+    document.getElementById('ml-nome').value='';
+    document.getElementById('ml-geo-ativo').classList.remove('on');
+    document.getElementById('ml-geo-campos').classList.add('hidden');
+    document.getElementById('ml-lat').value='';
+    document.getElementById('ml-lng').value='';
+    document.getElementById('ml-raio').value=100;
+  }
+  abrirModal('modal-local');
+}
+window.abrirModalLocal=abrirModalLocal;
+
+function usarLocalizacaoAtualLocal(){
+  if(!navigator.geolocation){toast('⚠️ Seu navegador não suporta localização');return;}
+  toast('📍 Obtendo localização atual...');
+  navigator.geolocation.getCurrentPosition(
+    pos=>{
+      document.getElementById('ml-lat').value=pos.coords.latitude.toFixed(5);
+      document.getElementById('ml-lng').value=pos.coords.longitude.toFixed(5);
+      toast('✅ Localização capturada!');
+    },
+    ()=>toast('❌ Não foi possível obter a localização.'),
+    {timeout:8000,enableHighAccuracy:true}
+  );
+}
+window.usarLocalizacaoAtualLocal=usarLocalizacaoAtualLocal;
+
+function salvarLocal(){
+  const nome=document.getElementById('ml-nome').value.trim();
+  if(!nome){toast('⚠️ Dê um nome pro local');return;}
+  const geoAtivo=document.getElementById('ml-geo-ativo').classList.contains('on');
+  const lat=document.getElementById('ml-lat').value.trim();
+  const lng=document.getElementById('ml-lng').value.trim();
+  const raio=parseInt(document.getElementById('ml-raio').value)||100;
+  if(geoAtivo&&(!lat||!lng)){toast('⚠️ Pra ativar o controle de localização, defina a latitude e longitude');return;}
+  const local={
+    id:(_localEditandoIdx!==null&&contratanteLocaisTemp[_localEditandoIdx].id)?contratanteLocaisTemp[_localEditandoIdx].id:'loc'+Date.now(),
+    nome,
+    lat:geoAtivo&&lat?parseFloat(lat):null,
+    lng:geoAtivo&&lng?parseFloat(lng):null,
+    raio:geoAtivo?raio:null
+  };
+  if(_localEditandoIdx!==null)contratanteLocaisTemp[_localEditandoIdx]=local;
+  else contratanteLocaisTemp.push(local);
+  fecharModal('modal-local');
+  renderListaLocaisContratante();
+}
+window.salvarLocal=salvarLocal;
+
+let contratanteRotasTemp=[];
+let rotaPontosTemp=[];
+let rotaEditandoIdx=null;
+let pontoEditandoIdx=null;
+
+function renderListaRotasContratante(){
+  const div=document.getElementById('lista-rotas-contratante');
+  if(!div)return;
+  if(!contratanteRotasTemp.length){div.innerHTML='<div class="text-xs" style="color:var(--muted);">Nenhuma rota cadastrada ainda.</div>';return;}
+  div.innerHTML=contratanteRotasTemp.map((r,idx)=>`
+    <div class="list-item">
+      <div class="li-main">
+        <div class="li-title">${r.nome}</div>
+        <div class="li-sub">${r.pontos.length} ponto(s) de checagem</div>
+      </div>
+      <div class="li-actions">
+        <button class="btn btn-outline btn-sm btn-icon" onclick="abrirModalRota(${idx})">✏️</button>
+        <button class="btn btn-red btn-sm btn-icon" onclick="excluirRotaTemp(${idx})">🗑️</button>
+      </div>
+    </div>`).join('');
+}
+function excluirRotaTemp(idx){
+  if(!confirm('Excluir esta rota?'))return;
+  contratanteRotasTemp.splice(idx,1);
+  renderListaRotasContratante();
+}
+window.excluirRotaTemp=excluirRotaTemp;
+
+function abrirModalRota(idx){
+  rotaEditandoIdx=(idx!==undefined)?idx:null;
+  if(rotaEditandoIdx!==null){
+    const r=contratanteRotasTemp[rotaEditandoIdx];
+    document.getElementById('mr-title').textContent='Editar Rota';
+    document.getElementById('mr-nome').value=r.nome;
+    rotaPontosTemp=JSON.parse(JSON.stringify(r.pontos));
+  }else{
+    document.getElementById('mr-title').textContent='Nova Rota';
+    document.getElementById('mr-nome').value='';
+    rotaPontosTemp=[];
+  }
+  renderListaPontosRota();
+  abrirModal('modal-rota');
+}
+window.abrirModalRota=abrirModalRota;
+
+function salvarRota(){
+  const nome=document.getElementById('mr-nome').value.trim();
+  if(!nome){toast('⚠️ Dê um nome pra rota');return;}
+  if(!rotaPontosTemp.length){toast('⚠️ Adicione pelo menos 1 ponto de checagem');return;}
+  const rota={id:(rotaEditandoIdx!==null&&contratanteRotasTemp[rotaEditandoIdx].id)?contratanteRotasTemp[rotaEditandoIdx].id:'rota'+Date.now(),nome,pontos:rotaPontosTemp};
+  if(rotaEditandoIdx!==null)contratanteRotasTemp[rotaEditandoIdx]=rota;
+  else contratanteRotasTemp.push(rota);
+  fecharModal('modal-rota');
+  renderListaRotasContratante();
+  toast('✅ Rota salva! Não esqueça de salvar o contratante também.');
+}
+window.salvarRota=salvarRota;
+
+function renderListaPontosRota(){
+  const div=document.getElementById('lista-pontos-rota');
+  if(!div)return;
+  if(!rotaPontosTemp.length){div.innerHTML='<div class="text-xs" style="color:var(--muted);">Nenhum ponto adicionado ainda.</div>';return;}
+  div.innerHTML=rotaPontosTemp.map((p,idx)=>`
+    <div class="list-item">
+      <div class="li-main">
+        <div class="li-title">${p.nome}${p.obrigatorio?' <span class="badge badge-red">Obrigatório</span>':''}${p.podeIniciar?' <span class="badge badge-green">Início</span>':''}${p.podeEncerrar?' <span class="badge badge-blue">Fim</span>':''}</div>
+        <div class="li-sub">Raio: ${p.raio}m · Parado: ${p.tempo}s</div>
+      </div>
+      <div class="li-actions">
+        <button class="btn btn-outline btn-sm btn-icon" onclick="abrirModalPonto(${idx})">✏️</button>
+        <button class="btn btn-red btn-sm btn-icon" onclick="excluirPontoTemp(${idx})">🗑️</button>
+      </div>
+    </div>`).join('');
+}
+function excluirPontoTemp(idx){
+  rotaPontosTemp.splice(idx,1);
+  renderListaPontosRota();
+}
+window.excluirPontoTemp=excluirPontoTemp;
+
+function abrirModalPonto(idx){
+  pontoEditandoIdx=(idx!==undefined)?idx:null;
+  if(pontoEditandoIdx!==null){
+    const p=rotaPontosTemp[pontoEditandoIdx];
+    document.getElementById('mp-title').textContent='Editar Ponto';
+    document.getElementById('mp-nome').value=p.nome;
+    document.getElementById('mp-lat').value=p.lat;
+    document.getElementById('mp-lng').value=p.lng;
+    document.getElementById('mp-raio').value=p.raio;
+    document.getElementById('mp-tempo').value=p.tempo;
+    document.getElementById('mp-obrigatorio').classList.toggle('on',!!p.obrigatorio);
+    document.getElementById('mp-pode-iniciar').classList.toggle('on',!!p.podeIniciar);
+    document.getElementById('mp-pode-encerrar').classList.toggle('on',!!p.podeEncerrar);
+  }else{
+    document.getElementById('mp-title').textContent='Novo Ponto de Checagem';
+    document.getElementById('mp-nome').value='';
+    document.getElementById('mp-lat').value='';
+    document.getElementById('mp-lng').value='';
+    document.getElementById('mp-raio').value='30';
+    document.getElementById('mp-tempo').value='30';
+    document.getElementById('mp-obrigatorio').classList.add('on');
+    document.getElementById('mp-pode-iniciar').classList.remove('on');
+    document.getElementById('mp-pode-encerrar').classList.remove('on');
+  }
+  abrirModal('modal-ponto');
+}
+window.abrirModalPonto=abrirModalPonto;
+
+function usarLocalizacaoAtualPonto(){
+  if(!navigator.geolocation){toast('⚠️ Seu navegador não suporta localização');return;}
+  toast('📍 Obtendo localização atual...');
+  navigator.geolocation.getCurrentPosition(
+    pos=>{
+      document.getElementById('mp-lat').value=pos.coords.latitude.toFixed(5);
+      document.getElementById('mp-lng').value=pos.coords.longitude.toFixed(5);
+      toast('✅ Localização capturada!');
+    },
+    ()=>toast('❌ Não foi possível obter a localização.'),
+    {timeout:8000,enableHighAccuracy:true}
+  );
+}
+window.usarLocalizacaoAtualPonto=usarLocalizacaoAtualPonto;
+
+function salvarPonto(){
+  const nome=document.getElementById('mp-nome').value.trim();
+  const lat=document.getElementById('mp-lat').value.trim();
+  const lng=document.getElementById('mp-lng').value.trim();
+  const raio=parseInt(document.getElementById('mp-raio').value)||30;
+  const tempo=parseInt(document.getElementById('mp-tempo').value)||30;
+  if(!nome){toast('⚠️ Dê um nome pro ponto');return;}
+  if(!lat||!lng){toast('⚠️ Defina a localização do ponto');return;}
+  const ponto={
+    id:(pontoEditandoIdx!==null&&rotaPontosTemp[pontoEditandoIdx].id)?rotaPontosTemp[pontoEditandoIdx].id:'pt'+Date.now(),
+    nome,lat:parseFloat(lat),lng:parseFloat(lng),raio,tempo,
+    obrigatorio:document.getElementById('mp-obrigatorio').classList.contains('on'),
+    podeIniciar:document.getElementById('mp-pode-iniciar').classList.contains('on'),
+    podeEncerrar:document.getElementById('mp-pode-encerrar').classList.contains('on')
+  };
+  if(pontoEditandoIdx!==null)rotaPontosTemp[pontoEditandoIdx]=ponto;
+  else rotaPontosTemp.push(ponto);
+  fecharModal('modal-ponto');
+  renderListaPontosRota();
+}
+window.salvarPonto=salvarPonto;
+
 function salvarContratante(){
   const id=document.getElementById('mc-id').value||'c'+Date.now();
   const nome=document.getElementById('mc-nome').value.trim();
   if(!nome){toast('⚠️ Informe o nome');return;}
   const lista=DB.get('contratantes').filter(x=>x.id!==id);
-  lista.push({id,nome,contato:document.getElementById('mc-contato').value,locais:document.getElementById('mc-locais').value,valor:parseMoeda(document.getElementById('mc-valor').value)});
+  lista.push({id,nome,contato:document.getElementById('mc-contato').value,locais:contratanteLocaisTemp,valor:parseMoeda(document.getElementById('mc-valor').value),rotas:contratanteRotasTemp});
   DB.set('contratantes',lista);
-
-  // Criar/atualizar login do cliente, se preenchido
-  const clienteEmail=document.getElementById('mc-cliente-email').value.trim();
-  const clienteSenha=document.getElementById('mc-cliente-senha').value.trim();
-  if(clienteEmail&&clienteSenha){
-    if(clienteSenha.length<6){toast('⚠️ Senha do cliente precisa ter no mínimo 6 caracteres');return;}
-    const emailEmUso=DB.get('usuarios').find(u=>u.email===clienteEmail&&!(u.perfil==='cliente'&&u.contratanteId===id));
-    if(emailEmUso){toast('⚠️ Esse e-mail já está em uso por outro usuário');return;}
-    const usuarios=DB.get('usuarios').filter(u=>!(u.perfil==='cliente'&&u.contratanteId===id));
-    usuarios.push({id:'ucli'+id,nome,email:clienteEmail,senha:clienteSenha,perfil:'cliente',contratanteId:id,atualizadoEm:new Date().toISOString()});
-    DB.set('usuarios',usuarios);
-  }
   fecharModal('modal-contratante');renderContratantes();popularLocais();toast('✅ Contratante salvo!');
 }
 
@@ -2503,7 +3200,7 @@ function abrirModalEscala(){
   const vigs=DB.get('vigilantes');
   document.getElementById('me-vigilante').innerHTML=vigs.map(v=>`<option value="${v.id}|${v.nome}">${v.nome}</option>`).join('');
   const locais=[];
-  DB.get('contratantes').forEach(c=>(c.locais||'').split('\n').filter(l=>l.trim()).forEach(l=>locais.push(`<option value="${c.id}|${l.trim()}">${c.nome} — ${l.trim()}</option>`)));
+  DB.get('contratantes').forEach(c=>_locaisContratante(c).forEach(l=>locais.push(`<option value="${c.id}|${l.nome}">${c.nome} — ${l.nome}</option>`)));
   document.getElementById('me-local').innerHTML=locais.join('');
   document.getElementById('me-data').value=escalaDiaSel||new Date().toISOString().split('T')[0];
   document.getElementById('me-tipo').value='plantao';
@@ -2767,8 +3464,10 @@ function abrirFechamento(){
   let html=`<div style="font-size:13px;color:var(--muted);margin-bottom:14px;">Referência: <strong>${MESES[mes]} ${ano}</strong></div>`;
   DB.get('vigilantes').forEach(v=>{
     const qtd=escala.filter(e=>(e.vigilanteId===v.id&&e.status!=='substituicao')||(e.substitutoId===v.id&&e.status==='substituicao')).length;
-    const total=qtd*Number(v.diaria||0);
-    html+=`<div class="fechamento-card"><div class="fc-nome">👤 ${v.nome}</div><div class="fc-info">Plantões: <strong>${qtd}</strong> · Diária: ${fmtMoeda(v.diaria)}</div><div class="fc-info">Pix: ${v.pix||'—'} · ${v.banco||'—'}</div><div class="fc-total">Total: ${fmtMoeda(total)}</div></div>`;
+    const ehFixo=v.tipoPagamento==='fixo';
+    const total=ehFixo?Number(v.valorFixo||0):qtd*Number(v.diaria||0);
+    const infoValor=ehFixo?`Valor fixo mensal: ${fmtMoeda(v.valorFixo)}`:`Plantões: <strong>${qtd}</strong> · Diária: ${fmtMoeda(v.diaria)}`;
+    html+=`<div class="fechamento-card"><div class="fc-nome">👤 ${v.nome}${ehFixo?' <span class="badge badge-purple">Fixo</span>':''}</div><div class="fc-info">${infoValor}</div><div class="fc-info">Pix: ${v.pix||'—'} · ${v.banco||'—'}</div><div class="fc-total">Total: ${fmtMoeda(total)}</div></div>`;
   });
   document.getElementById('fechamento-conteudo').innerHTML=html;abrirModal('modal-fechamento');
 }
@@ -2778,9 +3477,12 @@ function confirmarPagamentos(){
   const fin=DB.get('financeiro');const hoje=new Date().toISOString().split('T')[0];
   DB.get('vigilantes').forEach(v=>{
     const qtd=escala.filter(e=>(e.vigilanteId===v.id&&e.status!=='substituicao')||(e.substitutoId===v.id&&e.status==='substituicao')).length;
-    if(!qtd)return;
-    const total=qtd*Number(v.diaria||0);
-    fin.push({id:'f'+Date.now()+Math.random().toString(36).slice(2,5),tipo:'diaria',vigilanteId:v.id,ref:v.nome,valor:total.toFixed(2),data:hoje,obs:`Fechamento ${MESES[mes]}/${ano} — ${qtd} plantões`});
+    const ehFixo=v.tipoPagamento==='fixo';
+    if(!ehFixo&&!qtd)return; // sem plantão no mês e não é fixo — não lança nada
+    const total=ehFixo?Number(v.valorFixo||0):qtd*Number(v.diaria||0);
+    if(!total)return;
+    const obs=ehFixo?`Fechamento ${MESES[mes]}/${ano} — valor fixo mensal`:`Fechamento ${MESES[mes]}/${ano} — ${qtd} plantões`;
+    fin.push({id:'f'+Date.now()+Math.random().toString(36).slice(2,5),tipo:'diaria',vigilanteId:v.id,ref:v.nome,valor:total.toFixed(2),data:hoje,obs});
   });
   DB.set('financeiro',fin);fecharModal('modal-fechamento');toast('✅ Pagamentos lançados!');
 }
@@ -3151,8 +3853,8 @@ function verificarEscalaVigilante(){
     const contratantes=DB.get('contratantes');
     let optsHtml='<option value="">Selecione o local...</option>';
     contratantes.forEach(c=>{
-      (c.locais||'').split('\n').filter(l=>l.trim()).forEach(l=>{
-        optsHtml+=`<option value="${c.nome}|${l.trim()}">${c.nome} — ${l.trim()}</option>`;
+      _locaisContratante(c).forEach(l=>{
+        optsHtml+=`<option value="${c.nome}|${l.nome}">${c.nome} — ${l.nome}</option>`;
       });
     });
 
@@ -3229,7 +3931,7 @@ function verificarPlantaoAtivo(){
   if(rondaAtualIdx!==null) msgs.push('ronda em andamento');
   setTimeout(()=>toast(msgs.length?('✅ Retomando: '+msgs.join(', ')+' recuperados!'):'✅ Plantão retomado!'),300);
 }
-function iniciarPlantao(){
+async function iniciarPlantao(){
   let localNome='';let contNome='';let escalaHoje=null;
 
   const sel=document.getElementById('sel-local-plantao');
@@ -3252,6 +3954,20 @@ function iniciarPlantao(){
 
   if(!localNome){
     toast('⚠️ Selecione o local antes de iniciar');
+    return;
+  }
+
+  const btnIniciar=document.getElementById('btn-iniciar-plantao');
+  if(btnIniciar)btnIniciar.disabled=true;
+  toast('📍 Confirmando sua localização...');
+  const geo=await _verificarGeofence(contNome,localNome);
+  if(btnIniciar)btnIniciar.disabled=false;
+  if(!geo.ok){
+    if(geo.semGps){
+      mostrarBloqueio('Localização necessária','Não conseguimos confirmar onde você está. Verifique se o GPS do celular está ligado e a permissão de localização liberada pro Guardião, e tente de novo.\n\nSe continuar sem funcionar, ligue pro administrador.','Entendi',()=>{});
+    }else{
+      mostrarBloqueio('Fora da área permitida',`Você está a ${geo.distancia}m do local — o permitido é até ${geo.raio}m.\n\nAproxime-se do local e tente de novo, ou ligue pro administrador pra liberar seu acesso.`,'Entendi',()=>{});
+    }
     return;
   }
 
@@ -3291,6 +4007,7 @@ function iniciarPlantao(){
   DB.set('plantoes',todosPlantoes);
 
   mostrarAtivo();iniciarRelogioSaida();renderEquipamentosChecklist();renderSelecaoVeiculoChecklist();
+  irPara('screen-plantao');
   toast('🟢 Plantão iniciado em '+localNome+'!');
 }
 
@@ -3309,8 +4026,10 @@ function mostrarAtivo(){
   try{renderItensVeiculo();}catch(e){console.warn('renderItensVeiculo:',e);}
   try{renderEquipamentosChecklist();}catch(e){console.warn('renderEquipamentos:',e);}
   try{renderPortariaPlantao();}catch(e){console.warn('renderPortaria:',e);}
+  try{calcularProgressoPlantao();}catch(e){}
   try{renderListaRondas();}catch(e){console.warn('renderRondas:',e);}
   try{renderObsCk();}catch(e){console.warn('renderObs:',e);}
+  try{popularSeletorRota();popularSeletorVeiculoRonda();}catch(e){console.warn('popularSeletorRota:',e);}
   // Restaurar estado visual do checklist e rondas
   setTimeout(()=>{
     restaurarEstadoChecklistVisual();
@@ -3334,19 +4053,33 @@ function iniciarRelogioSaida(){
   if(timerHora)clearInterval(timerHora);
   timerHora=setInterval(()=>{const el=document.getElementById('hora-atual-saida');if(el)el.textContent='Agora: '+fmtH(new Date().toISOString());},1000);
 }
+function abaCliente(aba,el){
+  ['inicio','cadastrar'].forEach(a=>document.getElementById('aba-cliente-'+a).classList.toggle('hidden',a!==aba));
+  document.querySelectorAll('#screen-cliente .tab-item').forEach(t=>t.classList.remove('active'));
+  if(el)el.classList.add('active');
+  if(aba==='inicio'){renderRondasHojeCliente();renderMeusAlertasEmergencia();}
+}
+window.abaCliente=abaCliente;
+
 function abaPlantao(aba,el){
-  ['ronda','portaria','checklist'].forEach(a=>document.getElementById('aba-'+a).classList.toggle('hidden',a!==aba));
+  ['ronda','portaria','checklist','ocorrencias'].forEach(a=>document.getElementById('aba-'+a).classList.toggle('hidden',a!==aba));
   document.querySelectorAll('#screen-plantao .tab-item').forEach(t=>t.classList.remove('active'));
   if(el)el.classList.add('active');
   // Ao abrir checklist, restaurar estado visual E buscar veículos/dados atualizados da nuvem
   if(aba==='checklist'){
     restaurarEstadoChecklistVisual();
-    sincronizarDadosAdmin();
+    _sincronizarDadosAdminReal(true).then(()=>{
+      try{renderItensVeiculo();renderEquipamentosChecklist();renderSelecaoVeiculoChecklist();}catch(e){}
+    });
   }
   // Ao abrir portaria, mostrar pré-cadastros do cliente e buscar novidades
   if(aba==='portaria'){
     renderPreCadastrosVig();
     sincronizarDadosAdmin(true).then(()=>renderPreCadastrosVig());
+  }
+  if(aba==='ocorrencias'){
+    renderListaOcorrencias();
+    popularSeletorRondaFotos();
   }
 }
 function encerrarPlantao(){
@@ -3459,8 +4192,18 @@ function confirmarSaidaAntecipada(){
   fecharModal('modal-saida-antecipada');
   finalizarPlantao(true,motivo);
 }
-function finalizarPlantao(antecipado,motivo){
+async function finalizarPlantao(antecipado,motivo){
+  const geo=await _verificarGeofence(plantaoAtivo.contratanteNome,plantaoAtivo.localNome);
+  if(!geo.ok){
+    if(geo.semGps){
+      mostrarBloqueio('Localização necessária','Não conseguimos confirmar onde você está pra encerrar o plantão. Verifique o GPS e tente de novo, ou ligue pro administrador.','Entendi',()=>{});
+    }else{
+      mostrarBloqueio('Fora da área permitida',`Você está a ${geo.distancia}m do local — o permitido é até ${geo.raio}m.\n\nAproxime-se do local pra encerrar o plantão, ou ligue pro administrador pra liberar.`,'Entendi',()=>{});
+    }
+    return;
+  }
   plantaoAtivo.fim=new Date().toISOString();plantaoAtivo.saidaAntecipada=antecipado;plantaoAtivo.motivoSaida=motivo;
+
   plantaoAtivo.fotos=fotosP;plantaoAtivo.portaria=portariaP;plantaoAtivo.ckState=ckState;
   // Registrar KM rodados no veículo usado (não visível ao vigia)
   const kmR=calcularKmRodados(plantaoAtivo.checklist);
@@ -3476,7 +4219,7 @@ function finalizarPlantao(antecipado,motivo){
   checklistSalvo=false;fotosCk=[];rondasAtivas=[];rondaAtualIdx=null;
   document.getElementById('plantao-ativo-view').classList.add('hidden');
   document.getElementById('plantao-sem-turno').classList.remove('hidden');
-  toast(antecipado?'⚠️ Saída antecipada registrada.':'🔴 Plantão encerrado!');
+  toast(antecipado?'⚠️ Saída antecipada registrada.':'🔴 Plantão encerrado! Relatório disponível em "Meus Relatórios".');
   setTimeout(()=>irPara('screen-meus-relatorios'),1200);
 }
 
@@ -3488,7 +4231,8 @@ function finalizarPlantao(antecipado,motivo){
 // ═══════════════════════════════════════════
 function abrirModalPortaria(){
   selTipo('entrega');
-  ['pt-entregador','pt-placa-e','pt-destino','pt-visitante','pt-placa-v','pt-visita-dest'].forEach(id=>document.getElementById(id).value='');
+  ['pt-entregador','pt-placa-e','pt-destino','pt-visitante','pt-placa-v','pt-visita-dest','pt-obs-e','pt-obs-v','pt-obs-p','pt-prestador-nome','pt-prestador-servico','pt-placa-p','pt-prestador-dest'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  document.getElementById('pt-pernoite').classList.remove('on');
   abrirModal('modal-portaria');
 }
 function selTipo(tipo){
@@ -3507,22 +4251,23 @@ function salvarPortaria(){
     const placa=document.getElementById('pt-placa-e').value.trim().toUpperCase();
     const dest=document.getElementById('pt-destino').value.trim();
     if(!nome||!placa||!dest){toast('⚠️ Preencha todos os campos');return;}
-    reg={...reg,empresa:document.getElementById('pt-empresa').value,entregador:nome,placa,destino:dest};
+    reg={...reg,empresa:document.getElementById('pt-empresa').value,entregador:nome,placa,destino:dest,obs:document.getElementById('pt-obs-e').value.trim()};
   } else if(tipoPortaria==='prestador'){
     const nome=document.getElementById('pt-prestador-nome').value.trim();
     const servico=document.getElementById('pt-prestador-servico').value.trim();
     const placa=document.getElementById('pt-placa-p').value.trim().toUpperCase();
     const dest=document.getElementById('pt-prestador-dest').value.trim();
     if(!nome||!dest){toast('⚠️ Preencha nome e local');return;}
-    reg={...reg,prestador:nome,servico,placa,destino:dest,horaSaida:null};
+    reg={...reg,prestador:nome,servico,placa,destino:dest,horaSaida:null,obs:document.getElementById('pt-obs-p').value.trim()};
   } else {
     const nome=document.getElementById('pt-visitante').value.trim();
     const placa=document.getElementById('pt-placa-v').value.trim().toUpperCase();
     const dest=document.getElementById('pt-visita-dest').value.trim();
     if(!nome||!placa||!dest){toast('⚠️ Preencha todos os campos');return;}
-    reg={...reg,visitante:nome,placa,destino:dest,horaSaida:null};
+    const pernoite=document.getElementById('pt-pernoite').classList.contains('on');
+    reg={...reg,visitante:nome,placa,destino:dest,horaSaida:null,pernoite,obs:document.getElementById('pt-obs-v').value.trim()};
   }
-  portariaP.push(reg);atualizarStorage();fecharModal('modal-portaria');renderPortariaPlantao();toast('✅ Portaria registrada!');
+  portariaP.push(reg);atualizarStorage();fecharModal('modal-portaria');renderPortariaPlantao();calcularProgressoPlantao();toast('✅ Portaria registrada!');
 }
 function registrarSaidaVisitante(id){
   const r=portariaP.find(p=>p.id===id);if(r)r.horaSaida=fmtH(new Date().toISOString());
@@ -3533,7 +4278,7 @@ function renderPortariaPlantao(){
   if(!div)return;
   if(!portariaP.length){div.innerHTML='<div class="empty-state"><div class="es-icon">🚦</div><div>Nenhum registro</div></div>';return;}
   div.innerHTML=[...portariaP].reverse().map(r=>{
-    if(r.tipo==='entrega')return`<div class="list-item"><div class="li-main"><div class="li-title">📦 ${r.empresa} — ${r.entregador}</div><div class="li-sub">🚗 ${r.placa} · Para: ${r.destino} · ${r.hora}</div></div><span class="badge badge-purple">Entrega</span></div>`;
+    if(r.tipo==='entrega')return`<div class="list-item"><div class="li-main"><div class="li-title">📦 ${r.empresa} — ${r.entregador}</div><div class="li-sub">🚗 ${r.placa} · Para: ${r.destino} · ${r.hora}</div>${r.obs?`<div class="li-sub" style="color:var(--gold);">📝 ${r.obs}</div>`:''}</div><span class="badge badge-purple">Entrega</span></div>`;
     const ehPrestador=r.tipo==='prestador';
     const nomeExib=ehPrestador?r.prestador:r.visitante;
     const iconExib=ehPrestador?'🔧':'🚗';
@@ -3542,8 +4287,9 @@ function renderPortariaPlantao(){
     return`<div class="list-item" style="flex-direction:column;align-items:flex-start;gap:6px;">
       <div class="flex items-center justify-between w-full">
         <div class="li-main">
-          <div class="li-title">${iconExib} ${nomeExib}${ehPrestador&&r.servico?' — '+r.servico:''}</div>
+          <div class="li-title">${iconExib} ${nomeExib}${ehPrestador&&r.servico?' — '+r.servico:''}${r.pernoite?' <span class="badge badge-purple">🌙 Pernoite</span>':''}</div>
           <div class="li-sub">${r.placa?r.placa+' · ':''}Local: ${r.destino} · Entrada: ${r.hora}${r.horaSaida?' · Saída: '+r.horaSaida:''}</div>
+          ${r.obs?`<div class="li-sub" style="color:var(--gold);">📝 ${r.obs}</div>`:''}
           ${avisoSemSaida}
         </div>
         ${semSaida
@@ -3631,6 +4377,7 @@ function confirmarIdentificacaoCliente(){
   clienteIdentificacao={nome,cpf,telefone};
   document.getElementById('cli-identificado-nome').textContent=nome;
   document.getElementById('cli-identificado-cpf').textContent='CPF: '+cpf;
+  document.getElementById('cli-identificado-avatar').textContent=_iniciais(nome);
   document.getElementById('cliente-identificacao').classList.add('hidden');
   document.getElementById('cliente-form').classList.remove('hidden');
   selTipoCliente('visitante');
@@ -3867,7 +4614,7 @@ function enviarWhatsappMorador(userId){
   if(!u)return;
   const numero=(u.telefone||'').replace(/\D/g,'');
   const numeroCompleto=numero.length<=11?'55'+numero:numero; // adiciona DDI Brasil se faltar
-  const msg=`Olá, ${u.nome}! Seu acesso ao sistema *RondaMaster* foi liberado.\n\n🔗 Link: [cole aqui o link do seu GitHub Pages]\n📧 Login: ${u.email}\n🔑 Senha: ${u.senha}\n\nUse para cadastrar visitantes, entregas e prestadores de serviço no seu endereço.`;
+  const msg=`Olá, ${u.nome}! Seu acesso ao sistema *Guardião - Ronda Master* foi liberado.\n\n🔗 Link: [cole aqui o link do seu GitHub Pages]\n📧 Login: ${u.email}\n🔑 Senha: ${u.senha}\n\nUse para cadastrar visitantes, entregas e prestadores de serviço no seu endereço.`;
   const link='https://wa.me/'+numeroCompleto+'?text='+encodeURIComponent(msg);
   window.open(link,'_blank');
 }
@@ -3953,8 +4700,52 @@ function renderRelatoriosCliente(){
   if(!div||!U)return;
   const cont=DB.get('contratantes').find(c=>c.id===U.contratanteId);
   if(!cont){div.innerHTML='<div class="empty-state"><div class="es-icon">📋</div><div>Local não encontrado</div></div>';return;}
-  const plantoes=DB.get('plantoes').filter(p=>p.fim&&p.contratanteNome===cont.nome);
-  renderRelatoriosPorData(plantoes,'lista-relatorios-cliente');
+  // Morador só vê os últimos 7 dias — histórico completo continua disponível pro admin
+  const seteDiasAtras=new Date();
+  seteDiasAtras.setDate(seteDiasAtras.getDate()-7);
+  seteDiasAtras.setHours(0,0,0,0);
+  const plantoes=DB.get('plantoes').filter(p=>p.fim&&p.contratanteNome===cont.nome&&new Date(p.inicio)>=seteDiasAtras).sort((a,b)=>new Date(b.inicio)-new Date(a.inicio));
+
+  if(!plantoes.length){
+    div.innerHTML='<div class="empty-state"><div class="es-icon">📋</div><div>Nenhum plantão encerrado nos últimos 7 dias</div></div>';
+    return;
+  }
+
+  // Meus próprios pedidos (visitante/entrega/prestador) — só os deste morador
+  const meuCpf=(clienteIdentificacao&&clienteIdentificacao.cpf)||U.cpf||'';
+  const meusPedidos=DB.get('pre_cadastros').filter(pc=>pc.contratanteId===U.contratanteId&&pc.clienteCpf===meuCpf);
+  const iconesTipo={visitante:'🚗',entrega:'📦',prestador:'🔧'};
+
+  div.innerHTML=plantoes.map(p=>{
+    const dataPlantao=new Date(p.inicio).toDateString();
+    const rondas=(p.rondas||[]).filter(r=>r.fim);
+    const ocorrencias=p.ocorrencias||[];
+    const meusPedidosDoDia=meusPedidos.filter(pc=>new Date(pc.criadoEm).toDateString()===dataPlantao);
+
+    return`<div class="card mb-3">
+      <div class="flex items-center justify-between mb-2">
+        <div class="flex items-center gap-2">
+          <div class="avatar-badge">${_iniciais(p.vigilanteNome)}</div>
+          <div>
+            <div style="font-weight:700;font-size:14px;">${p.vigilanteNome||'—'}</div>
+            <div class="text-xs" style="color:var(--muted);">${fmtData(p.inicio)}</div>
+          </div>
+        </div>
+        <div class="text-xs" style="color:var(--muted);text-align:right;">Entrada: ${fmtH(p.inicio)}<br>Saída: ${fmtH(p.fim)}</div>
+      </div>
+
+      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-top:10px;margin-bottom:4px;">🚶 Rondas (${rondas.length})</div>
+      ${rondas.length?rondas.map(r=>`<div class="text-xs" style="padding:4px 0;border-bottom:1px solid var(--border);">Ronda #${r.num}: ${r.hora||fmtH(r.inicio)} → ${r.horaFim||fmtH(r.fim)}</div>`).join(''):'<div class="text-xs" style="color:var(--muted);">Nenhuma ronda registrada</div>'}
+
+      ${ocorrencias.length?`
+      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-top:10px;margin-bottom:4px;">⚠️ Ocorrências (${ocorrencias.length})</div>
+      ${ocorrencias.map(oc=>`<div class="text-xs" style="padding:4px 0;border-bottom:1px solid var(--border);"><span class="badge-severidade ${oc.classificacao.toLowerCase()}" style="margin-right:6px;">${oc.classificacao}</span>${oc.descricao}</div>`).join('')}`:''}
+
+      ${meusPedidosDoDia.length?`
+      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-top:10px;margin-bottom:4px;">📋 Meus pedidos nesse dia (${meusPedidosDoDia.length})</div>
+      ${meusPedidosDoDia.map(pc=>`<div class="text-xs" style="padding:4px 0;border-bottom:1px solid var(--border);">${iconesTipo[pc.tipo]||''} ${pc.nome||pc.entregador||pc.prestador||'—'} ${pc.usado?'<span class="badge badge-green" style="margin-left:4px;">usado</span>':'<span class="badge badge-gray" style="margin-left:4px;">não usado</span>'}</div>`).join('')}`:''}
+    </div>`;
+  }).join('');
 }
 window.renderRelatoriosCliente=renderRelatoriosCliente;
 
@@ -4001,7 +4792,7 @@ function salvarChecklist(){
   checklistSalvo=true;atualizarStorage();
   document.getElementById('btn-editar-ck').style.display='';
   document.getElementById('checklist-form').classList.add('hidden');
-  renderChecklistSalvo(ck);toast('✅ Checklist salvo!');
+  renderChecklistSalvo(ck);calcularProgressoPlantao();toast('✅ Checklist salvo!');
 }
 function toggleEditarChecklist(){
   checklistSalvo=!checklistSalvo;
@@ -4022,12 +4813,20 @@ function renderChecklistSalvo(ck){
   }).join('');
   const obsArr=Array.isArray(ck.obs)?ck.obs:[];
   const kmRod=calcularKmRodados(ck);
+  const _itensProbResumo=todosItens.filter(item=>(ck.equipamentos&&ck.equipamentos[item.id]?ck.equipamentos[item.id]:'ok')!=='ok').map(item=>item.nome);
+  const _reservaResumo=(ck.gasolina||'').toLowerCase().includes('reserva');
+  const _avisoResumo=(_reservaResumo||_itensProbResumo.length)?`<div style="background:rgba(220,38,38,.12);border:1.5px solid var(--red);border-radius:8px;padding:8px 10px;margin-bottom:8px;">
+    <div style="font-weight:800;color:var(--red);font-size:12px;">⚠️ Atenção no veículo</div>
+    ${_reservaResumo?'<div style="font-size:11px;color:var(--red);">⛽ Combustível na reserva</div>':''}
+    ${_itensProbResumo.length?`<div style="font-size:11px;color:var(--red);">🔧 Problema em: <strong>${_itensProbResumo.join(', ')}</strong></div>`:''}
+  </div>`:'';
   det.innerHTML=`
+    ${_avisoResumo}
     <div class="rel-row"><span class="rel-lbl">Veículo</span><span class="rel-val">${ck.veiculo||'—'}${ck.placa?' ('+ck.placa+')':''}</span></div>
     <div class="rel-row"><span class="rel-lbl">KM Entrada</span><span class="rel-val">${ck.kmEntrada||'—'}</span></div>
     <div class="rel-row"><span class="rel-lbl">KM Saída</span><span class="rel-val">${ck.kmSaida||'—'}</span></div>
     ${kmRod!==null?`<div class="rel-row"><span class="rel-lbl">🛣️ KM Rodados</span><span class="rel-val" style="color:var(--teal);">${kmRod} km</span></div>`:''}
-    <div class="rel-row"><span class="rel-lbl">Gasolina</span><span class="rel-val">${ck.gasolina||'—'}</span></div>
+    <div class="rel-row"><span class="rel-lbl">Gasolina</span><span class="rel-val"${_reservaResumo?' style="color:var(--red);font-weight:800;"':''}>${ck.gasolina||'—'}</span></div>
     <div class="rel-row"><span class="rel-lbl">Óleo</span><span class="rel-val">${ck.oleo||'—'}</span></div>
     ${eqHtml}
     ${obsArr.length?`<div class="rel-row"><span class="rel-lbl">Obs.</span><span class="rel-val">${obsArr.length} registro(s)</span></div>`:''}`;
@@ -4113,20 +4912,20 @@ function gerarHtmlRelatorio(p, opcoes){
 
   const S={
     card:'background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:24px;font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#1a1a1a;',
-    header:'border-bottom:2px solid #0B1D3A;padding-bottom:12px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:flex-start;',
-    logo:'font-size:20px;font-weight:900;color:#0B1D3A;',
-    logoSpan:'color:#1A4FAF;',
+    header:'border-bottom:2px solid #1a1a1a;padding-bottom:12px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:flex-start;',
+    logo:'font-size:20px;font-weight:900;color:#1a1a1a;',
+    logoSpan:'color:#B8860B;',
     empNome:'font-size:13px;font-weight:700;color:#1a1a1a;margin-top:4px;',
     empInfo:'font-size:11px;color:#64748B;margin-top:2px;',
     num:'font-size:11px;color:#64748B;text-align:right;',
     section:'margin-bottom:16px;page-break-inside:avoid;',
-    h4:'font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#1A4FAF;margin-bottom:8px;border-bottom:1px solid #e2e8f0;padding-bottom:4px;',
+    h4:'font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#B8860B;margin-bottom:8px;border-bottom:1px solid #e2e8f0;padding-bottom:4px;',
     row:'display:flex;justify-content:space-between;font-size:12px;padding:5px 0;border-bottom:1px solid #f8fafc;',
     lbl:'color:#64748B;flex-shrink:0;min-width:120px;',
     val:'font-weight:600;text-align:right;margin-left:8px;',
     ok:'background:#D1FAE5;color:#065F46;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;',
     nok:'background:#FEE2E2;color:#7F1D1D;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;',
-    ronda:'background:#f0fdf4;border-radius:6px;padding:8px 10px;margin-bottom:6px;border-left:3px solid #10B981;page-break-inside:avoid;',
+    ronda:'background:#fdfaf3;border-radius:6px;padding:8px 10px;margin-bottom:6px;border-left:3px solid #B8860B;page-break-inside:avoid;',
     obs:'background:#FEF3C7;border-radius:4px;padding:6px 10px;margin-bottom:4px;border-left:3px solid #F59E0B;',
     footer:'border-top:1px solid #e2e8f0;padding-top:10px;text-align:center;font-size:10px;color:#94A3B8;margin-top:16px;',
   };
@@ -4145,16 +4944,25 @@ function gerarHtmlRelatorio(p, opcoes){
     const v=ck.equipamentos[item.id]||'ok';
     return`<div style="${S.row}"><span style="${S.lbl}">${item.nome}</span><span style="${S.val}"><span style="${v==='ok'?S.ok:S.nok}">${v==='ok'?'✓ OK':'✗ PROBLEMA'}</span></span></div>`;
   }).join(''):'';
+  const _itensComProblema=ck.equipamentos?todosItens.filter(item=>(ck.equipamentos[item.id]||'ok')!=='ok').map(item=>item.nome):[];
+  const _gasolinaReserva=(ck.gasolina||'').toLowerCase().includes('reserva');
+  const _avisoVeiculo=(_gasolinaReserva||_itensComProblema.length)?`
+    <div style="background:#FEE2E2;border:1.5px solid #DC2626;border-radius:8px;padding:10px 12px;margin-bottom:10px;">
+      <div style="font-weight:800;color:#7F1D1D;font-size:12px;margin-bottom:2px;">⚠️ Atenção no veículo</div>
+      ${_gasolinaReserva?'<div style="font-size:11px;color:#7F1D1D;">⛽ Combustível na reserva</div>':''}
+      ${_itensComProblema.length?`<div style="font-size:11px;color:#7F1D1D;">🔧 Problema em: <strong>${_itensComProblema.join(', ')}</strong></div>`:''}
+    </div>`:'';
 
   // Rondas
   const rondasHtml=(p.rondas&&p.rondas.length)?`
     <div style="${S.section}">
       <h4 style="${S.h4}">🚶 Rondas Realizadas (${p.rondas.filter(r=>r.fim).length})</h4>
       ${p.rondas.map(r=>`<div style="${S.ronda}">
-        <div style="font-weight:700;font-size:12px;margin-bottom:3px;">Ronda #${r.num}</div>
+        <div style="font-weight:700;font-size:12px;margin-bottom:3px;">Ronda #${r.num}${r.rotaNome?' — '+r.rotaNome:''}</div>
         <div style="font-size:11px;color:#64748B;">📅 ${r.data||fmtData(r.inicio)} · ⏰ ${r.hora||fmtH(r.inicio)} → ${r.horaFim||fmtH(r.fim)||'Em andamento'}</div>
         ${r.lat?`<div style="font-size:10px;color:#0d9488;margin-top:2px;">📍 Início: ${r.lat}, ${r.lng}</div>`:''}
         ${r.latFim?`<div style="font-size:10px;color:#0d9488;margin-top:1px;">📍 Fim: ${r.latFim}, ${r.lngFim}</div>`:''}
+        ${(r.pontosValidados&&r.pontosValidados.length)?`<div style="font-size:10px;margin-top:3px;">${r.pontosValidados.map(pt=>(pt.validado?'✅':'❌')+' '+pt.nome).join(' · ')}</div>`:''}
       </div>`).join('')}
     </div>`:'';
 
@@ -4163,11 +4971,12 @@ function gerarHtmlRelatorio(p, opcoes){
   const ckHtml=ck.veiculo?`
     <div style="${S.section}">
       <h4 style="${S.h4}">🏍️ Checklist do Veículo</h4>
+      ${_avisoVeiculo}
       <div style="${S.row}"><span style="${S.lbl}">Veículo</span><span style="${S.val}">${ck.veiculo}${ck.placa?' — '+ck.placa:''}</span></div>
       <div style="${S.row}"><span style="${S.lbl}">KM Entrada</span><span style="${S.val}">${ck.kmEntrada||'—'}</span></div>
       <div style="${S.row}"><span style="${S.lbl}">KM Saída</span><span style="${S.val}">${ck.kmSaida||'—'}</span></div>
-      ${kmRodadosModal!==null?`<div style="${S.row}"><span style="${S.lbl}">🛣️ KM Rodados</span><span style="${S.val};color:#1A4FAF;">${kmRodadosModal} km</span></div>`:''}
-      <div style="${S.row}"><span style="${S.lbl}">Gasolina</span><span style="${S.val}">${ck.gasolina||'—'}</span></div>
+      ${kmRodadosModal!==null?`<div style="${S.row}"><span style="${S.lbl}">🛣️ KM Rodados</span><span style="${S.val};color:#B8860B;">${kmRodadosModal} km</span></div>`:''}
+      <div style="${S.row}"><span style="${S.lbl}">Gasolina</span><span style="${S.val}${_gasolinaReserva?';color:#DC2626;font-weight:800;':''}">${ck.gasolina||'—'}</span></div>
       <div style="${S.row}"><span style="${S.lbl}">Óleo</span><span style="${S.val}">${ck.oleo||'—'}</span></div>
       ${eqHtml}
     </div>`:'';
@@ -4187,7 +4996,7 @@ function gerarHtmlRelatorio(p, opcoes){
   const entHtml=entregas.length?`
     <div style="${S.section}">
       <h4 style="${S.h4}">📦 Entregas (${entregas.length})</h4>
-      ${entregas.map(e=>`<div style="${S.row}"><span style="${S.lbl}">${e.empresa} · ${e.entregador}</span><span style="${S.val}">${e.placa} · ${e.destino} · ${e.hora}</span></div>`).join('')}
+      ${entregas.map(e=>`<div style="${S.row}"><span style="${S.lbl}">${e.empresa} · ${e.entregador}</span><span style="${S.val}">${e.placa} · ${e.destino} · ${e.hora}${e.obs?'<br><small style="color:#B45309;">📝 '+e.obs+'</small>':''}</span></div>`).join('')}
     </div>`:'';
 
   // Visitantes
@@ -4195,8 +5004,8 @@ function gerarHtmlRelatorio(p, opcoes){
     <div style="${S.section}">
       <h4 style="${S.h4}">🚗 Visitantes (${visitantes.length})</h4>
       ${visitantes.map(v=>`<div style="${S.row}">
-        <span style="${S.lbl}">${v.visitante}</span>
-        <span style="${S.val}">${v.placa} · ${v.destino}<br><small style="color:#64748B;">${v.hora}${v.horaSaida?' → '+v.horaSaida:' (sem saída)'}${v.ocorrencia?'<br>⚠️ '+v.ocorrencia.obs:''}</small></span>
+        <span style="${S.lbl}">${v.visitante}${v.pernoite?' 🌙':''}</span>
+        <span style="${S.val}">${v.placa} · ${v.destino}<br><small style="color:#64748B;">Entrada: ${v.hora}${v.horaSaida?' · Saída: '+v.horaSaida:' · ⚠️ sem saída registrada'}${v.pernoite?'<br>🌙 Pernoite (vai passar a noite)':''}${v.obs?'<br>📝 '+v.obs:''}${v.ocorrencia?'<br>⚠️ '+v.ocorrencia.obs:''}</small></span>
       </div>`).join('')}
     </div>`:'';
 
@@ -4210,6 +5019,19 @@ function gerarHtmlRelatorio(p, opcoes){
       ${preCads.map(pc=>`<div style="${S.row}">
         <span style="${S.lbl}">${iconesPC[pc.tipo]||''} ${pc.empresa?pc.empresa+' — ':''}${pc.nome||'—'}${pc.servico?' — '+pc.servico:''}</span>
         <span style="${S.val}">${pc.placa?pc.placa+' · ':''}${pc.destino||pc.obs||''}<br><small style="color:#64748B;">por ${pc.clienteNome} · ${fmtH(pc.criadoEm)}${pc.usado?' · ✅ usado':' · ⏳ não usado'}</small></span>
+      </div>`).join('')}
+    </div>`:'';
+
+  // Ocorrências registradas durante o plantão (com gravidade)
+  const ocorrenciasPlantao=p.ocorrencias||[];
+  const corSeveridadeHtml={Baixa:'#22C55E',Média:'#F0B429',Alta:'#F97316',Emergência:'#EF4444'};
+  const ocorrenciasHtml=ocorrenciasPlantao.length?`
+    <div style="${S.section}">
+      <h4 style="${S.h4}">⚠️ Ocorrências (${ocorrenciasPlantao.length})</h4>
+      ${ocorrenciasPlantao.map((oc,i)=>`<div style="background:#FEF2F2;border-radius:4px;padding:8px 10px;margin-bottom:4px;border-left:3px solid ${corSeveridadeHtml[oc.classificacao]||'#94A3B8'};">
+        <div style="font-weight:700;">#${i+1} ${oc.classificacao.toUpperCase()} — ${oc.responsavel}</div>
+        <div style="font-size:11px;margin-top:2px;">${oc.descricao}</div>
+        <div style="font-size:11px;margin-top:2px;color:#64748B;">⏰ ${fmtH(oc.criadoEm)} em ${fmtData(oc.criadoEm)}${oc.totalFotos?' · 📷 '+oc.totalFotos+' foto(s) (só neste aparelho)':''}</div>
       </div>`).join('')}
     </div>`:'';
 
@@ -4240,13 +5062,13 @@ function gerarHtmlRelatorio(p, opcoes){
     <div style="${S.section};background:#F8FAFC;border:1px dashed #CBD5E1;border-radius:8px;padding:12px;">
       <h4 style="${S.h4}">➕ Adicionar Observação</h4>
       <textarea id="ra-obs-nova" placeholder="Alguma situação para registrar sobre este plantão..." style="width:100%;min-height:60px;border:1px solid #CBD5E1;border-radius:6px;padding:8px;font-family:inherit;font-size:12px;margin-bottom:8px;"></textarea>
-      <button onclick="adicionarObsAdmin()" style="background:#1A4FAF;color:#fff;border:none;padding:8px 16px;border-radius:6px;font-weight:700;font-size:12px;cursor:pointer;">💾 Salvar Observação</button>
+      <button onclick="adicionarObsAdmin()" style="background:linear-gradient(135deg,#E8B84B,#B37F1A);color:#1a1206;border:none;padding:8px 16px;border-radius:6px;font-weight:800;font-size:12px;cursor:pointer;">💾 Salvar Observação</button>
     </div>`:'';
 
   return `<div style="${S.card}">
     <div style="${S.header}">
       <div>
-        <div style="${S.logo}">🛡️ Ronda<span style="${S.logoSpan}">Master</span></div>
+        <div style="${S.logo}">🛡️ Guardião <span style="${S.logoSpan}">· Ronda Master</span></div>
         ${emp.nome?`<div style="${S.empNome}">${emp.nome}</div>`:''}
         ${emp.doc?`<div style="${S.empInfo}">CNPJ: ${emp.doc}</div>`:''}
         ${emp.tel?`<div style="${S.empInfo}">Tel: ${emp.tel}</div>`:''}
@@ -4277,10 +5099,11 @@ function gerarHtmlRelatorio(p, opcoes){
     ${entHtml}
     ${visHtml}
     ${preCadHtml}
+    ${ocorrenciasHtml}
     ${alertasHtml}
     ${obsAdminHtml}
     ${addObsHtml}
-    <div style="${S.footer}">RondaMaster · ID: ${id}</div>
+    <div style="${S.footer}">Guardião · Ronda Master · ID: ${id}</div>
   </div>`;
 }
 
@@ -4580,7 +5403,55 @@ function carregarHoraExtra(){
 // ═══════════════════════════════════════════
 // GERAÇÃO DE PDF
 // ═══════════════════════════════════════════
+function _dentroDeAppNativo(){
+  return!!(window.Capacitor&&window.Capacitor.isNativePlatform&&window.Capacitor.isNativePlatform());
+}
+// Dentro do app instalado, não existe "abrir nova aba" nem "baixar arquivo"
+// do jeito que um navegador comum faz — precisa salvar o arquivo de verdade
+// no celular (Filesystem) e chamar o Android pra abrir com algum app que
+// leia PDF (Share, que no Android mostra a lista de apps — incluindo os
+// visualizadores de PDF instalados, tipo Google PDF Viewer, Drive, etc.)
+async function _salvarEAbrirPdfNativo(pdf,nomeArquivo){
+  // Retorna {ok:true} ou {ok:false, etapa:'...', erro:'...'} — assim dá pra
+  // mostrar uma mensagem exata de onde travou, em vez de só "não funcionou".
+  if(!window.Capacitor){
+    return{ok:false,etapa:'Capacitor não encontrado',erro:'window.Capacitor não existe'};
+  }
+  const plugins=window.Capacitor.Plugins;
+  if(!plugins){
+    return{ok:false,etapa:'Plugins não registrados',erro:'window.Capacitor.Plugins não existe'};
+  }
+  const Filesystem=plugins.Filesystem;
+  const Share=plugins.Share;
+  if(!Filesystem){
+    return{ok:false,etapa:'Plugin Filesystem ausente',erro:'Plugins disponíveis: '+Object.keys(plugins).join(', ')};
+  }
+  if(!Share){
+    return{ok:false,etapa:'Plugin Share ausente',erro:'Plugins disponíveis: '+Object.keys(plugins).join(', ')};
+  }
+  let uriArquivo;
+  try{
+    const base64Completo=pdf.output('datauristring');
+    const base64Puro=base64Completo.split(',')[1];
+    const resultado=await Filesystem.writeFile({path:nomeArquivo,data:base64Puro,directory:'CACHE'});
+    uriArquivo=resultado.uri;
+  }catch(e){
+    console.error('Falha ao salvar o PDF com Filesystem.writeFile:',e);
+    return{ok:false,etapa:'Salvar o arquivo (Filesystem.writeFile)',erro:(e&&e.message)||String(e)};
+  }
+  try{
+    await Share.share({title:nomeArquivo,url:uriArquivo,dialogTitle:'Abrir relatório em PDF'});
+  }catch(e){
+    console.error('Falha ao abrir o menu de compartilhamento com Share.share:',e);
+    return{ok:false,etapa:'Abrir o menu de compartilhamento (Share.share)',erro:(e&&e.message)||String(e)};
+  }
+  return{ok:true};
+}
 function gerarPDF(plantaoId){
+  if(_dentroDeAppNativo()){
+    toast('📄 Gerar PDF não está disponível dentro do aplicativo. O relatório completo já fica disponível na tela, em "Meus Relatórios".');
+    return;
+  }
   const p=DB.get('plantoes').find(x=>x.id===plantaoId);
   if(!p){toast('❌ Plantão não encontrado');return;}
   let emp={};try{emp=JSON.parse(localStorage.getItem('rm_empresa')||'{}');}catch(e){}
@@ -4596,14 +5467,14 @@ function gerarPDF(plantaoId){
     'body{font-family:"Helvetica Neue",Arial,sans-serif;font-size:10px;color:#1c1c1c;background:#e9edf2;line-height:1.4;}',
     '@page{size:A4;margin:10mm 11mm;}',
     '@media print{body{background:#fff;}.print-bar{display:none!important;}.pagina{box-shadow:none;margin:0;padding:0;border-radius:0;max-width:none;}}',
-    '.print-bar{position:fixed;top:0;left:0;right:0;background:#0B1D3A;color:#fff;padding:9px 18px;display:flex;align-items:center;justify-content:space-between;z-index:999;font-size:12px;}',
-    '.btn-print{background:#fff;color:#0B1D3A;border:none;padding:6px 18px;border-radius:5px;font-weight:700;font-size:12px;cursor:pointer;}',
+    '.print-bar{position:fixed;top:0;left:0;right:0;background:#151516;color:#fff;padding:9px 18px;display:flex;align-items:center;justify-content:space-between;z-index:999;font-size:12px;border-bottom:2px solid #E8B84B;}',
+    '.btn-print{background:linear-gradient(135deg,#E8B84B,#B37F1A);color:#1a1206;border:none;padding:6px 18px;border-radius:5px;font-weight:800;font-size:12px;cursor:pointer;}',
     '.pagina{background:#fff;max-width:750px;margin:56px auto 24px;padding:26px 30px;box-shadow:0 1px 10px rgba(0,0,0,.1);}',
 
     // Cabeçalho
-    '.cab{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:1.5px solid #0B1D3A;padding-bottom:9px;margin-bottom:11px;}',
-    '.cab-logo{font-size:16px;font-weight:800;color:#0B1D3A;letter-spacing:-.01em;}',
-    '.cab-logo span{color:#1A4FAF;font-weight:800;}',
+    '.cab{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:1.5px solid #1a1a1a;padding-bottom:9px;margin-bottom:11px;}',
+    '.cab-logo{font-size:16px;font-weight:800;color:#1a1a1a;letter-spacing:-.01em;}',
+    '.cab-logo span{color:#B8860B;font-weight:800;}',
     '.cab-emp{font-size:9.5px;font-weight:700;color:#1c1c1c;margin-top:3px;}',
     '.cab-info{font-size:8.5px;color:#777;margin-top:1px;}',
     '.cab-dir{text-align:right;font-size:9px;color:#777;line-height:1.6;}',
@@ -4625,7 +5496,7 @@ function gerarPDF(plantaoId){
 
     // Seções
     '.sec{margin-bottom:11px;page-break-inside:avoid;}',
-    '.sec-tit{font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#1A4FAF;margin-bottom:5px;padding-bottom:3px;border-bottom:1px solid #e3e7ee;}',
+    '.sec-tit{font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#B8860B;margin-bottom:5px;padding-bottom:3px;border-bottom:1px solid #e3e7ee;}',
 
     // Tabela genérica (rondas, portaria)
     'table.tb{width:100%;border-collapse:collapse;font-size:9px;}',
@@ -4658,11 +5529,11 @@ function gerarPDF(plantaoId){
   const doc=win.document;
   doc.open();
   doc.write('<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">');
-  doc.write('<title>Relatorio RondaMaster</title>');
+  doc.write('<title>Relatorio Guardiao - Ronda Master</title>');
   doc.write('<style>'+css+'</style>');
   doc.write('</head><body>');
   doc.write('<div class="print-bar">');
-  doc.write('<span>Ronda Master - Relatorio de Vigilancia</span>');
+  doc.write('<span>Guardião - Ronda Master · Relatório de Vigilância</span>');
   doc.write('<button class="btn-print" onclick="window.print()">Salvar PDF</button>');
   doc.write('</div>');
   doc.write('<div class="pagina">'+corpo+'</div>');
@@ -4694,19 +5565,23 @@ function montarCorpoHTML(p,emp){
     const v=ck.equipamentos[item.id]||'ok';
     return'<span class="chip '+(v==='ok'?'chip-ok':'chip-nok')+'">'+item.nome+' '+(v==='ok'?'✓':'✗')+'</span>';
   }).join(''):'';
+  const _itensProbPdf=ck.equipamentos?todosItens.filter(item=>(ck.equipamentos[item.id]||'ok')!=='ok').map(item=>item.nome):[];
+  const _reservaPdf=(ck.gasolina||'').toLowerCase().includes('reserva');
+  const avisoVeiculoPdf=(_reservaPdf||_itensProbPdf.length)?'<div style="background:#FEE2E2;border:1.5px solid #DC2626;border-radius:6px;padding:8px 10px;margin-bottom:8px;"><div style="font-weight:800;color:#7F1D1D;font-size:11px;">⚠️ Atenção no veículo</div>'+(_reservaPdf?'<div style="font-size:10px;color:#7F1D1D;">⛽ Combustível na reserva</div>':'')+(_itensProbPdf.length?'<div style="font-size:10px;color:#7F1D1D;">🔧 Problema em: <b>'+_itensProbPdf.join(', ')+'</b></div>':'')+'</div>':'';
 
   // Tabela de rondas — compacta
   let rondasTbl='';
   if(p.rondas&&p.rondas.length){
     rondasTbl='<table class="tb"><thead><tr>'+
-      '<th style="width:26px;">#</th><th>Data</th><th>Entrada</th><th>Saída</th><th>GPS Entrada</th><th>GPS Saída</th>'+
+      '<th style="width:26px;">#</th><th>Data</th><th>Entrada</th><th>Saída</th><th>GPS Entrada</th><th>GPS Saída</th><th>Checkpoints</th>'+
       '</tr></thead><tbody>';
     rondasTbl+=p.rondas.map(r=>{
       const gpsE=r.lat?r.lat+', '+r.lng:'—';
       const gpsS=r.latFim?r.latFim+', '+r.lngFim:'—';
+      const chk=(r.pontosValidados&&r.pontosValidados.length)?r.pontosValidados.map(pt=>(pt.validado?'✅':'❌')+' '+pt.nome).join('<br>'):'—';
       return'<tr><td><b>'+r.num+'</b></td><td>'+(r.data||fmtData(r.inicio))+'</td>'+
         '<td>'+(r.hora||fmtH(r.inicio))+'</td><td>'+(r.horaFim||fmtH(r.fim)||'—')+'</td>'+
-        '<td class="mono">'+gpsE+'</td><td class="mono">'+gpsS+'</td></tr>';
+        '<td class="mono">'+gpsE+'</td><td class="mono">'+gpsS+'</td><td style="font-size:9px;">'+chk+'</td></tr>';
     }).join('');
     rondasTbl+='</tbody></table>';
   }
@@ -4722,11 +5597,16 @@ function montarCorpoHTML(p,emp){
   if(entregas.length||visitantes.length){
     portariaTbl='<table class="tb"><thead><tr><th>Tipo</th><th>Nome</th><th>Placa</th><th>Destino</th><th>Horário</th></tr></thead><tbody>';
     entregas.forEach(e=>{
-      portariaTbl+='<tr><td>📦 Entrega</td><td>'+e.empresa+' · '+e.entregador+'</td><td class="mono">'+(e.placa||'—')+'</td><td>'+e.destino+'</td><td>'+e.hora+'</td></tr>';
+      const obsLinha=e.obs?'<br><small style="color:#B45309;">📝 '+e.obs+'</small>':'';
+      portariaTbl+='<tr><td>📦 Entrega</td><td>'+e.empresa+' · '+e.entregador+'</td><td class="mono">'+(e.placa||'—')+'</td><td>'+e.destino+obsLinha+'</td><td>'+e.hora+'</td></tr>';
     });
     visitantes.forEach(v=>{
       const hr=v.hora+(v.horaSaida?' → '+v.horaSaida:' (sem saída)');
-      portariaTbl+='<tr><td>🚗 Visitante</td><td>'+v.visitante+'</td><td class="mono">'+(v.placa||'—')+'</td><td>'+v.destino+'</td><td>'+hr+'</td></tr>';
+      const notas=[];
+      if(v.pernoite)notas.push('🌙 Pernoite (vai passar a noite)');
+      if(v.obs)notas.push('📝 '+v.obs);
+      const obsLinha=notas.length?'<br><small style="color:#B45309;">'+notas.join(' · ')+'</small>':'';
+      portariaTbl+='<tr><td>🚗 Visitante</td><td>'+v.visitante+(v.pernoite?' 🌙':'')+'</td><td class="mono">'+(v.placa||'—')+'</td><td>'+v.destino+obsLinha+'</td><td>'+hr+'</td></tr>';
     });
     portariaTbl+='</tbody></table>';
   }
@@ -4735,7 +5615,7 @@ function montarCorpoHTML(p,emp){
 
   // Cabeçalho
   html+='<div class="cab"><div>';
-  html+='<div class="cab-logo">🛡️ Ronda<span>Master</span></div>';
+  html+='<div class="cab-logo">🛡️ Guardião <span>· Ronda Master</span></div>';
   if(emp.nome) html+='<div class="cab-emp">'+emp.nome+'</div>';
   const infoLinha=[emp.doc?'CNPJ '+emp.doc:'',emp.tel?'Tel '+emp.tel:''].filter(Boolean).join(' · ');
   if(infoLinha) html+='<div class="cab-info">'+infoLinha+'</div>';
@@ -4758,9 +5638,10 @@ function montarCorpoHTML(p,emp){
   if(ck.veiculo){
     const kmRodadosPdf=calcularKmRodados(ck);
     html+='<div class="sec"><div class="sec-tit">🏍️ Checklist do Veículo</div>';
+    html+=avisoVeiculoPdf;
     html+='<div class="ln"><span class="ln-l">Veículo</span><span class="ln-v">'+ck.veiculo+(ck.placa?' — '+ck.placa:'')+'</span></div>';
-    html+='<div class="ln"><span class="ln-l">KM Entrada → Saída</span><span class="ln-v">'+(ck.kmEntrada||'—')+' → '+(ck.kmSaida||'—')+(kmRodadosPdf!==null?' <b style="color:#1A4FAF;">('+kmRodadosPdf+' km rodados)</b>':'')+'</span></div>';
-    html+='<div class="ln"><span class="ln-l">Gasolina / Óleo</span><span class="ln-v">'+(ck.gasolina||'—')+' / '+(ck.oleo||'—')+'</span></div>';
+    html+='<div class="ln"><span class="ln-l">KM Entrada → Saída</span><span class="ln-v">'+(ck.kmEntrada||'—')+' → '+(ck.kmSaida||'—')+(kmRodadosPdf!==null?' <b style="color:#B8860B;">('+kmRodadosPdf+' km rodados)</b>':'')+'</span></div>';
+    html+='<div class="ln"><span class="ln-l">Gasolina / Óleo</span><span class="ln-v"'+(_reservaPdf?' style="color:#DC2626;font-weight:800;"':'')+'>'+(ck.gasolina||'—')+' / '+(ck.oleo||'—')+'</span></div>';
     if(chips) html+='<div class="chips">'+chips+'</div>';
     html+='</div>';
   }
@@ -4776,6 +5657,17 @@ function montarCorpoHTML(p,emp){
     html+='<div class="sec"><div class="sec-tit">📇 Pré-Cadastros do Cliente ('+preCadsPdf.length+')</div>';
     preCadsPdf.forEach(pc=>{
       html+='<div class="ln"><span class="ln-l">'+(iconesPCpdf[pc.tipo]||'')+' '+(pc.empresa?pc.empresa+' — ':'')+(pc.nome||'—')+(pc.servico?' — '+pc.servico:'')+'</span><span class="ln-v">'+(pc.placa?pc.placa+' · ':'')+(pc.destino||pc.obs||'')+'</span></div>';
+    });
+    html+='</div>';
+  }
+
+  // Ocorrências registradas durante o plantão (com gravidade)
+  const ocorrenciasPdf=p.ocorrencias||[];
+  const corSeveridadePdf={Baixa:'#22C55E',Média:'#F0B429',Alta:'#F97316',Emergência:'#EF4444'};
+  if(ocorrenciasPdf.length){
+    html+='<div class="sec"><div class="sec-tit">⚠️ Ocorrências ('+ocorrenciasPdf.length+')</div>';
+    ocorrenciasPdf.forEach((oc,i)=>{
+      html+='<div class="obs" style="border-left-color:'+(corSeveridadePdf[oc.classificacao]||'#94A3B8')+';background:#FEF2F2;"><b>#'+(i+1)+' '+oc.classificacao.toUpperCase()+'</b> — '+oc.responsavel+' <span class="obs-hr">· '+fmtH(oc.criadoEm)+' em '+fmtData(oc.criadoEm)+'</span><br><span style="font-size:9px;">'+oc.descricao+(oc.totalFotos?' · 📷 '+oc.totalFotos+' foto(s) (só neste aparelho)':'')+'</span></div>';
     });
     html+='</div>';
   }
@@ -4801,7 +5693,7 @@ function montarCorpoHTML(p,emp){
     html+='</div>';
   }
 
-  html+='<div class="rodape">RondaMaster · ID '+id+' · Gerado em '+new Date().toLocaleString('pt-BR')+'</div>';
+  html+='<div class="rodape">Guardião · Ronda Master · ID '+id+' · Gerado em '+new Date().toLocaleString('pt-BR')+'</div>';
   return html;
 }
 window.montarCorpoHTML=montarCorpoHTML;
@@ -4811,6 +5703,8 @@ function verRelatorio(id){
   const p=DB.get('plantoes').find(x=>x.id===id);if(!p)return;
   const podeEditar=U&&(U.perfil==='admin'||U.perfil==='gerente');
   document.getElementById('relatorio-conteudo').innerHTML=gerarHtmlRelatorio(p,{mostrarFotos:true,podeEditar});
+  const btnPdf=document.getElementById('btn-gerar-pdf-relatorio');
+  if(btnPdf)btnPdf.classList.toggle('hidden',_dentroDeAppNativo());
   abrirModal('modal-relatorio');
 }
 function adicionarObsAdmin(){
@@ -4837,6 +5731,314 @@ function gerarPDFAtual(){
   else toast('❌ Nenhum relatório selecionado');
 }
 window.gerarPDFAtual=gerarPDFAtual;
+
+
+// ═══════════════════════════════════════════
+// BOTÃO DO VIGIA: RELATÓRIO PREMIUM (só com plantão ativo)
+// ═══════════════════════════════════════════
+// Gera DOIS arquivos: o relatório de sempre (o que o sistema já faz) e,
+// separadamente, um PDF só com a galeria de fotos em boa qualidade — nada
+// disso passa pelo Firestore, é tudo montado na hora, com as fotos que já
+// estão guardadas neste aparelho (IndexedDB).
+async function gerarRelatorioPremiumCompleto(){
+  if(!plantaoAtivo){toast('⚠️ Só é possível gerar com o plantão em andamento');return;}
+  if(!window.jspdf){toast('❌ Biblioteca de PDF ainda carregando, tente de novo em instantes');return;}
+  const p=plantaoAtivo;
+
+  toast('🖤 Gerando relatório completo...');
+  try{
+    const{jsPDF}=window.jspdf;
+    const pdf=new jsPDF('p','mm','a4');
+    const pWidth=pdf.internal.pageSize.getWidth();
+    const pHeight=pdf.internal.pageSize.getHeight();
+    let y=15;
+
+    function desenharCabecalho(){
+      pdf.setFillColor(15,15,15);
+      pdf.rect(10,y,pWidth-20,24,'F');
+      pdf.setDrawColor(212,175,55);
+      pdf.rect(10,y,pWidth-20,24,'D');
+      pdf.setFillColor(212,175,55);
+      pdf.triangle(18,y+7,26,y+7,22,y+18,'F');
+      pdf.setFont("Helvetica","bold");pdf.setFontSize(11);pdf.setTextColor(255,255,255);
+      pdf.text("GUARDIAO - RONDA MASTER",32,y+9);
+      pdf.setFont("Helvetica","normal");pdf.setFontSize(7.5);pdf.setTextColor(212,175,55);
+      pdf.text(`${_semEmoji(p.vigilanteNome)||'—'} · ${_semEmoji(p.contratanteNome||p.localNome)||'—'} · ${fmtData(p.inicio)}`,32,y+16);
+      y+=30;
+    }
+    function espacoOuNovaPagina(minimo){
+      if(y>pHeight-minimo){pdf.addPage();y=15;desenharCabecalho();}
+    }
+    desenharCabecalho();
+
+    // Bloco de informações do plantão
+    pdf.setFillColor(245,245,245);
+    pdf.rect(10,y,pWidth-20,36,'F');
+    pdf.setDrawColor(200,200,200);
+    pdf.rect(10,y,pWidth-20,36,'D');
+    pdf.setFont("Helvetica","bold");pdf.setFontSize(8.5);pdf.setTextColor(0,0,0);
+    pdf.text(`Vigilante: ${_semEmoji(p.vigilanteNome)||'—'}`,14,y+8);
+    pdf.text(`Local / Contratante: ${_semEmoji(p.contratanteNome||p.localNome)||'—'}`,14,y+16);
+    pdf.text(`Data: ${fmtData(p.inicio)}`,14,y+24);
+    pdf.text(`Entrada: ${fmtH(p.inicio)}`,14,y+32);
+    pdf.text(`Saída: ${p.fim?fmtH(p.fim):'Em andamento'}`,115,y+8);
+    pdf.text(`Rondas: ${(p.rondas||[]).length}`,115,y+16);
+    pdf.text(`Ocorrências: ${(p.ocorrencias||[]).length}`,115,y+24);
+    y+=44;
+
+    // RONDAS (texto)
+    const rondas=p.rondas||[];
+    espacoOuNovaPagina(20);
+    pdf.setFont("Helvetica","bold");pdf.setFontSize(10);pdf.setTextColor(0,0,0);
+    pdf.text("RONDAS REALIZADAS",10,y);
+    pdf.line(10,y+2,pWidth-10,y+2);
+    y+=8;
+    if(!rondas.length){
+      pdf.setFont("Helvetica","italic");pdf.setFontSize(8.5);pdf.setTextColor(120,120,120);
+      pdf.text("Nenhuma ronda registrada até agora.",12,y+3);
+      y+=10;
+    }else{
+      for(const r of rondas){
+        espacoOuNovaPagina(r.pontosValidados&&r.pontosValidados.length?20:14);
+        pdf.setFont("Helvetica","normal");pdf.setFontSize(8.5);pdf.setTextColor(30,30,30);
+        pdf.text(`Ronda #${r.num}${r.rotaNome?' - '+_semEmoji(r.rotaNome):''} — ${r.hora||fmtH(r.inicio)} - ${r.horaFim||fmtH(r.fim)}`,12,y+4);
+        y+=8;
+        if(r.pontosValidados&&r.pontosValidados.length){
+          pdf.setFont("Helvetica","italic");pdf.setFontSize(7.5);pdf.setTextColor(90,90,90);
+          const txtPontos=r.pontosValidados.map(pt=>(pt.validado?'[OK] ':'[--] ')+_semEmoji(pt.nome)).join('   ');
+          const linhas=pdf.splitTextToSize(txtPontos,pWidth-24);
+          pdf.text(linhas,14,y+2);
+          y+=linhas.length*3.5+4;
+        }
+      }
+    }
+    y+=4;
+
+    // OCORRÊNCIAS (texto)
+    const ocorrencias=p.ocorrencias||[];
+    espacoOuNovaPagina(20);
+    pdf.setFont("Helvetica","bold");pdf.setFontSize(10);pdf.setTextColor(0,0,0);
+    pdf.text("OCORRÊNCIAS REGISTRADAS",10,y);
+    pdf.line(10,y+2,pWidth-10,y+2);
+    y+=8;
+    if(!ocorrencias.length){
+      pdf.setFont("Helvetica","italic");pdf.setFontSize(8.5);pdf.setTextColor(120,120,120);
+      pdf.text("Nenhuma ocorrência registrada até agora.",12,y+3);
+      y+=10;
+    }else{
+      const corSeveridade={Baixa:[46,204,113],'Média':[241,196,15],Alta:[230,126,34],'Emergência':[231,76,60]};
+      for(const oc of ocorrencias){
+        const alturaBase=20;
+        espacoOuNovaPagina(alturaBase+6);
+        const cor=corSeveridade[oc.classificacao]||[150,150,150];
+        pdf.setFillColor(252,250,248);pdf.rect(10,y,pWidth-20,alturaBase,'F');
+        pdf.setFillColor(...cor);pdf.rect(10,y,3,alturaBase,'F');
+        pdf.setFont("Helvetica","bold");pdf.setFontSize(8.5);pdf.setTextColor(0,0,0);
+        pdf.text(`${oc.classificacao.toUpperCase()} — ${_semEmoji(oc.responsavel)} — ${fmtH(oc.criadoEm)}`,16,y+6);
+        pdf.setFont("Helvetica","normal");pdf.setFontSize(8);pdf.setTextColor(40,40,40);
+        const desc=pdf.splitTextToSize(_semEmoji(oc.descricao),pWidth-34);
+        pdf.text(desc,16,y+12);
+        y+=alturaBase+4;
+      }
+    }
+    y+=4;
+
+    // CHECKLIST DO VEÍCULO
+    const ck=p.checklist||{};
+    espacoOuNovaPagina(20);
+    pdf.setFont("Helvetica","bold");pdf.setFontSize(10);pdf.setTextColor(0,0,0);
+    pdf.text("CHECKLIST DO VEÍCULO",10,y);
+    pdf.line(10,y+2,pWidth-10,y+2);
+    y+=8;
+    if(!ck.veiculo){
+      pdf.setFont("Helvetica","italic");pdf.setFontSize(8.5);pdf.setTextColor(120,120,120);
+      pdf.text("Checklist não preenchido.",12,y+3);
+      y+=10;
+    }else{
+      pdf.setFont("Helvetica","normal");pdf.setFontSize(8.5);pdf.setTextColor(30,30,30);
+      pdf.text(`Veículo: ${_semEmoji(ck.veiculo)}${ck.placa?' - '+ck.placa:''}`,12,y+4);
+      pdf.text(`KM: ${ck.kmEntrada||'-'} a ${ck.kmSaida||'-'}`,110,y+4);
+      y+=7;
+      const _reservaJsPdf=(ck.gasolina||'').toLowerCase().includes('reserva');
+      const equips=DB.get('equipamentos');
+      const itensVeic=DB.get('itens_veiculo');
+      const todosItens=[...itensVeic,...equips];
+      const _itensProbJsPdf=ck.equipamentos?todosItens.filter(item=>(ck.equipamentos[item.id]||'ok')!=='ok').map(item=>item.nome):[];
+      if(_reservaJsPdf||_itensProbJsPdf.length){
+        espacoOuNovaPagina(12);
+        pdf.setFont("Helvetica","bold");pdf.setFontSize(8);pdf.setTextColor(220,38,38);
+        let avisoTxt='ATENCAO NO VEICULO:';
+        if(_reservaJsPdf)avisoTxt+=' combustivel na reserva.';
+        if(_itensProbJsPdf.length)avisoTxt+=' Problema em: '+_itensProbJsPdf.map(n=>_semEmoji(n)).join(', ')+'.';
+        const avisoQuebrado=pdf.splitTextToSize(avisoTxt,pWidth-24);
+        pdf.text(avisoQuebrado,12,y+4);
+        y+=avisoQuebrado.length*4+4;
+      }
+      if(_reservaJsPdf){pdf.setTextColor(220,38,38);pdf.setFont("Helvetica","bold");}else{pdf.setTextColor(30,30,30);pdf.setFont("Helvetica","normal");}
+      pdf.setFontSize(8.5);
+      pdf.text(`Combustível: ${_semEmoji(ck.gasolina)||'-'}   Óleo: ${_semEmoji(ck.oleo)||'-'}`,12,y+4);
+      pdf.setTextColor(30,30,30);pdf.setFont("Helvetica","normal");
+      y+=9;
+      if(ck.equipamentos&&todosItens.length){
+        const linhasItens=todosItens.map(item=>{
+          const v=ck.equipamentos[item.id]||'ok';
+          return(v==='ok'?'[OK] ':'[PROBLEMA] ')+_semEmoji(item.nome);
+        }).join('   ');
+        const linhasQuebradas=pdf.splitTextToSize(linhasItens,pWidth-24);
+        espacoOuNovaPagina(linhasQuebradas.length*4+6);
+        pdf.setFontSize(7.5);pdf.setTextColor(60,60,60);
+        pdf.text(linhasQuebradas,12,y+2);
+        y+=linhasQuebradas.length*3.8+6;
+      }
+    }
+    y+=4;
+
+    // PORTARIA (visitantes e entregas)
+    const portariaLista=p.portaria||[];
+    const visitantesPdf=portariaLista.filter(x=>x.tipo==='visitante');
+    const entregasPdf=portariaLista.filter(x=>x.tipo==='entrega');
+    espacoOuNovaPagina(20);
+    pdf.setFont("Helvetica","bold");pdf.setFontSize(10);pdf.setTextColor(0,0,0);
+    pdf.text("PORTARIA — VISITANTES E ENTREGAS",10,y);
+    pdf.line(10,y+2,pWidth-10,y+2);
+    y+=8;
+    if(!visitantesPdf.length&&!entregasPdf.length){
+      pdf.setFont("Helvetica","italic");pdf.setFontSize(8.5);pdf.setTextColor(120,120,120);
+      pdf.text("Nenhum registro de portaria.",12,y+3);
+      y+=10;
+    }else{
+      pdf.setFont("Helvetica","normal");pdf.setFontSize(8);pdf.setTextColor(30,30,30);
+      for(const v of visitantesPdf){
+        espacoOuNovaPagina(12);
+        const notas=[];
+        if(v.pernoite)notas.push('PERNOITE');
+        if(v.obs)notas.push(v.obs);
+        const linha=`Visitante: ${_semEmoji(v.visitante)} - ${v.placa||'-'} - ${_semEmoji(v.destino)} - Entrada ${v.hora}${v.horaSaida?' - Saída '+v.horaSaida:' - sem saída'}${notas.length?' - '+_semEmoji(notas.join('; ')):''}`;
+        const linhasQ=pdf.splitTextToSize(linha,pWidth-24);
+        pdf.text(linhasQ,12,y+3);
+        y+=linhasQ.length*3.8+3;
+      }
+      for(const e of entregasPdf){
+        espacoOuNovaPagina(12);
+        const linha=`Entrega: ${_semEmoji(e.empresa)} - ${_semEmoji(e.entregador)} - ${e.placa||'-'} - ${_semEmoji(e.destino)} - ${e.hora}${e.obs?' - '+_semEmoji(e.obs):''}`;
+        const linhasQ=pdf.splitTextToSize(linha,pWidth-24);
+        pdf.text(linhasQ,12,y+3);
+        y+=linhasQ.length*3.8+3;
+      }
+    }
+    y+=4;
+
+    // GRADE DE FOTOS
+    const colunas=2,gap=5;
+    const cel=(pWidth-20-(colunas-1)*gap)/colunas;
+    function desenharSecaoFotos(titulo,fotos){
+      if(!fotos.length)return;
+      espacoOuNovaPagina(16);
+      pdf.setFont("Helvetica","bold");pdf.setFontSize(10);pdf.setTextColor(0,0,0);
+      pdf.text(titulo,10,y+4);
+      y+=9;
+      let col=0;
+      for(const foto of fotos){
+        if(y>pHeight-cel-10){pdf.addPage();y=15;desenharCabecalho();col=0;}
+        const x=10+col*(cel+gap);
+        try{pdf.addImage(foto.full,'JPEG',x,y,cel,cel);}catch(e){}
+        pdf.setDrawColor(220,220,220);
+        pdf.rect(x,y,cel,cel,'D');
+        col++;
+        if(col>=colunas){col=0;y+=cel+gap;}
+      }
+      if(col!==0)y+=cel+gap;
+      y+=6;
+    }
+
+    const totalFotos=_totalFotosRonda()+fotosPorTipo.ocorrencia.length;
+    if(totalFotos){
+      // Uma seção separada pra cada ronda que teve foto anexada, na ordem certa
+      const numerosRonda=Object.keys(fotosPorTipo.ronda).map(Number).sort((a,b)=>a-b);
+      for(const num of numerosRonda){
+        const fotosDaRonda=fotosPorTipo.ronda[num];
+        if(fotosDaRonda&&fotosDaRonda.length){
+          desenharSecaoFotos(`RONDA #${num} — FOTOS (${fotosDaRonda.length})`,fotosDaRonda);
+        }
+      }
+
+      const obsFotos=(document.getElementById('obs-fotos-ocorrencia')?.value||'').trim();
+      if(fotosPorTipo.ocorrencia.length||obsFotos){
+        espacoOuNovaPagina(16);
+        pdf.setFont("Helvetica","bold");pdf.setFontSize(10);pdf.setTextColor(0,0,0);
+        pdf.text(`FOTOS DE OCORRÊNCIA (${fotosPorTipo.ocorrencia.length})`,10,y+4);
+        y+=9;
+        if(obsFotos){
+          pdf.setFont("Helvetica","italic");pdf.setFontSize(8.5);pdf.setTextColor(60,60,60);
+          const obsLinhas=pdf.splitTextToSize('Observação: '+obsFotos,pWidth-20);
+          pdf.text(obsLinhas,12,y+3);
+          y+=obsLinhas.length*4+6;
+        }
+        let col=0;
+        for(const foto of fotosPorTipo.ocorrencia){
+          if(y>pHeight-cel-10){pdf.addPage();y=15;desenharCabecalho();col=0;}
+          const x=10+col*(cel+gap);
+          try{pdf.addImage(foto.full,'JPEG',x,y,cel,cel);}catch(e){}
+          pdf.setDrawColor(220,220,220);
+          pdf.rect(x,y,cel,cel,'D');
+          col++;
+          if(col>=colunas){col=0;y+=cel+gap;}
+        }
+        if(col!==0)y+=cel+gap;
+      }
+    }
+
+    pdf.setFont("Helvetica","normal");pdf.setFontSize(7);pdf.setTextColor(150,150,150);
+    pdf.text("Relatório gerado localmente pelo Guardião - Ronda Master.",10,pHeight-8);
+    pdf.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`,pWidth-65,pHeight-8);
+
+    const nomeArquivo=`Relatorio_${(p.contratanteNome||p.localNome||'Guardiao').replace(/\s+/g,'_')}_${fmtData(p.inicio).replace(/\//g,'-')}.pdf`;
+
+    let abriu=false;
+    let detalheDiagnostico='';
+    if(_dentroDeAppNativo()){
+      // Dentro do app instalado: salva o arquivo de verdade no celular e
+      // chama o Android pra abrir com um visualizador de PDF.
+      const resultadoNativo=await _salvarEAbrirPdfNativo(pdf,nomeArquivo);
+      abriu=resultadoNativo.ok;
+      if(!abriu){
+        detalheDiagnostico=`Etapa: ${resultadoNativo.etapa}. Detalhe: ${resultadoNativo.erro}`;
+        console.error('Diagnóstico da falha ao abrir o PDF no app:',detalheDiagnostico);
+        // Se por algum motivo os plugins nativos falharem, tenta do jeito
+        // "de navegador" mesmo assim — não custa tentar.
+        try{const blobUrl=pdf.output('bloburl');abriu=!!window.open(blobUrl,'_blank');}catch(e){}
+      }
+    }else{
+      // Fora do app (navegador comum): abre em nova aba e tenta baixar
+      try{
+        const blobUrl=pdf.output('bloburl');
+        abriu=!!window.open(blobUrl,'_blank');
+      }catch(e){console.warn('Não foi possível abrir o PDF em nova aba:',e);}
+      try{pdf.save(nomeArquivo);}catch(e){console.warn('Download automático não disponível:',e);}
+    }
+
+    // Como pedido: depois de gerar, as fotos e a observação são descartadas
+    limparFotosPremium();
+    const obsEl=document.getElementById('obs-fotos-ocorrencia');
+    if(obsEl)obsEl.value='';
+
+    if(abriu){
+      toast('✅ Relatório gerado! Escolha um app pra visualizar o PDF.');
+    }else{
+      toast('⚠️ Relatório gerado, mas não consegui abrir sozinho.');
+      if(detalheDiagnostico){
+        // Mostra numa segunda mensagem, com tempo pra ler — ajuda a apontar
+        // exatamente onde travou, pra corrigir com precisão.
+        setTimeout(()=>toast('🔍 '+detalheDiagnostico),3500);
+      }
+    }
+  }catch(err){
+    console.error('Erro ao gerar relatório completo:',err);
+    toast('❌ Falha ao gerar o relatório.');
+  }
+}
+window.gerarRelatorioPremiumCompleto=gerarRelatorioPremiumCompleto;
+
 let _acaoBloqueioFn=null;
 function mostrarBloqueio(titulo,msg,btnLabel,fn){
   _acaoBloqueioFn=fn;
@@ -4862,9 +6064,169 @@ window.acaoBloqueio=acaoBloqueio;
 // ═══════════════════════════════════════════
 let rondasAtivas=[];
 let rondaAtualIdx=null;
-function iniciarRonda(){
+// ═══════════════════════════════════════════
+// ROTAS DE RONDA — SELEÇÃO E VALIDAÇÃO DE CHECKPOINTS
+// ═══════════════════════════════════════════
+function _rotasContratanteAtual(){
+  if(!plantaoAtivo)return[];
+  const cont=DB.get('contratantes').find(c=>c.nome===plantaoAtivo.contratanteNome);
+  return(cont&&cont.rotas)?cont.rotas:[];
+}
+function popularSeletorVeiculoRonda(){
+  const wrap=document.getElementById('seletor-veiculo-ronda-wrap');
+  const sel=document.getElementById('sel-veiculo-ronda');
+  if(!wrap||!sel)return;
+  const veiculos=DB.get('veiculos').filter(v=>v.ativo!==false);
+  // Só mostra o seletor se tiver mais de 1 veículo — com só 1, não tem escolha real
+  if(veiculos.length<2){wrap.classList.add('hidden');return;}
+  wrap.classList.remove('hidden');
+  const valorAnterior=sel.value;
+  sel.innerHTML=veiculos.map(v=>`<option value="${v.id}">${v.tipo||''} ${v.nome||''} — ${(v.placa||'').toUpperCase()}</option>`).join('');
+  const veiculoChecklist=plantaoAtivo&&plantaoAtivo.checklist?plantaoAtivo.checklist.veiculoId:null;
+  if(valorAnterior&&veiculos.some(v=>v.id===valorAnterior)){
+    sel.value=valorAnterior;
+  }else if(veiculoChecklist&&veiculos.some(v=>v.id===veiculoChecklist)){
+    sel.value=veiculoChecklist;
+  }
+}
+window.popularSeletorVeiculoRonda=popularSeletorVeiculoRonda;
+function popularSeletorRota(){
+  const wrap=document.getElementById('seletor-rota-wrap');
+  const sel=document.getElementById('sel-rota-ronda');
+  if(!wrap||!sel)return;
+  const rotas=_rotasContratanteAtual();
+  if(!rotas.length){wrap.classList.add('hidden');return;}
+  wrap.classList.remove('hidden');
+  sel.innerHTML=rotas.map(r=>`<option value="${r.id}">${r.nome} (${r.pontos.length} ponto(s))</option>`).join('');
+  atualizarPreviewRota();
+}
+window.popularSeletorRota=popularSeletorRota;
+function _rotaSelecionada(){
+  const sel=document.getElementById('sel-rota-ronda');
+  if(!sel||!sel.value)return null;
+  return _rotasContratanteAtual().find(r=>r.id===sel.value)||null;
+}
+function atualizarPreviewRota(){
+  const div=document.getElementById('preview-pontos-rota');
+  if(!div)return;
+  const rota=_rotaSelecionada();
+  if(!rota){div.innerHTML='';return;}
+  div.innerHTML='Pontos: '+rota.pontos.map(p=>p.nome+(p.obrigatorio?' *':'')).join(' → ')+(rota.pontos.some(p=>p.obrigatorio)?' <span style="color:var(--red);">(* obrigatório)</span>':'');
+}
+window.atualizarPreviewRota=atualizarPreviewRota;
+
+let checkpointPollInterval=null;
+let checkpointStatusAtual={};
+let rotaEmAndamento=null;
+
+function iniciarMonitoramentoCheckpoints(rota){
+  pararMonitoramentoCheckpoints();
+  rotaEmAndamento=rota;
+  checkpointStatusAtual={};
+  rota.pontos.forEach(p=>{checkpointStatusAtual[p.id]={emRaioDesde:null,validado:false,validadoEm:null};});
+  renderCheckpointsProgresso();
+  const verificar=()=>{
+    if(!navigator.geolocation)return;
+    navigator.geolocation.getCurrentPosition(pos=>{
+      const agora=Date.now();
+      let algumNovoValidado=false;
+      rota.pontos.forEach(p=>{
+        const st=checkpointStatusAtual[p.id];
+        if(st.validado)return;
+        const dist=_distanciaMetros(pos.coords.latitude,pos.coords.longitude,p.lat,p.lng);
+        if(dist<=p.raio){
+          if(!st.emRaioDesde)st.emRaioDesde=agora;
+          if((agora-st.emRaioDesde)/1000>=p.tempo){
+            st.validado=true;st.validadoEm=new Date().toISOString();
+            algumNovoValidado=true;
+          }
+        }else{
+          st.emRaioDesde=null;
+        }
+      });
+      if(algumNovoValidado)toast('✅ Ponto de checagem validado!');
+      renderCheckpointsProgresso();
+    },()=>{},{enableHighAccuracy:true,timeout:10000});
+  };
+  verificar();
+  checkpointPollInterval=setInterval(verificar,10000);
+}
+function pararMonitoramentoCheckpoints(){
+  if(checkpointPollInterval){clearInterval(checkpointPollInterval);checkpointPollInterval=null;}
+}
+function renderCheckpointsProgresso(){
+  const div=document.getElementById('checkpoints-progresso');
+  if(!div||!rotaEmAndamento)return;
+  div.innerHTML=`<div class="text-xs" style="color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">📍 ${rotaEmAndamento.nome}</div>`+
+    rotaEmAndamento.pontos.map(p=>{
+      const st=checkpointStatusAtual[p.id];
+      const emRaio=st.emRaioDesde&&!st.validado;
+      const icone=st.validado?'✅':(emRaio?'🔵':'⚪');
+      return`<div class="text-xs" style="padding:4px 0;display:flex;justify-content:space-between;">
+        <span>${icone} ${p.nome}${p.obrigatorio?' *':''}</span>
+        <span style="color:${st.validado?'var(--green)':'var(--muted)'};">${st.validado?'Validado':(emRaio?'Aguardando tempo...':'—')}</span>
+      </div>`;
+    }).join('');
+}
+function _checkpointsObrigatoriosPendentes(){
+  if(!rotaEmAndamento)return[];
+  return rotaEmAndamento.pontos.filter(p=>p.obrigatorio&&!checkpointStatusAtual[p.id].validado);
+}
+async function _validarPontoIniciar(rota){
+  if(!rota)return{ok:true};
+  const podeIniciarPontos=rota.pontos.filter(p=>p.podeIniciar);
+  if(!podeIniciarPontos.length)return{ok:true};
+  if(!navigator.geolocation)return{ok:true};
+  try{
+    const pos=await new Promise((resolve,reject)=>navigator.geolocation.getCurrentPosition(resolve,reject,{timeout:10000,enableHighAccuracy:true}));
+    const dentro=podeIniciarPontos.some(p=>_distanciaMetros(pos.coords.latitude,pos.coords.longitude,p.lat,p.lng)<=p.raio);
+    if(!dentro)return{ok:false,pontos:podeIniciarPontos.map(p=>p.nome).join(', ')};
+    return{ok:true};
+  }catch(e){return{ok:false,semGps:true};}
+}
+async function _validarPontoEncerrar(rota){
+  if(!rota)return{ok:true};
+  const podeEncerrarPontos=rota.pontos.filter(p=>p.podeEncerrar);
+  if(!podeEncerrarPontos.length)return{ok:true};
+  if(!navigator.geolocation)return{ok:true};
+  try{
+    const pos=await new Promise((resolve,reject)=>navigator.geolocation.getCurrentPosition(resolve,reject,{timeout:10000,enableHighAccuracy:true}));
+    const dentro=podeEncerrarPontos.some(p=>_distanciaMetros(pos.coords.latitude,pos.coords.longitude,p.lat,p.lng)<=p.raio);
+    if(!dentro)return{ok:false,pontos:podeEncerrarPontos.map(p=>p.nome).join(', ')};
+    return{ok:true};
+  }catch(e){return{ok:false,semGps:true};}
+}
+
+async function iniciarRonda(){
   if(!plantaoAtivo){toast('⚠️ Nenhum plantão ativo');return;}
+  const rota=_rotaSelecionada();
+  if(rota){
+    const btnIniciar=document.getElementById('btn-iniciar-ronda');
+    if(btnIniciar)btnIniciar.disabled=true;
+    toast('📍 Confirmando localização do ponto de início...');
+    const val=await _validarPontoIniciar(rota);
+    if(btnIniciar)btnIniciar.disabled=false;
+    if(!val.ok){
+      if(val.semGps){
+        mostrarBloqueio('Localização necessária','Não conseguimos confirmar onde você está. Verifique o GPS e tente de novo.','Entendi',()=>{});
+      }else{
+        mostrarBloqueio('Fora do ponto de início',`Você precisa estar em um destes pontos pra iniciar esta rota: ${val.pontos}.`,'Entendi',()=>{});
+      }
+      return;
+    }
+  }
   const agora=new Date();
+  const selVeiculoRonda=document.getElementById('sel-veiculo-ronda');
+  let veiculoRondaId=null,veiculoRondaNome=null;
+  if(selVeiculoRonda&&selVeiculoRonda.value){
+    veiculoRondaId=selVeiculoRonda.value;
+    const vSel=DB.get('veiculos').find(v=>v.id===veiculoRondaId);
+    veiculoRondaNome=vSel?`${vSel.tipo||''} ${vSel.nome||''} — ${(vSel.placa||'').toUpperCase()}`.trim():null;
+  }else if(plantaoAtivo.checklist&&plantaoAtivo.checklist.veiculoId){
+    veiculoRondaId=plantaoAtivo.checklist.veiculoId;
+    const vSel=DB.get('veiculos').find(v=>v.id===veiculoRondaId);
+    veiculoRondaNome=vSel?`${vSel.tipo||''} ${vSel.nome||''} — ${(vSel.placa||'').toUpperCase()}`.trim():null;
+  }
   const nova={
     id:'r'+Date.now(),
     num:rondasAtivas.length+1,
@@ -4872,15 +6234,21 @@ function iniciarRonda(){
     data:agora.toLocaleDateString('pt-BR'),
     hora:fmtH(agora.toISOString()),
     fim:null,
-    lat:null,lng:null
+    lat:null,lng:null,
+    rotaId:rota?rota.id:null,rotaNome:rota?rota.nome:null,pontosValidados:[],
+    veiculoId:veiculoRondaId,veiculoNome:veiculoRondaNome
   };
   rondaAtualIdx=rondasAtivas.length;
   rondasAtivas.push(nova);
   document.getElementById('btn-iniciar-ronda').classList.add('hidden');
+  document.getElementById('seletor-rota-wrap').classList.add('hidden');
+  const seletorVeicWrap=document.getElementById('seletor-veiculo-ronda-wrap');
+  if(seletorVeicWrap)seletorVeicWrap.classList.add('hidden');
   document.getElementById('ronda-ativa-info').classList.remove('hidden');
   document.getElementById('ronda-num-label').textContent='Ronda #'+nova.num;
   document.getElementById('ronda-inicio-label').textContent=nova.data+' às '+nova.hora;
   document.getElementById('ronda-local-label').textContent='📍 Obtendo localização...';
+  if(rota)iniciarMonitoramentoCheckpoints(rota);
   // Capturar GPS
   if(navigator.geolocation){
     navigator.geolocation.getCurrentPosition(
@@ -4907,11 +6275,36 @@ function iniciarRonda(){
   renderListaRondas();
   toast('🚶 Ronda #'+nova.num+' iniciada!');
 }
-function finalizarRonda(){
+async function finalizarRonda(){
   if(rondaAtualIdx===null)return;
+  if(rotaEmAndamento){
+    const pendentes=_checkpointsObrigatoriosPendentes();
+    if(pendentes.length){
+      mostrarBloqueio('Pontos obrigatórios pendentes',`Você ainda precisa validar: ${pendentes.map(p=>p.nome).join(', ')}. Aproxime-se desses pontos e aguarde o tempo necessário.`,'Entendi',()=>{});
+      return;
+    }
+    const val=await _validarPontoEncerrar(rotaEmAndamento);
+    if(!val.ok){
+      if(val.semGps){
+        mostrarBloqueio('Localização necessária','Não conseguimos confirmar onde você está pra encerrar a ronda. Verifique o GPS e tente de novo.','Entendi',()=>{});
+      }else{
+        mostrarBloqueio('Fora do ponto de encerramento',`Você precisa estar em um destes pontos pra encerrar esta rota: ${val.pontos}.`,'Entendi',()=>{});
+      }
+      return;
+    }
+  }
   const agora=new Date();
   rondasAtivas[rondaAtualIdx].fim=agora.toISOString();
   rondasAtivas[rondaAtualIdx].horaFim=fmtH(agora.toISOString());
+  if(rotaEmAndamento){
+    rondasAtivas[rondaAtualIdx].pontosValidados=rotaEmAndamento.pontos.map(p=>({
+      id:p.id,nome:p.nome,obrigatorio:p.obrigatorio,
+      validado:checkpointStatusAtual[p.id].validado,
+      validadoEm:checkpointStatusAtual[p.id].validadoEm
+    }));
+  }
+  pararMonitoramentoCheckpoints();
+  rotaEmAndamento=null;
   const idxFim=rondaAtualIdx;
   // GPS de saída
   if(navigator.geolocation){
@@ -4920,9 +6313,9 @@ function finalizarRonda(){
         rondasAtivas[idxFim].latFim=pos.coords.latitude.toFixed(5);
         rondasAtivas[idxFim].lngFim=pos.coords.longitude.toFixed(5);
         plantaoAtivo.rondas=rondasAtivas;
-        atualizarStorage();renderListaRondas();
+        atualizarStorage();renderListaRondas();calcularProgressoPlantao();
       },
-      ()=>{plantaoAtivo.rondas=rondasAtivas;atualizarStorage();renderListaRondas();},
+      ()=>{plantaoAtivo.rondas=rondasAtivas;atualizarStorage();renderListaRondas();calcularProgressoPlantao();},
       {timeout:5000,enableHighAccuracy:true}
     );
   }
@@ -4931,8 +6324,12 @@ function finalizarRonda(){
   atualizarStorage();
   document.getElementById('btn-iniciar-ronda').classList.remove('hidden');
   document.getElementById('ronda-ativa-info').classList.add('hidden');
+  document.getElementById('checkpoints-progresso').innerHTML='';
+  popularSeletorRota();
+  popularSeletorVeiculoRonda();
   atualizarContadorRondas();
   renderListaRondas();
+  calcularProgressoPlantao();
   toast('🏁 Ronda #'+rondasAtivas.filter(r=>r.fim).length+' finalizada!');
 }
 function atualizarContadorRondas(){
@@ -4946,15 +6343,243 @@ function renderListaRondas(){
   if(!concluidas.length){div.innerHTML='';return;}
   div.innerHTML=concluidas.map(r=>`
     <div style="background:var(--slate2);border-radius:10px;padding:12px;margin-bottom:8px;border-left:3px solid var(--green);">
-      <div style="font-weight:700;font-size:13px;">🚶 Ronda #${r.num}</div>
+      <div style="font-weight:700;font-size:13px;">🚶 Ronda #${r.num}${r.rotaNome?' — '+r.rotaNome:''}</div>
       <div style="font-size:12px;color:var(--muted);margin-top:4px;">
         📅 ${r.data||fmtData(r.inicio)} · ⏰ ${r.hora||fmtH(r.inicio)} → ${r.horaFim||fmtH(r.fim)}
       </div>
+      ${r.veiculoNome?`<div style="font-size:11px;color:var(--gold);margin-top:2px;">🏍️ ${r.veiculoNome}</div>`:''}
       ${r.lat?`<div style="font-size:11px;color:var(--teal);margin-top:2px;">📍 Início: ${r.lat}, ${r.lng}</div>`:''}
       ${r.latFim?`<div style="font-size:11px;color:var(--teal);margin-top:2px;">📍 Fim: ${r.latFim}, ${r.lngFim}</div>`:''}
+      ${(r.pontosValidados&&r.pontosValidados.length)?`<div style="font-size:11px;margin-top:4px;">${r.pontosValidados.map(p=>(p.validado?'✅':'❌')+' '+p.nome).join(' · ')}</div>`:''}
     </div>`).join('');
 }
 window.renderListaRondas=renderListaRondas;
+
+// ═══════════════════════════════════════════
+// FOTOS DO RELATÓRIO PREMIUM (ronda separada por número, ocorrência simples)
+// ═══════════════════════════════════════════
+// Só na memória desta tela — não vão pro IndexedDB, não vão pro Firestore,
+// não sobrevivem a um F5. Servem só pra montar o PDF na hora; depois de
+// gerar, são descartadas. fotosPorTipo.ronda é um objeto {numRonda: [fotos]}
+// pra manter cada ronda separada da outra.
+let fotosPorTipo={ronda:{},ocorrencia:[]};
+
+function _pareceImagem(arquivo){
+  // Alguns gerenciadores de arquivos (usados quando o campo não restringe
+  // tipo, o que era necessário pra destravar a seleção múltipla em alguns
+  // navegadores) não preenchem o "type" do arquivo corretamente. Por isso
+  // checamos também a extensão do nome, pra não rejeitar foto de verdade.
+  if(arquivo.type&&arquivo.type.startsWith('image/'))return true;
+  const ext=(arquivo.name||'').toLowerCase().split('.').pop();
+  return['jpg','jpeg','png','gif','webp','bmp','heic','heif'].includes(ext);
+}
+
+function _totalFotosRonda(){
+  return Object.values(fotosPorTipo.ronda||{}).reduce((s,arr)=>s+arr.length,0);
+}
+
+// Popular o seletor de rondas sempre que uma ronda for finalizada
+function popularSeletorRondaFotos(){
+  const sel=document.getElementById('sel-ronda-fotos');
+  const aviso=document.getElementById('sem-ronda-aviso');
+  const wrap=document.getElementById('upload-fotos-ronda-wrap');
+  if(!sel)return;
+  const concluidas=(typeof rondasAtivas!=='undefined'?rondasAtivas:[]).filter(r=>r.fim);
+  if(!concluidas.length){
+    sel.innerHTML='';
+    if(aviso)aviso.classList.remove('hidden');
+    if(wrap)wrap.classList.add('hidden');
+    return;
+  }
+  if(aviso)aviso.classList.add('hidden');
+  if(wrap)wrap.classList.remove('hidden');
+  const valorAnterior=sel.value;
+  sel.innerHTML=concluidas.map(r=>`<option value="${r.num}">Ronda #${r.num} (${r.hora||fmtH(r.inicio)})</option>`).join('');
+  if(valorAnterior&&concluidas.some(r=>String(r.num)===valorAnterior)){
+    sel.value=valorAnterior;
+  }else{
+    sel.value=concluidas[concluidas.length-1].num;
+  }
+  renderizarGaleriaFotosRonda();
+}
+window.popularSeletorRondaFotos=popularSeletorRondaFotos;
+
+async function processarFotosRonda(input){
+  const todosArquivos=Array.from(input.files);
+  if(!todosArquivos.length)return;
+  const sel=document.getElementById('sel-ronda-fotos');
+  const numRonda=sel?sel.value:'';
+  if(!numRonda){toast('⚠️ Escolha a ronda antes de anexar as fotos');input.value='';return;}
+  const arquivos=todosArquivos.filter(_pareceImagem);
+  const ignorados=todosArquivos.length-arquivos.length;
+  if(!arquivos.length){
+    toast('⚠️ Nenhum arquivo de imagem selecionado. Escolha fotos (jpg, png, etc.).');
+    input.value='';
+    return;
+  }
+  const statusEl=document.getElementById('status-processando-ronda');
+  statusEl.classList.remove('hidden');
+  let processadas=0,falhas=0;
+  if(!fotosPorTipo.ronda[numRonda])fotosPorTipo.ronda[numRonda]=[];
+  for(const arquivo of arquivos){
+    statusEl.textContent=`Processando foto ${processadas+1} de ${arquivos.length}...`;
+    try{
+      const foto=await lerEComprimirFoto(arquivo);
+      fotosPorTipo.ronda[numRonda].push(foto);
+    }catch(e){falhas++;}
+    processadas++;
+  }
+  statusEl.classList.add('hidden');
+  input.value='';
+  renderizarGaleriaFotosRonda();
+  const total=fotosPorTipo.ronda[numRonda].length;
+  if(falhas){
+    toast(`⚠️ ${processadas-falhas} foto(s) anexada(s) na Ronda #${numRonda}, ${falhas} falharam.`);
+  }else if(processadas===1){
+    toast(`✅ Foto adicionada na Ronda #${numRonda}! Total: ${total}.`);
+  }else{
+    toast(`✅ +${processadas} fotos na Ronda #${numRonda}! Total: ${total}.`);
+  }
+}
+window.processarFotosRonda=processarFotosRonda;
+
+function renderizarGaleriaFotosRonda(){
+  const sel=document.getElementById('sel-ronda-fotos');
+  const div=document.getElementById('galeria-fotos-ronda');
+  const contador=document.getElementById('contador-fotos-ronda');
+  if(!sel||!div)return;
+  const numRonda=sel.value;
+  const fotos=(numRonda&&fotosPorTipo.ronda[numRonda])?fotosPorTipo.ronda[numRonda]:[];
+  if(contador)contador.textContent=fotos.length===1?'1 foto anexada':fotos.length+' fotos anexadas';
+  div.innerHTML=fotos.map((f,idx)=>`
+    <div class="preview-item"><img src="${f.thumb}" loading="lazy">
+      <button class="btn-remover-foto" onclick="removerFotoRonda(${idx})">&times;</button>
+    </div>`).join('');
+}
+window.renderizarGaleriaFotosRonda=renderizarGaleriaFotosRonda;
+
+function removerFotoRonda(idx){
+  const sel=document.getElementById('sel-ronda-fotos');
+  const numRonda=sel?sel.value:'';
+  if(!numRonda||!fotosPorTipo.ronda[numRonda])return;
+  fotosPorTipo.ronda[numRonda].splice(idx,1);
+  renderizarGaleriaFotosRonda();
+}
+window.removerFotoRonda=removerFotoRonda;
+
+// Fotos de Ocorrência continuam simples, sem separar por número
+async function processarFotos(input,tipo){
+  const todosArquivos=Array.from(input.files);
+  if(!todosArquivos.length)return;
+  const arquivos=todosArquivos.filter(_pareceImagem);
+  const ignorados=todosArquivos.length-arquivos.length;
+  if(!arquivos.length){
+    toast('⚠️ Nenhum arquivo de imagem selecionado. Escolha fotos (jpg, png, etc.).');
+    input.value='';
+    return;
+  }
+  const statusEl=document.getElementById('status-processando-'+tipo);
+  statusEl.classList.remove('hidden');
+  let processadas=0,falhas=0;
+  for(const arquivo of arquivos){
+    statusEl.textContent=`Processando foto ${processadas+1} de ${arquivos.length}...`;
+    try{
+      const foto=await lerEComprimirFoto(arquivo);
+      fotosPorTipo[tipo].push(foto);
+    }catch(e){falhas++;}
+    processadas++;
+  }
+  statusEl.classList.add('hidden');
+  input.value='';
+  renderizarGaleriaFotos(tipo);
+  const total=fotosPorTipo[tipo].length;
+  if(falhas){
+    toast(`⚠️ ${processadas-falhas} foto(s) anexada(s), ${falhas} falharam.`);
+  }else if(ignorados>0){
+    toast(`✅ +${processadas} foto(s)! Total: ${total}. (${ignorados} arquivo(s) não-imagem ignorado(s))`);
+  }else if(processadas===1){
+    toast(`✅ Foto adicionada! Total: ${total}. Toque de novo pra somar mais.`);
+  }else{
+    toast(`✅ +${processadas} fotos! Total: ${total}.`);
+  }
+}
+window.processarFotos=processarFotos;
+
+function renderizarGaleriaFotos(tipo){
+  const div=document.getElementById('galeria-fotos-'+tipo);
+  if(!div)return;
+  const qtd=fotosPorTipo[tipo].length;
+  const contador=document.getElementById('contador-fotos-'+tipo);
+  if(contador)contador.textContent=qtd===1?'1 foto anexada':qtd+' fotos anexadas';
+  div.innerHTML=fotosPorTipo[tipo].map((f,idx)=>`
+    <div class="preview-item"><img src="${f.thumb}" loading="lazy">
+      <button class="btn-remover-foto" onclick="removerFoto('${tipo}',${idx})">&times;</button>
+    </div>`).join('');
+}
+window.renderizarGaleriaFotos=renderizarGaleriaFotos;
+
+function removerFoto(tipo,idx){
+  fotosPorTipo[tipo].splice(idx,1);
+  renderizarGaleriaFotos(tipo);
+}
+window.removerFoto=removerFoto;
+
+function limparFotosPremium(){
+  fotosPorTipo={ronda:{},ocorrencia:[]};
+  popularSeletorRondaFotos();
+  renderizarGaleriaFotos('ocorrencia');
+}
+
+// ═══════════════════════════════════════════
+// OCORRÊNCIAS (com gravidade e fotos locais)
+// ═══════════════════════════════════════════
+let ocorrenciaTempFotos=[];
+function abrirModalOcorrencia(){
+  document.getElementById('oc-classificacao').value='Baixa';
+  document.getElementById('oc-descricao').value='';
+  abrirModal('modal-ocorrencia');
+}
+async function salvarOcorrencia(){
+  const descricao=document.getElementById('oc-descricao').value.trim();
+  if(!descricao){toast('⚠️ Descreva a ocorrência');return;}
+  const classificacao=document.getElementById('oc-classificacao').value;
+  const agora=new Date();
+  const oc={
+    id:'oc'+Date.now(),
+    classificacao,descricao,
+    responsavel:U.nome,
+    criadoEm:agora.toISOString()
+  };
+  if(!plantaoAtivo.ocorrencias)plantaoAtivo.ocorrencias=[];
+  plantaoAtivo.ocorrencias.push(oc);
+  atualizarStorage();
+  fecharModal('modal-ocorrencia');
+  renderListaOcorrencias();
+  calcularProgressoPlantao();
+  toast('⚠️ Ocorrência registrada.');
+}
+function renderListaOcorrencias(){
+  const div=document.getElementById('lista-ocorrencias-plantao');
+  if(!div||!plantaoAtivo)return;
+  const lista=(plantaoAtivo.ocorrencias||[]).slice().reverse();
+  if(!lista.length){div.innerHTML='<div class="empty-state"><div class="es-icon">⚠️</div><div>Nenhuma ocorrência registrada neste plantão</div></div>';return;}
+  div.innerHTML=lista.map(oc=>`
+    <div class="ocorrencia-card">
+      <div class="flex items-center justify-between" style="margin-bottom:6px;">
+        <span class="badge-severidade ${oc.classificacao.toLowerCase()}">${oc.classificacao}</span>
+        <button class="btn btn-outline btn-icon btn-sm" onclick="excluirOcorrencia('${oc.id}')">🗑️</button>
+      </div>
+      <div style="font-size:13px;line-height:1.45;">${oc.descricao}</div>
+      <div class="li-sub mt-1">👤 ${oc.responsavel} · ⏰ ${fmtH(oc.criadoEm)} em ${fmtData(oc.criadoEm)}</div>
+    </div>`).join('');
+}
+function excluirOcorrencia(id){
+  if(!confirm('Excluir esta ocorrência?'))return;
+  plantaoAtivo.ocorrencias=(plantaoAtivo.ocorrencias||[]).filter(o=>o.id!==id);
+  atualizarStorage();
+  renderListaOcorrencias();
+  toast('🗑️ Ocorrência removida.');
+}
 
 // ═══════════════════════════════════════════
 // OBSERVAÇÕES DO CHECKLIST (tópicos)
