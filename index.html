@@ -488,6 +488,7 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
 <!-- APP -->
 <div id="app" class="hidden">
   <div id="alerta-emergencia-banner"></div>
+  <div id="pedidos-encerramento-banner"></div>
   <div id="topbar">
     <div>
     <div class="logo"><img src="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAUDBAQEAwUEBAQFBQUGBwwIBwcHBw8LCwkMEQ8SEhEPERETFhwXExQaFRERGCEYGh0dHx8fExciJCIeJBweHx7/2wBDAQUFBQcGBw4ICA4eFBEUHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh7/wAARCAA+AFADASIAAhEBAxEB/8QAHAAAAgIDAQEAAAAAAAAAAAAAAwQFBwIGCAEA/8QAMxAAAQIEBQMCBAQHAAAAAAAAAQIDAAQFEQYSITFBBxMiUXEIMoGRFCNhwTNCY3KhsbL/xAAaAQACAwEBAAAAAAAAAAAAAAAABQIEBgMB/8QAKREAAQMDAgQGAwAAAAAAAAAAAQACAwQRIQUxEkGBoQYUJGHB0ZHh8f/aAAwDAQACEQMRAD8A5jYah9lrSMJdvxh5lItaPULxpmDBuCNp0tBUp9bWj1CAWtBpr6W1gS0A6cxLUiZXK1JtSDlKwpGbkXHB+lvrEVMzBmKhOOXukPqSk+2h/wAgxXE95zFble/Wyau0wDTBX8Yy8s4eeG3vf9dUq82PtCrqAYec1vAHACI7pUo11AhV1FriJF1IG0KuiBClmBoDeHGhYbQqzDKD72gQmAeYs/BHRHHWKKZLVZDMlTKdMth1mYnH9XEHUKShF1WI9bRVgXbiO4enddpdK6SYElqhUJaTdn6ZLsyqXnAjvOBvNkSToVWG3PEKdYrpKOEOjGSu8EQkdYqm1/D0mVl1OzmL1KebSVgS8j4gp13Uv9PSKyb6eMty4EtWF5rXu9LjUnU/Kr9o63xC6RLTHr21/wDJjnSVWopT7RjKfX657nOL+w+lonUMQiEZGN9zvjKrbEOFqpR5ZU2+GHZVJAU605oLmwuDYjUxrirbxZ3UmZYmundRelZht5CXm0FSFZgFJdSCLjkRVqFXQLxtNIrZayAulFiDbsPtIq6BkEgazYi6wd2hR0Q07biFnYaqmpFsiDpVwIUQbCChYA3gQmcwFo6trnT+U6kfDnhGkvTBlpuUpkvMyLpPgl3tWsscpINrjUaEbWjkvMNDHZXQPEknX+kNGQw4nv0xkU+abB1QtvQX/uTlUPeM34mllghjmjwWu+Ff0+NskhY7mFV/Qir42ZqWJMF4rnHphFHk7tpmfN5lRVly9zdSMuovfixtFV42RiStYsZwlSZgsSzksh13J43Sb5lLVvlFthvtqYsbGWNZHAPxB4mVU5V1UjWqfKJcfb8lMEN2Csv8ybg3tqNxfaNP6cVhjEvUepVaWl1tS0vTUy7RX8yx3B5EcX10hTG1zJXVwiAaWBwxjiIHz1TEkOYKfjzxEe9v4m8Z0CVw30cmqXKKWttlTRK17rUXklSrcXPHEVayr8sRbfXSqy8rg0U4qBmKg+2htHOVCgtSvYWA+sU+2oZP1EO/DjpJKZ0km7nE9gqOqBrZQ1vIBEct7wu7aCqVAHDpD9LU0hVxBAq+kLJXpaCBXMCEwVxsnTLHFQ6f4pTVZYOP0+YAaqMok/xm76KH9RNyUn3GxjVs3EeE5gQY5TwR1EZikFwVON7o3BzdwrE+JSakKtjylVymzCJqSqVFadZdRssJccH31sRwRaEelU9IUCk1+tz7nbl2ksoJHzKPmQkepJsAI0JzuktIU+4plrN2mybpRmN1W9LkX94HOF11pEsp5f4cOd3tX8Su1sx9TbT7wvGm+hFGXYGL+wN/zbCsea9QZ7Z+bI1dq89iWuu1ioeObxYaBullsbJH7nk3MYp2txGCAAmwG0ZKVYQyjjbEwMYLAKs5xeS525XyiIC4Yk6hR5yTa7rq2Cn8O1MeKiTlcNkjbf1/2YiVGJqK/9k=" alt="Guardião" style="height:28px;width:auto;vertical-align:middle;margin-right:7px;border-radius:3px;">Guardião<span> · Ronda Master</span></div>
@@ -744,6 +745,12 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
     </div>
 
     <div id="screen-plantao" class="screen">
+      <div id="plantao-aguardando-aprovacao" class="hidden" style="text-align:center;padding:40px 20px;">
+        <div style="font-size:48px;margin-bottom:12px;">⏳</div>
+        <div style="font-size:18px;font-weight:900;margin-bottom:8px;">Aguardando aprovação</div>
+        <div style="color:var(--muted);font-size:14px;line-height:1.5;">Seu pedido de encerramento foi enviado. Assim que o administrador ou gerente aprovar, o plantão será encerrado automaticamente aqui.</div>
+        <button class="btn btn-outline mt-3" onclick="atualizarAgoraVigia()">🔄 Verificar agora</button>
+      </div>
       <div id="plantao-ativo-view" class="hidden">
         <div class="plantao-ativo-box">
           <div class="flex items-center justify-between mb-2">
@@ -855,6 +862,19 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
           </div>
           <div class="text-xs mb-3" style="color:var(--muted);">Registre qualquer desvio, irregularidade ou situação fora do padrão observada no plantão.</div>
           <div id="lista-ocorrencias-plantao"></div>
+
+          <div class="card mt-3">
+            <div class="card-title">📷 Relatório de Imagens</div>
+            <div class="text-xs mb-2" style="color:var(--muted);">Se você tirou fotos do plantão por fora do sistema (câmera do celular, WhatsApp, etc.), marque aqui pra ficar registrado no relatório.</div>
+            <label class="check-item" style="cursor:pointer;">
+              <span class="perm-label">Gerei um relatório de imagens deste plantão</span>
+              <button type="button" class="toggle" id="ck-gerou-fotos" onclick="this.classList.toggle('on');document.getElementById('campo-onde-fotos').classList.toggle('hidden',!this.classList.contains('on'));salvarFlagFotosExternas();"></button>
+            </label>
+            <div id="campo-onde-fotos" class="field hidden">
+              <label>Enviado para onde? (opcional)</label>
+              <input type="text" id="ck-onde-fotos" placeholder="Ex: WhatsApp do síndico, grupo da equipe..." oninput="salvarFlagFotosExternas()">
+            </div>
+          </div>
 
           <div class="text-xs mt-3" style="color:var(--muted);text-align:center;padding:8px;">📋 O relatório completo do plantão fica disponível em "Meus Relatórios" assim que encerrar.</div>
         </div>
@@ -1411,6 +1431,21 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
   </div>
 </div>
 
+<div class="modal-overlay hidden" id="modal-recusar-encerramento">
+  <div class="modal"><div class="modal-handle"></div>
+    <div class="modal-title">↩️ Recusar Pedido de Encerramento</div>
+    <input type="hidden" id="re-plantao-id">
+    <div id="re-info" style="background:var(--slate2);border-radius:10px;padding:12px;margin-bottom:16px;font-size:13px;line-height:1.6;"></div>
+    <div class="field"><label>Motivo da recusa (o vigia vai ver essa mensagem)</label>
+      <textarea id="re-motivo" placeholder="Ex: ainda falta finalizar uma ronda, aguarde a troca chegar..."></textarea>
+    </div>
+    <div class="flex gap-3 mt-2">
+      <button class="btn btn-outline" onclick="fecharModal('modal-recusar-encerramento')">Cancelar</button>
+      <button class="btn btn-red" onclick="confirmarRecusaEncerramento()">↩️ Recusar Pedido</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL BLOQUEIO (impede encerrar plantão com pendências) -->
 <div class="modal-overlay hidden" id="modal-bloqueio">
   <div class="modal" style="text-align:center;">
@@ -1771,9 +1806,25 @@ function _alertasRelevantes(){
 async function _verificarPlantaoFechadoRemotamente(){
   if(!plantaoAtivo||!U||U.perfil!=='vigilante')return;
   const atual=DB.get('plantoes').find(p=>p.id===plantaoAtivo.id);
-  if(!atual||!atual.fim||plantaoAtivo.fim)return; // continua aberto, ou já foi tratado localmente
+  if(!atual)return;
 
-  // O plantão foi encerrado em outro lugar (o administrador encerrou remotamente)
+  // O admin RECUSOU o pedido de encerramento — volta o vigia pro plantão ativo
+  if(atual.statusEncerramento==='recusado'&&plantaoAtivo.statusEncerramento==='pendente'){
+    plantaoAtivo.statusEncerramento=null;
+    const lista=DB.get('plantoes').map(p=>p.id===atual.id?{...p,statusEncerramento:null}:p);
+    DB.set('plantoes',lista);
+    const aguardando=document.getElementById('plantao-aguardando-aprovacao');
+    const ativoView=document.getElementById('plantao-ativo-view');
+    if(aguardando)aguardando.classList.add('hidden');
+    if(ativoView)ativoView.classList.remove('hidden');
+    iniciarRelogioSaida();
+    toast('↩️ Seu pedido de encerramento foi recusado. Motivo: '+(atual.motivoRecusa||'não informado')+'. Plantão continua ativo.');
+    return;
+  }
+
+  if(!atual.fim||plantaoAtivo.fim)return; // continua aberto (ou aguardando aprovação), ou já foi tratado localmente
+
+  // O admin/gerente APROVOU o encerramento (ou encerrou diretamente, em caso excepcional)
   pararMonitoramentoCheckpoints();
   plantaoAtivo.fim=atual.fim;
 
@@ -1785,11 +1836,13 @@ async function _verificarPlantaoFechadoRemotamente(){
   plantaoAtivo=null;fotosP=[];portariaP=[];ckState={};
   checklistSalvo=false;fotosCk=[];rondasAtivas=[];rondaAtualIdx=null;
   const ativoView=document.getElementById('plantao-ativo-view');
+  const aguardando=document.getElementById('plantao-aguardando-aprovacao');
   const semTurno=document.getElementById('plantao-sem-turno');
   if(ativoView)ativoView.classList.add('hidden');
+  if(aguardando)aguardando.classList.add('hidden');
   if(semTurno)semTurno.classList.remove('hidden');
   try{popularSeletorRota();popularSeletorVeiculoRonda();}catch(e){}
-  toast('🔴 Seu plantão foi encerrado pelo administrador. Confira o relatório em "Meus Relatórios".');
+  toast('✅ Encerramento aprovado! Confira o relatório em "Meus Relatórios".');
   setTimeout(()=>irPara('screen-meus-relatorios'),1800);
 }
 
@@ -1802,6 +1855,7 @@ function verificarAlertasEmergencia(){
   }
   if(U.perfil!=='admin'&&U.perfil!=='gerente'&&U.perfil!=='vigilante')return;
   if(U.perfil==='vigilante')_verificarPlantaoFechadoRemotamente();
+  if(U.perfil==='admin'||U.perfil==='gerente')renderPedidosEncerramento();
   const relevantes=_alertasRelevantes();
   const div=document.getElementById('alerta-emergencia-banner');
   if(!div)return;
@@ -2349,13 +2403,27 @@ function _distanciaMetros(lat1,lng1,lat2,lng2){
 }
 async function _verificarGeofence(contNome,localNome){
   const cont=DB.get('contratantes').find(c=>c.nome===contNome);
-  if(!cont)return{ok:true};
-  const local=_locaisContratante(cont).find(l=>l.nome===localNome);
-  if(!local||local.lat==null||local.lng==null)return{ok:true};
+  if(!cont){
+    console.warn('[Geofence] Contratante não encontrado pelo nome:',contNome,'— liberando sem checar.');
+    return{ok:true};
+  }
+  const locaisDisponiveis=_locaisContratante(cont);
+  const local=locaisDisponiveis.find(l=>l.nome===localNome);
+  if(!local){
+    console.warn('[Geofence] Local "'+localNome+'" não encontrado no contratante "'+contNome+'". Locais disponíveis:',locaisDisponiveis.map(l=>l.nome),'— liberando sem checar.');
+    return{ok:true};
+  }
+  if(local.lat==null||local.lng==null){
+    // Comportamento esperado: esse local não tem controle de localização configurado
+    return{ok:true};
+  }
   // Liberação temporária concedida pelo admin (vigia ligou/avisou por fora do app)
   const vig=DB.get('vigilantes').find(v=>v.id===U.id);
   if(vig&&vig.geoLiberadoAte&&new Date(vig.geoLiberadoAte)>new Date())return{ok:true,liberado:true};
-  if(!navigator.geolocation)return{ok:true};
+  if(!navigator.geolocation){
+    console.warn('[Geofence] navigator.geolocation indisponível neste navegador — liberando sem checar.');
+    return{ok:true};
+  }
   try{
     const pos=await new Promise((resolve,reject)=>{
       navigator.geolocation.getCurrentPosition(resolve,reject,{timeout:10000,enableHighAccuracy:true});
@@ -2364,6 +2432,7 @@ async function _verificarGeofence(contNome,localNome){
     if(dist>local.raio)return{ok:false,distancia:Math.round(dist),raio:local.raio};
     return{ok:true};
   }catch(e){
+    console.warn('[Geofence] Falha ao obter GPS:',e&&e.message);
     return{ok:false,semGps:true};
   }
 }
@@ -2594,6 +2663,7 @@ function irPara(s){
 // DASHBOARD
 // ═══════════════════════════════════════════
 function atualizarDashboard(){
+  renderPedidosEncerramento();
   const plantoes=DB.get('plantoes');
   const hoje=new Date().toDateString();
   const fin=DB.get('financeiro');const mes=new Date().getMonth();
@@ -2791,7 +2861,18 @@ let contratanteLocaisTemp=[];
 function _locaisContratante(c){
   if(Array.isArray(c.locais))return c.locais;
   if(typeof c.locais==='string'){
-    return(c.locais||'').split('\n').filter(l=>l.trim()).map((nome,i)=>({id:'legado'+i,nome:nome.trim(),lat:null,lng:null,raio:null}));
+    // MIGRAÇÃO IMPORTANTE: contratantes cadastrados antes da mudança pra
+    // "cada local com seu próprio raio" guardavam UM raio pro contratante
+    // inteiro (geoAtivo/geoLat/geoLng/geoRaio). Se não aplicarmos esses
+    // dados aqui, esse contratante fica sem nenhuma proteção de localização
+    // silenciosamente — o vigia consegue bater o ponto de qualquer lugar.
+    const temGeoAntigo=c.geoAtivo&&c.geoLat!=null&&c.geoLng!=null;
+    return(c.locais||'').split('\n').filter(l=>l.trim()).map((nome,i)=>({
+      id:'legado'+i,nome:nome.trim(),
+      lat:temGeoAntigo?c.geoLat:null,
+      lng:temGeoAntigo?c.geoLng:null,
+      raio:temGeoAntigo?(c.geoRaio||100):null
+    }));
   }
   return[];
 }
@@ -4079,9 +4160,33 @@ function abaPlantao(aba,el){
   }
   if(aba==='ocorrencias'){
     renderListaOcorrencias();
-    popularSeletorRondaFotos();
+    restaurarEstadoFotosExternas();
   }
 }
+function salvarFlagFotosExternas(){
+  if(!plantaoAtivo)return;
+  const chk=document.getElementById('ck-gerou-fotos');
+  const onde=document.getElementById('ck-onde-fotos');
+  plantaoAtivo.relatorioImagensExterno={
+    gerado:chk?chk.classList.contains('on'):false,
+    onde:onde?onde.value.trim():''
+  };
+  DB.set('plantoes',DB.get('plantoes').map(p=>p.id===plantaoAtivo.id?plantaoAtivo:p));
+}
+window.salvarFlagFotosExternas=salvarFlagFotosExternas;
+function restaurarEstadoFotosExternas(){
+  if(!plantaoAtivo)return;
+  const info=plantaoAtivo.relatorioImagensExterno;
+  const chk=document.getElementById('ck-gerou-fotos');
+  const campoOnde=document.getElementById('campo-onde-fotos');
+  const onde=document.getElementById('ck-onde-fotos');
+  if(!chk)return;
+  chk.classList.toggle('on',!!(info&&info.gerado));
+  if(campoOnde)campoOnde.classList.toggle('hidden',!(info&&info.gerado));
+  if(onde)onde.value=(info&&info.onde)||'';
+}
+window.restaurarEstadoFotosExternas=restaurarEstadoFotosExternas;
+
 function encerrarPlantao(){
   // ── VALIDAÇÃO 1: Checklist obrigatório ──
   if(!plantaoAtivo.checklist){
@@ -4157,6 +4262,7 @@ function encerrarPlantao(){
         <div>🚶 Rondas realizadas: <strong style="color:var(--white)">${totalRondas}</strong></div>
         <div>🚦 Registros de portaria: <strong style="color:var(--white)">${totalPortaria}</strong></div>
         <div>📝 Observações: <strong style="color:var(--white)">${totalObs}</strong></div>
+        ${plantaoAtivo.relatorioImagensExterno&&plantaoAtivo.relatorioImagensExterno.gerado?`<div>📷 Relatório de imagens: <strong style="color:var(--white)">gerado à parte</strong></div>`:''}
         ${itensProblema.length?`<div style="color:var(--red);">⚠️ Itens com PROBLEMA: <strong>${itensProblema.join(', ')}</strong></div>`:'<div style="color:var(--green);">✅ Todos os itens OK</div>'}
       </div>
     </div>`;
@@ -4202,25 +4308,19 @@ async function finalizarPlantao(antecipado,motivo){
     }
     return;
   }
-  plantaoAtivo.fim=new Date().toISOString();plantaoAtivo.saidaAntecipada=antecipado;plantaoAtivo.motivoSaida=motivo;
-
+  plantaoAtivo.saidaAntecipada=antecipado;plantaoAtivo.motivoSaida=motivo;
   plantaoAtivo.fotos=fotosP;plantaoAtivo.portaria=portariaP;plantaoAtivo.ckState=ckState;
-  // Registrar KM rodados no veículo usado (não visível ao vigia)
+  // Não encerra direto — manda um PEDIDO de encerramento, que só vira
+  // encerramento de verdade quando o admin/gerente aprovar.
+  plantaoAtivo.statusEncerramento='pendente';
+  plantaoAtivo.solicitadoEncerramentoEm=new Date().toISOString();
   const kmR=calcularKmRodados(plantaoAtivo.checklist);
   if(kmR!==null&&plantaoAtivo.checklist&&plantaoAtivo.checklist.veiculoId)registrarKmVeiculo(plantaoAtivo.checklist.veiculoId,kmR);
   DB.set('plantoes',DB.get('plantoes').map(p=>p.id===plantaoAtivo.id?plantaoAtivo:p));
-  // Limpar todos os dados de sessão após finalizar
-  try{
-    localStorage.removeItem('rm_fotos_rascunho_'+plantaoAtivo.id);
-    localStorage.removeItem('rm_sessao_ativa');
-  }catch(e){}
   clearInterval(timerHora);
-  plantaoAtivo=null;fotosP=[];portariaP=[];ckState={};
-  checklistSalvo=false;fotosCk=[];rondasAtivas=[];rondaAtualIdx=null;
   document.getElementById('plantao-ativo-view').classList.add('hidden');
-  document.getElementById('plantao-sem-turno').classList.remove('hidden');
-  toast(antecipado?'⚠️ Saída antecipada registrada.':'🔴 Plantão encerrado! Relatório disponível em "Meus Relatórios".');
-  setTimeout(()=>irPara('screen-meus-relatorios'),1200);
+  document.getElementById('plantao-aguardando-aprovacao').classList.remove('hidden');
+  toast('📤 Pedido de encerramento enviado! Aguardando aprovação do administrador.');
 }
 
 // ═══════════════════════════════════════════
@@ -5035,6 +5135,11 @@ function gerarHtmlRelatorio(p, opcoes){
       </div>`).join('')}
     </div>`:'';
 
+  const imgExterno=p.relatorioImagensExterno&&p.relatorioImagensExterno.gerado?`
+    <div style="${S.section}">
+      <div style="background:#EFF6FF;border:1px solid #2E8BF7;border-radius:6px;padding:8px 12px;font-size:12px;color:#1e40af;">📷 <strong>Relatório de imagens gerado à parte</strong>${p.relatorioImagensExterno.onde?' — enviado para: '+p.relatorioImagensExterno.onde:''}</div>
+    </div>`:'';
+
   // Alertas de emergência acionados naquele dia/local
   const alertasPlantao=DB.get('alertas_emergencia').filter(a=>a.contratanteNome===p.contratanteNome&&new Date(a.criadoEm).toDateString()===dataPlantao);
   const alertasHtml=alertasPlantao.length?`
@@ -5100,6 +5205,7 @@ function gerarHtmlRelatorio(p, opcoes){
     ${visHtml}
     ${preCadHtml}
     ${ocorrenciasHtml}
+    ${imgExterno}
     ${alertasHtml}
     ${obsAdminHtml}
     ${addObsHtml}
@@ -6642,7 +6748,7 @@ function finalizarPlantaoAdmin(){
     if(p.id===id&&!p.fim){
       const kmR=calcularKmRodados(p.checklist);
       if(kmR!==null&&p.checklist&&p.checklist.veiculoId)registrarKmVeiculo(p.checklist.veiculoId,kmR);
-      return{...p,fim:new Date().toISOString(),encerradoPeloAdmin:true,motivoAdmin:motivo};
+      return{...p,fim:new Date().toISOString(),encerradoPeloAdmin:true,motivoAdmin:motivo,statusEncerramento:null};
     }
     return p;
   });
@@ -6655,6 +6761,70 @@ function finalizarPlantaoAdmin(){
 
 window.abrirFinalizarAdmin=abrirFinalizarAdmin;
 window.finalizarPlantaoAdmin=finalizarPlantaoAdmin;
+
+// ═══════════════════════════════════════════
+// APROVAÇÃO DE PEDIDOS DE ENCERRAMENTO
+// ═══════════════════════════════════════════
+// O vigia não encerra o plantão sozinho — ele manda um PEDIDO, e só quando
+// o admin/gerente aprova é que o plantão realmente fecha (statusEncerramento
+// vira null e "fim" é preenchido). Isso aparece em destaque no dashboard,
+// igual um alerta de emergência, pra não passar despercebido.
+function renderPedidosEncerramento(){
+  const div=document.getElementById('pedidos-encerramento-banner');
+  if(!div)return;
+  if(!U||(U.perfil!=='admin'&&U.perfil!=='gerente')){div.innerHTML='';return;}
+  const pendentes=DB.get('plantoes').filter(p=>p.statusEncerramento==='pendente');
+  if(!pendentes.length){div.innerHTML='';return;}
+  div.innerHTML=`<div style="background:rgba(240,180,41,.12);border:1.5px solid var(--gold);border-radius:10px;padding:12px;margin-bottom:12px;">
+    <div style="font-weight:800;color:var(--gold);font-size:13px;margin-bottom:8px;">⏳ ${pendentes.length} pedido${pendentes.length!==1?'s':''} de encerramento aguardando aprovação</div>
+    ${pendentes.map(p=>`
+      <div style="background:var(--slate2);border-radius:8px;padding:10px;margin-bottom:6px;">
+        <div style="font-weight:700;font-size:13px;">${p.vigilanteNome}</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">📍 ${p.localNome} · ⏰ Pediu às ${fmtH(p.solicitadoEncerramentoEm||p.inicio)}</div>
+        <div class="flex gap-2">
+          <button class="btn btn-outline btn-sm" style="flex:1;" onclick="abrirRecusarEncerramento('${p.id}')">↩️ Recusar</button>
+          <button class="btn btn-green btn-sm" style="flex:1;" onclick="aprovarEncerramento('${p.id}')">✅ Aprovar</button>
+        </div>
+      </div>`).join('')}
+  </div>`;
+}
+window.renderPedidosEncerramento=renderPedidosEncerramento;
+
+async function aprovarEncerramento(plantaoId){
+  toast('🔄 Verificando...');
+  await sincronizarDadosAdmin(true);
+  const p=DB.get('plantoes').find(x=>x.id===plantaoId);
+  if(!p||p.fim){renderPedidosEncerramento();toast('Esse pedido já não existe mais.');return;}
+  const kmR=calcularKmRodados(p.checklist);
+  if(kmR!==null&&p.checklist&&p.checklist.veiculoId)registrarKmVeiculo(p.checklist.veiculoId,kmR);
+  const lista=DB.get('plantoes').map(x=>x.id===plantaoId?{...x,fim:new Date().toISOString(),statusEncerramento:null}:x);
+  DB.set('plantoes',lista);
+  renderPedidosEncerramento();
+  atualizarDashboard();
+  toast('✅ Encerramento aprovado! O plantão do vigia foi fechado.');
+}
+window.aprovarEncerramento=aprovarEncerramento;
+
+function abrirRecusarEncerramento(plantaoId){
+  const p=DB.get('plantoes').find(x=>x.id===plantaoId);if(!p)return;
+  document.getElementById('re-plantao-id').value=plantaoId;
+  document.getElementById('re-info').innerHTML=`<strong>${p.vigilanteNome}</strong><br>📍 ${p.localNome}`;
+  document.getElementById('re-motivo').value='';
+  abrirModal('modal-recusar-encerramento');
+}
+window.abrirRecusarEncerramento=abrirRecusarEncerramento;
+
+function confirmarRecusaEncerramento(){
+  const id=document.getElementById('re-plantao-id').value;
+  const motivo=document.getElementById('re-motivo').value.trim();
+  if(!motivo){toast('⚠️ Informe o motivo — o vigia vai ver essa mensagem');return;}
+  const lista=DB.get('plantoes').map(p=>p.id===id?{...p,statusEncerramento:'recusado',motivoRecusa:motivo}:p);
+  DB.set('plantoes',lista);
+  fecharModal('modal-recusar-encerramento');
+  renderPedidosEncerramento();
+  toast('↩️ Pedido recusado. O vigia vai ser avisado.');
+}
+window.confirmarRecusaEncerramento=confirmarRecusaEncerramento;
 window.iniciarRonda=iniciarRonda;
 window.finalizarRonda=finalizarRonda;
 window.salvarHoraExtra=salvarHoraExtra;
