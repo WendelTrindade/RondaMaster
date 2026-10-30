@@ -1295,6 +1295,8 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
       <select id="mv2-tipo"><option>🏍️ Moto</option><option>🚗 Carro</option><option>🚲 Bicicleta</option><option>🔧 Outro</option></select>
     </div>
     <div class="field"><label>Trocar óleo a cada (km)</label><input type="number" id="mv2-limite-km" placeholder="Ex: 1000" value="1000"></div>
+    <div class="field"><label>KM do odômetro na última troca de óleo (opcional)</label><input type="number" id="mv2-km-troca" placeholder="Ex: 15200">
+      <div class="text-xs" style="color:var(--muted);margin-top:4px;">Se informar, o sistema calcula pelo odômetro: KM atual da moto menos este KM. Se deixar em branco, soma os KM rodados em cada plantão.</div></div>
     <div class="flex gap-3 mt-2">
       <button class="btn btn-outline" onclick="fecharModal('modal-veiculo')">Cancelar</button>
       <button class="btn btn-primary" onclick="salvarVeiculo()">💾 Salvar</button>
@@ -2812,15 +2814,65 @@ function calcularKmRodados(ck){
   if(isNaN(e)||isNaN(s)||s<e)return null;
   return s-e;
 }
-// Registra o KM rodado no veículo específico usado no plantão (se houver)
-function registrarKmVeiculo(veiculoId,kmRodados){
-  if(!veiculoId||!kmRodados||kmRodados<=0)return;
+function _placaNorm(p){return String(p||'').toUpperCase().replace(/[^A-Z0-9]/g,'');}
+// Registra o KM do plantão no veículo usado. Cada plantão só conta UMA vez.
+// Se o admin informou o KM da última troca, calcula pelo odômetro (KM atual − KM da troca);
+// senão, soma os KM rodados de cada plantão.
+function registrarKmVeiculo(veiculoId,kmRodados,ck,plantaoId){
+  if(!veiculoId)return;
   const lista=DB.get('veiculos').map(v=>{
-    if(v.id===veiculoId) return{...v,kmDesdeTroca:(v.kmDesdeTroca||0)+kmRodados};
-    return v;
+    if(v.id!==veiculoId)return v;
+    const contados=Array.isArray(v.kmContados)?v.kmContados:[];
+    if(plantaoId&&contados.includes(plantaoId))return v;
+    const n={...v};
+    const saida=ck?parseFloat(ck.kmSaida):NaN;
+    if(!isNaN(saida)&&(typeof n.kmAtual!=='number'||saida>n.kmAtual))n.kmAtual=saida;
+    if(typeof n.kmUltimaTroca==='number'&&typeof n.kmAtual==='number'){
+      n.kmDesdeTroca=Math.max(0,n.kmAtual-n.kmUltimaTroca);
+    }else if(kmRodados&&kmRodados>0){
+      n.kmDesdeTroca=(n.kmDesdeTroca||0)+kmRodados;
+    }
+    if(plantaoId)n.kmContados=[...contados,plantaoId].slice(-40);
+    return n;
   });
   DB.set('veiculos',lista);
 }
+// Junta veículos repetidos (mesma placa) num só, somando o KM controlado
+function unificarVeiculosDuplicados(silencioso){
+  const lista=DB.get('veiculos');
+  const grupos={};
+  lista.forEach(v=>{const k=_placaNorm(v.placa);if(k)(grupos[k]=grupos[k]||[]).push(v);});
+  const removidos={};let n=0;const manter=[];
+  Object.values(grupos).forEach(g=>{
+    if(g.length<2)return;
+    g.sort((a,b)=>String(a.id).localeCompare(String(b.id),undefined,{numeric:true}));
+    const base={...g[0]};
+    g.slice(1).forEach(o=>{
+      removidos[o.id]=base.id;n++;
+      base.kmDesdeTroca=(base.kmDesdeTroca||0)+(o.kmDesdeTroca||0);
+      if(typeof o.kmAtual==='number'&&(typeof base.kmAtual!=='number'||o.kmAtual>base.kmAtual))base.kmAtual=o.kmAtual;
+      if(typeof base.kmUltimaTroca!=='number'&&typeof o.kmUltimaTroca==='number')base.kmUltimaTroca=o.kmUltimaTroca;
+      if(o.ultimaTrocaEm&&(!base.ultimaTrocaEm||o.ultimaTrocaEm>base.ultimaTrocaEm))base.ultimaTrocaEm=o.ultimaTrocaEm;
+      base.kmContados=[...(base.kmContados||[]),...(o.kmContados||[])].slice(-40);
+      if(!base.nome&&o.nome)base.nome=o.nome;
+    });
+    manter.push(base);
+  });
+  if(!n)return 0;
+  const idsRem=new Set(Object.keys(removidos));
+  const final=lista.filter(v=>!idsRem.has(v.id)).map(v=>manter.find(m=>m.id===v.id)||v);
+  _registrarExclusao('veiculos',[...idsRem]);
+  DB.set('veiculos',final);
+  // plantões em andamento que apontavam para o veículo repetido passam a apontar para o que ficou
+  const pl=DB.get('plantoes');
+  if(pl.some(p=>p.checklist&&removidos[p.checklist.veiculoId])){
+    DB.set('plantoes',pl.map(p=>(p.checklist&&removidos[p.checklist.veiculoId])?{...p,checklist:{...p.checklist,veiculoId:removidos[p.checklist.veiculoId]}}:p));
+  }
+  if(!silencioso)toast('🔧 '+n+' veículo(s) repetido(s) foram unificados em um só.');
+  try{renderVeiculos();}catch(e){}
+  return n;
+}
+window.unificarVeiculosDuplicados=unificarVeiculosDuplicados;
 // Lista veículos que atingiram o limite de troca de óleo (para o alerta do admin)
 function veiculosComManutencaoVencida(){
   return DB.get('veiculos').filter(v=>v.ativo!==false&&(v.kmDesdeTroca||0)>=(v.limiteKmOleo||1000));
@@ -2992,7 +3044,7 @@ async function fazerLogin(){
     return;
   }
   _lockSet(emailL,{n:0,ate:0});
-  if(u.perfil==='admin')setTimeout(_migrarTodasLegadas,3000);
+  if(u.perfil==='admin'){setTimeout(_migrarTodasLegadas,3000);setTimeout(()=>{try{unificarVeiculosDuplicados(false);}catch(e){}},5000);}
   if(senha==='123456'||senha.length<6){setTimeout(()=>toast('⚠️ Sua senha é fraca. Troque em Configurações.'),2500);}
   else if(u.perfil==='admin'&&DB.get('usuarios').some(x=>['admin@rm.com','joao@rm.com','morador@rm.com'].includes(x.email)&&x.id!==u.id)){
     setTimeout(()=>toast('⚠️ Existem contas de demonstração (…@rm.com). Exclua ou troque a senha delas.'),2500);
@@ -3670,8 +3722,9 @@ function renderVeiculos(){
       <div style="width:100%;">
         <div style="display:flex;justify-content:space-between;font-size:11px;color:${vencido?'var(--red)':'var(--muted)'};margin-bottom:4px;">
           <span>${vencido?'⚠️ Troca de óleo necessária':'🛣️ KM desde a troca'}</span>
-          <span>${_e(acum)} / ${_e(limite)} km</span>
+          <span>${_e(Math.round(acum))} / ${_e(limite)} km</span>
         </div>
+        <div style="font-size:10px;color:var(--muted);margin-bottom:4px;">${typeof v.kmAtual==='number'?'🔢 Odômetro atual: '+_e(v.kmAtual)+' km':'🔢 Odômetro: aguardando o 1º plantão'}${typeof v.kmUltimaTroca==='number'?' · última troca em '+_e(v.kmUltimaTroca)+' km':''}</div>
         <div style="background:var(--border);border-radius:6px;height:6px;overflow:hidden;">
           <div style="background:${vencido?'var(--red)':'var(--green)'};height:100%;width:${_e(pct)}%;"></div>
         </div>
@@ -3684,6 +3737,7 @@ function abrirModalVeiculo(){
   ['mv2-id','mv2-placa','mv2-nome'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('mv2-tipo').selectedIndex=0;
   document.getElementById('mv2-limite-km').value=1000;
+  document.getElementById('mv2-km-troca').value='';
   document.getElementById('mv2-title').textContent='Novo Veículo';
   abrirModal('modal-veiculo');
 }
@@ -3694,6 +3748,7 @@ function editarVeiculo(id){
   document.getElementById('mv2-nome').value=v.nome||'';
   document.getElementById('mv2-tipo').value=v.tipo||'🏍️ Moto';
   document.getElementById('mv2-limite-km').value=v.limiteKmOleo||1000;
+  document.getElementById('mv2-km-troca').value=(typeof v.kmUltimaTroca==='number')?v.kmUltimaTroca:'';
   document.getElementById('mv2-title').textContent='Editar Veículo';
   abrirModal('modal-veiculo');
 }
@@ -3702,16 +3757,26 @@ function salvarVeiculo(){
   const placa=document.getElementById('mv2-placa').value.trim().toUpperCase();
   const nome=document.getElementById('mv2-nome').value.trim();
   if(!placa){toast('⚠️ Informe a placa');return;}
+  const duplicado=DB.get('veiculos').find(x=>x.id!==id&&_placaNorm(x.placa)&&_placaNorm(x.placa)===_placaNorm(placa));
+  if(duplicado){toast('⚠️ Esse veículo já está cadastrado ('+(duplicado.nome||duplicado.placa)+'). Edite o que já existe, não crie outro.');return;}
   const existente=DB.get('veiculos').find(x=>x.id===id);
   const lista=DB.get('veiculos').filter(x=>x.id!==id);
-  lista.push({
+  const kmTrocaTxt=document.getElementById('mv2-km-troca').value;
+  const kmTroca=kmTrocaTxt===''?undefined:parseFloat(kmTrocaTxt);
+  const novo={
+    ...(existente||{}),
     id,placa,nome,
     tipo:document.getElementById('mv2-tipo').value,
     limiteKmOleo:parseFloat(document.getElementById('mv2-limite-km').value)||1000,
     kmDesdeTroca:existente?(existente.kmDesdeTroca||0):0,
     ultimaTrocaEm:existente?existente.ultimaTrocaEm:null,
     ativo:true
-  });
+  };
+  if(kmTroca!==undefined&&!isNaN(kmTroca)){
+    novo.kmUltimaTroca=kmTroca;
+    if(typeof novo.kmAtual==='number')novo.kmDesdeTroca=Math.max(0,novo.kmAtual-kmTroca);
+  }else if(existente&&kmTrocaTxt===''){delete novo.kmUltimaTroca;}
+  lista.push(novo);
   DB.set('veiculos',lista);
   fecharModal('modal-veiculo');
   renderVeiculos();
@@ -3719,7 +3784,7 @@ function salvarVeiculo(){
 }
 function marcarTrocaOleoVeiculo(id){
   if(!confirm('Confirma que a troca de óleo deste veículo foi realizada agora?'))return;
-  const lista=DB.get('veiculos').map(v=>v.id===id?{...v,kmDesdeTroca:0,ultimaTrocaEm:new Date().toISOString()}:v);
+  const lista=DB.get('veiculos').map(v=>{if(v.id!==id)return v;const n={...v,kmDesdeTroca:0,ultimaTrocaEm:new Date().toISOString()};if(typeof v.kmAtual==='number')n.kmUltimaTroca=v.kmAtual;return n;});
   DB.set('veiculos',lista);
   renderVeiculos();
   atualizarDashboard();
@@ -5023,7 +5088,7 @@ async function finalizarPlantao(antecipado,motivo){
   plantaoAtivo.saidaAntecipada=antecipado;plantaoAtivo.motivoSaida=motivo;
   plantaoAtivo.fotos=fotosP;plantaoAtivo.portaria=portariaP;plantaoAtivo.ckState=ckState;
   const kmR=calcularKmRodados(plantaoAtivo.checklist);
-  if(kmR!==null&&plantaoAtivo.checklist&&plantaoAtivo.checklist.veiculoId)registrarKmVeiculo(plantaoAtivo.checklist.veiculoId,kmR);
+  if(plantaoAtivo.checklist&&plantaoAtivo.checklist.veiculoId)registrarKmVeiculo(plantaoAtivo.checklist.veiculoId,kmR,plantaoAtivo.checklist,plantaoAtivo.id);
 
   if(antecipado){
     // Só precisa de aprovação quando é ANTES do horário estipulado pelo
@@ -5634,6 +5699,13 @@ function salvarChecklist(){
     placa=inpPlaca?inpPlaca.value.trim().toUpperCase():'';
   }
 
+  if(veiculoId){
+    const vv=DB.get('veiculos').find(x=>x.id===veiculoId);
+    const ke=parseFloat(document.getElementById('ck-km-entrada').value);
+    if(vv&&typeof vv.kmAtual==='number'&&!isNaN(ke)&&ke<vv.kmAtual){
+      if(!confirm('O KM de entrada ('+ke+') é MENOR que o último KM registrado desta moto ('+vv.kmAtual+').\n\nConfira o odômetro. Continuar mesmo assim?'))return;
+    }
+  }
   const ck={
     veiculo:veiculoTexto,
     veiculoId:veiculoId,
@@ -6189,7 +6261,7 @@ function renderSelecaoVeiculoChecklist(){
     const opts=veiculos.map(v=>`<option value="${_e(v.id)}">${_e(v.tipo||'')} ${_e(v.nome||'')} — ${_e((v.placa||'').toUpperCase())}</option>`).join('');
     wrap.innerHTML=`
       <div class="field"><label>🏍️ Qual veículo você vai usar?</label>
-        <select id="ck-veiculo-id">
+        <select id="ck-veiculo-id" onchange="_dicaKmVeiculo()">
           <option value="">Selecione...</option>
           ${opts}
           <option value="a_pe">🚶 A pé (sem veículo)</option>
@@ -6200,7 +6272,15 @@ function renderSelecaoVeiculoChecklist(){
       if(sel)sel.value=veiculoIdSalvo;
     }
   }
+  _dicaKmVeiculo();
 }
+function _dicaKmVeiculo(){
+  const el=document.getElementById('ck-km-entrada');if(!el)return;
+  const sel=document.getElementById('ck-veiculo-id');
+  const v=sel?DB.get('veiculos').find(x=>x.id===sel.value):null;
+  el.placeholder=(v&&typeof v.kmAtual==='number')?'Último KM da moto: '+v.kmAtual:'';
+}
+window._dicaKmVeiculo=_dicaKmVeiculo;
 window.renderSelecaoVeiculoChecklist=renderSelecaoVeiculoChecklist;
 window.restaurarEstadoChecklistVisual=restaurarEstadoChecklistVisual;
 window.renderItensVeiculo=renderItensVeiculo;
@@ -6325,6 +6405,25 @@ async function _salvarEAbrirPdfNativo(pdf,nomeArquivo){
   }
   return{ok:true};
 }
+// Limpa o HTML do relatório antes de abrir a janela de PDF: tira scripts, quadros embutidos,
+// atributos de evento (onclick etc.) e links "javascript:".
+function _limparHtml(h){
+  try{
+    const t=document.createElement('template');
+    t.innerHTML=String(h==null?'':h);
+    t.content.querySelectorAll('script,iframe,object,embed,link,meta,base,form').forEach(n=>n.remove());
+    t.content.querySelectorAll('*').forEach(el=>{
+      Array.from(el.attributes).forEach(a=>{
+        const n=a.name.toLowerCase();
+        const v=String(a.value).replace(/[\s\u0000-\u001f]/g,'').toLowerCase();
+        if(n.startsWith('on')||(['href','src','xlink:href','action','formaction'].includes(n)&&/^(javascript:|vbscript:|data:text\/html)/.test(v)))el.removeAttribute(a.name);
+      });
+    });
+    const d=document.createElement('div');d.appendChild(t.content);
+    return d.innerHTML;
+  }catch(e){return'';}
+}
+window._limparHtml=_limparHtml;
 function gerarPDF(plantaoId){
   if(_dentroDeAppNativo()){
     toast('📄 Gerar PDF não está disponível dentro do aplicativo. O relatório completo já fica disponível na tela, em "Meus Relatórios".');
@@ -7084,8 +7183,33 @@ async function _validarPontoEncerrar(rota){
   }catch(e){return{ok:false,semGps:true};}
 }
 
+// Espera o GPS dar a latitude/longitude (até maxMs). Devolve a melhor leitura ou null.
+function _aguardarGps(maxMs,precisaoBoa){
+  return new Promise(resolve=>{
+    if(!navigator.geolocation){resolve(null);return;}
+    let melhor=null,fim=false,wid=null,t=null;
+    const terminar=()=>{
+      if(fim)return;fim=true;
+      if(wid!==null){try{navigator.geolocation.clearWatch(wid);}catch(e){}}
+      clearTimeout(t);resolve(melhor);
+    };
+    t=setTimeout(terminar,maxMs);
+    try{
+      wid=navigator.geolocation.watchPosition(pos=>{
+        if(!melhor||(pos.coords.accuracy||0)<(melhor.coords.accuracy||0))melhor=pos;
+        if((pos.coords.accuracy||0)<=precisaoBoa)terminar();
+      },()=>{if(!melhor)terminar();},{enableHighAccuracy:true,timeout:maxMs,maximumAge:0});
+    }catch(e){terminar();}
+  });
+}
+let _iniciandoRonda=false,_finalizandoRonda=false;
 async function iniciarRonda(){
+  if(_iniciandoRonda)return;
   if(!plantaoAtivo){toast('⚠️ Nenhum plantão ativo');return;}
+  _iniciandoRonda=true;
+  try{await _iniciarRondaComGps();}finally{_iniciandoRonda=false;}
+}
+async function _iniciarRondaComGps(){
   const rota=_rotaSelecionada();
   if(rota){
     const btnIniciar=document.getElementById('btn-iniciar-ronda');
@@ -7101,6 +7225,17 @@ async function iniciarRonda(){
       }
       return;
     }
+  }
+  // A ronda NÃO começa enquanto o GPS não registrar latitude e longitude
+  const btnGps=document.getElementById('btn-iniciar-ronda');
+  const textoBtn=btnGps?btnGps.textContent:'';
+  if(btnGps){btnGps.disabled=true;btnGps.textContent='⏳ Aguardando o GPS...';}
+  toast('📍 Aguardando o GPS registrar sua localização. Não feche a tela.');
+  const pos=await _aguardarGps(20000,50);
+  if(btnGps){btnGps.disabled=false;btnGps.textContent=textoBtn;}
+  if(!pos){
+    mostrarBloqueio('Localização não registrada','A ronda só pode começar depois que o GPS registrar a sua latitude e longitude.\n\nLigue a localização do celular, libere a permissão para o Guardião, vá para um lugar aberto e toque em Iniciar ronda de novo.','Entendi',()=>{});
+    return;
   }
   const agora=new Date();
   const selVeiculoRonda=document.getElementById('sel-veiculo-ronda');
@@ -7121,7 +7256,7 @@ async function iniciarRonda(){
     data:agora.toLocaleDateString('pt-BR'),
     hora:fmtH(agora.toISOString()),
     fim:null,
-    lat:null,lng:null,
+    lat:pos.coords.latitude.toFixed(5),lng:pos.coords.longitude.toFixed(5),precisao:Math.round(pos.coords.accuracy||0),
     rotaId:rota?rota.id:null,rotaNome:rota?rota.nome:null,pontosValidados:[],
     veiculoId:veiculoRondaId,veiculoNome:veiculoRondaNome
   };
@@ -7134,28 +7269,8 @@ async function iniciarRonda(){
   document.getElementById('ronda-ativa-info').classList.remove('hidden');
   document.getElementById('ronda-num-label').textContent='Ronda #'+nova.num;
   document.getElementById('ronda-inicio-label').textContent=nova.data+' às '+nova.hora;
-  document.getElementById('ronda-local-label').textContent='📍 Obtendo localização...';
+  document.getElementById('ronda-local-label').textContent='📍 '+nova.lat+', '+nova.lng+' (precisão ±'+nova.precisao+' m)';
   if(rota)iniciarMonitoramentoCheckpoints(rota);
-  // Capturar GPS
-  if(navigator.geolocation){
-    navigator.geolocation.getCurrentPosition(
-      pos=>{
-        nova.lat=pos.coords.latitude.toFixed(5);
-        nova.lng=pos.coords.longitude.toFixed(5);
-        document.getElementById('ronda-local-label').textContent='📍 '+nova.lat+', '+nova.lng;
-        plantaoAtivo.rondas=rondasAtivas;
-        atualizarStorage();
-      },
-      ()=>{
-        document.getElementById('ronda-local-label').textContent='📍 GPS não disponível';
-        plantaoAtivo.rondas=rondasAtivas;
-        atualizarStorage();
-      },
-      {timeout:8000,enableHighAccuracy:true}
-    );
-  } else {
-    document.getElementById('ronda-local-label').textContent='📍 GPS não suportado';
-  }
   plantaoAtivo.rondas=rondasAtivas;
   atualizarStorage();
   atualizarContadorRondas();
@@ -7163,6 +7278,11 @@ async function iniciarRonda(){
   toast('🚶 Ronda #'+nova.num+' iniciada!');
 }
 async function finalizarRonda(){
+  if(rondaAtualIdx===null||_finalizandoRonda)return;
+  _finalizandoRonda=true;
+  try{await _finalizarRondaComGps();}finally{_finalizandoRonda=false;}
+}
+async function _finalizarRondaComGps(){
   if(rondaAtualIdx===null)return;
   if(rotaEmAndamento){
     const pendentes=_checkpointsObrigatoriosPendentes();
@@ -7193,18 +7313,13 @@ async function finalizarRonda(){
   pararMonitoramentoCheckpoints();
   rotaEmAndamento=null;
   const idxFim=rondaAtualIdx;
-  // GPS de saída
-  if(navigator.geolocation){
-    navigator.geolocation.getCurrentPosition(
-      pos=>{
-        rondasAtivas[idxFim].latFim=pos.coords.latitude.toFixed(5);
-        rondasAtivas[idxFim].lngFim=pos.coords.longitude.toFixed(5);
-        plantaoAtivo.rondas=rondasAtivas;
-        atualizarStorage();renderListaRondas();calcularProgressoPlantao();
-      },
-      ()=>{plantaoAtivo.rondas=rondasAtivas;atualizarStorage();renderListaRondas();calcularProgressoPlantao();},
-      {timeout:5000,enableHighAccuracy:true}
-    );
+  // GPS de saída: espera até 10 s para registrar o ponto final
+  toast('📍 Registrando a localização final da ronda...');
+  const posFim=await _aguardarGps(10000,50);
+  if(posFim){
+    rondasAtivas[idxFim].latFim=posFim.coords.latitude.toFixed(5);
+    rondasAtivas[idxFim].lngFim=posFim.coords.longitude.toFixed(5);
+    rondasAtivas[idxFim].precisaoFim=Math.round(posFim.coords.accuracy||0);
   }
   plantaoAtivo.rondas=rondasAtivas;
   rondaAtualIdx=null;
@@ -7528,7 +7643,7 @@ function finalizarPlantaoAdmin(){
   const plantoes=DB.get('plantoes').map(p=>{
     if(p.id===id&&!p.fim){
       const kmR=calcularKmRodados(p.checklist);
-      if(kmR!==null&&p.checklist&&p.checklist.veiculoId)registrarKmVeiculo(p.checklist.veiculoId,kmR);
+      if(p.checklist&&p.checklist.veiculoId)registrarKmVeiculo(p.checklist.veiculoId,kmR,p.checklist,p.id);
       return{...p,fim:new Date().toISOString(),encerradoPeloAdmin:true,motivoAdmin:motivo,statusEncerramento:null};
     }
     return p;
@@ -7578,7 +7693,7 @@ async function aprovarEncerramento(plantaoId){
   const p=DB.get('plantoes').find(x=>x.id===plantaoId);
   if(!p||p.fim){renderPedidosEncerramento();toast('Esse pedido já não existe mais.');return;}
   const kmR=calcularKmRodados(p.checklist);
-  if(kmR!==null&&p.checklist&&p.checklist.veiculoId)registrarKmVeiculo(p.checklist.veiculoId,kmR);
+  if(p.checklist&&p.checklist.veiculoId)registrarKmVeiculo(p.checklist.veiculoId,kmR,p.checklist,p.id);
   const agora=new Date().toISOString();
   const lista=DB.get('plantoes').map(x=>x.id===plantaoId?{...x,fim:agora,statusEncerramento:null,aprovadoEm:agora,aprovadoPor:U.nome}:x);
   DB.set('plantoes',lista);
