@@ -2084,6 +2084,7 @@ async function _verificarPlantaoFechadoRemotamente(){
   // O admin/gerente APROVOU o encerramento (ou encerrou diretamente, em caso excepcional)
   pararMonitoramentoCheckpoints();
   plantaoAtivo.fim=atual.fim;
+  const _okPdf2=_prepararEnvioPdf(plantaoAtivo);
 
   try{
     localStorage.removeItem('rm_fotos_rascunho_'+plantaoAtivo.id);
@@ -2099,8 +2100,8 @@ async function _verificarPlantaoFechadoRemotamente(){
   if(aguardando)aguardando.classList.add('hidden');
   if(semTurno)semTurno.classList.remove('hidden');
   try{popularSeletorRota();popularSeletorVeiculoRonda();}catch(e){}
-  toast('✅ Encerramento aprovado! Confira o relatório em "Meus Relatórios".');
-  setTimeout(()=>irPara('screen-meus-relatorios'),1800);
+  toast('✅ Encerramento aprovado!');
+  _mostrarTelaEnvioPdf(_okPdf2);
 }
 
 function verificarAlertasEmergencia(){
@@ -5109,6 +5110,7 @@ async function finalizarPlantao(antecipado,motivo){
   plantaoAtivo.fim=new Date().toISOString();
   plantaoAtivo.statusEncerramento=null;
   DB.set('plantoes',DB.get('plantoes').map(p=>p.id===plantaoAtivo.id?plantaoAtivo:p));
+  const _okPdf=_prepararEnvioPdf(plantaoAtivo);
   try{
     localStorage.removeItem('rm_fotos_rascunho_'+plantaoAtivo.id);
     localStorage.removeItem('rm_sessao_ativa');
@@ -5118,8 +5120,8 @@ async function finalizarPlantao(antecipado,motivo){
   checklistSalvo=false;fotosCk=[];rondasAtivas=[];rondaAtualIdx=null;
   document.getElementById('plantao-ativo-view').classList.add('hidden');
   document.getElementById('plantao-sem-turno').classList.remove('hidden');
-  toast('🔴 Plantão encerrado! Relatório disponível em "Meus Relatórios".');
-  setTimeout(()=>irPara('screen-meus-relatorios'),1200);
+  toast('🔴 Plantão encerrado!');
+  _mostrarTelaEnvioPdf(_okPdf);
 }
 
 // ═══════════════════════════════════════════
@@ -6725,10 +6727,19 @@ window.gerarPDFAtual=gerarPDFAtual;
 async function gerarRelatorioPremiumCompleto(){
   if(!plantaoAtivo){toast('⚠️ Só é possível gerar com o plantão em andamento');return;}
   if(!window.jspdf){toast('❌ Biblioteca de PDF ainda carregando, tente de novo em instantes');return;}
-  const p=plantaoAtivo;
-
   toast('🖤 Gerando relatório completo...');
   try{
+    const{pdf,nomeArquivo}=_montarPdfPremium(plantaoAtivo);
+    return await _entregarPdfPremium(pdf,nomeArquivo);
+  }catch(err){
+    console.error('Erro ao gerar relatório completo:',err);
+    toast('❌ Falha ao gerar o relatório.');
+  }
+}
+// Monta o PDF completo (com fotos) e devolve {pdf,nomeArquivo}. Síncrono de propósito:
+// lê as fotos que estão na memória antes de qualquer limpeza.
+function _montarPdfPremium(p){
+  {
     const{jsPDF}=window.jspdf;
     const pdf=new jsPDF('p','mm','a4');
     const pWidth=pdf.internal.pageSize.getWidth();
@@ -6979,7 +6990,11 @@ async function gerarRelatorioPremiumCompleto(){
     pdf.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`,pWidth-65,pHeight-8);
 
     const nomeArquivo=`Relatorio_${(p.contratanteNome||p.localNome||'Guardiao').replace(/\s+/g,'_')}_${fmtData(p.inicio).replace(/\//g,'-')}.pdf`;
-
+    return{pdf,nomeArquivo};
+  }
+}
+async function _entregarPdfPremium(pdf,nomeArquivo){
+  try{
     let abriu=false;
     let detalheDiagnostico='';
     if(_dentroDeAppNativo()){
@@ -7024,6 +7039,103 @@ async function gerarRelatorioPremiumCompleto(){
   }
 }
 window.gerarRelatorioPremiumCompleto=gerarRelatorioPremiumCompleto;
+
+
+// ═══════════════════════════════════════════
+// ENVIO DO RELATÓRIO EM PDF (WhatsApp) AO ENCERRAR O PLANTÃO
+// ═══════════════════════════════════════════
+let _envioPdf=null; // {blob,nome,texto,pdf}
+function _prepararEnvioPdf(p){
+  // Chamado ANTES de limpar o plantão da memória (as fotos só existem aqui).
+  _envioPdf=null;
+  try{
+    if(!window.jspdf||!p)return false;
+    if(typeof rondasAtivas!=='undefined'&&rondasAtivas&&rondasAtivas.length)p.rondas=rondasAtivas;
+    const r=_montarPdfPremium(p);
+    _envioPdf={
+      pdf:r.pdf,nome:r.nomeArquivo,blob:r.pdf.output('blob'),
+      texto:'Relatório de plantão - '+(p.contratanteNome||p.localNome||'')+' - '+(p.vigilanteNome||'')+' - '+fmtData(p.inicio),
+      plantaoId:p.id
+    };
+    try{limparFotosPremium();const o=document.getElementById('obs-fotos-ocorrencia');if(o)o.value='';}catch(e){}
+    return true;
+  }catch(e){console.error('Falha ao preparar o PDF de envio:',e);return false;}
+}
+function _mostrarTelaEnvioPdf(ok){
+  let el=document.getElementById('tela-envio-pdf');
+  if(!el){
+    el=document.createElement('div');
+    el.id='tela-envio-pdf';
+    el.style.cssText='position:fixed;inset:0;z-index:400;background:#0b0b0b;color:#fff;display:flex;align-items:center;justify-content:center;padding:24px;overflow:auto;';
+    document.body.appendChild(el);
+  }
+  const nome=_envioPdf?_e(_envioPdf.nome):'';
+  el.innerHTML='<div style="max-width:420px;width:100%;text-align:center;">'+
+    '<div style="font-size:56px;line-height:1">✅</div>'+
+    '<h2 style="margin:12px 0 6px;font-size:22px;color:#d4af37">Plantão encerrado!</h2>'+
+    (ok?'<p style="color:#ccc;font-size:15px;margin:0 0 22px">Seu relatório com fotos está pronto. Toque no botão abaixo e escolha o contato ou grupo no WhatsApp.</p>'+
+      '<button id="btn-envio-whats" style="width:100%;padding:20px 12px;font-size:19px;font-weight:700;border:0;border-radius:14px;background:#25D366;color:#06210f;cursor:pointer">📤 Enviar relatório em PDF pelo WhatsApp</button>'+
+      '<button id="btn-envio-abrir" style="width:100%;margin-top:12px;padding:14px;font-size:15px;border:1px solid #555;border-radius:12px;background:transparent;color:#ddd;cursor:pointer">📄 Só abrir / baixar o PDF</button>'+
+      '<div style="font-size:12px;color:#888;margin-top:10px;word-break:break-all">'+nome+'</div>'+
+      '<p style="font-size:12px;color:#999;margin:16px 0 0">Se fechar sem enviar, a versão com fotos não poderá ser gerada de novo. O relatório sem fotos continua em “Meus Relatórios”.</p>'
+     :'<p style="color:#ccc;font-size:15px;margin:0 0 22px">Não foi possível montar o PDF com fotos agora. O relatório continua disponível em “Meus Relatórios”.</p>')+
+    '<button id="btn-envio-fechar" style="width:100%;margin-top:14px;padding:14px;font-size:15px;border:1px solid #d4af37;border-radius:12px;background:transparent;color:#d4af37;cursor:pointer">'+(ok?'Fechar':'Ir para Meus Relatórios')+'</button></div>';
+  el.style.display='flex';
+  const w=document.getElementById('btn-envio-whats'),a=document.getElementById('btn-envio-abrir'),f=document.getElementById('btn-envio-fechar');
+  if(w)w.onclick=enviarPdfWhatsApp;
+  if(a)a.onclick=abrirPdfEnvio;
+  if(f)f.onclick=fecharTelaEnvioPdf;
+}
+function fecharTelaEnvioPdf(){
+  const el=document.getElementById('tela-envio-pdf');
+  if(el)el.style.display='none';
+  _envioPdf=null;
+  try{irPara('screen-meus-relatorios');}catch(e){}
+}
+async function enviarPdfWhatsApp(){
+  const d=_envioPdf;
+  if(!d){toast('⚠️ Relatório não está mais disponível');return;}
+  try{
+    if(_dentroDeAppNativo()){
+      const r=await _salvarEAbrirPdfNativo(d.pdf,d.nome);
+      if(!r.ok)toast('⚠️ Não consegui abrir o compartilhamento: '+r.erro);
+      return;
+    }
+    const arquivo=new File([d.blob],d.nome,{type:'application/pdf'});
+    if(navigator.canShare&&navigator.share&&navigator.canShare({files:[arquivo]})){
+      try{
+        await navigator.share({files:[arquivo],title:d.nome,text:d.texto});
+        toast('✅ Pronto! Relatório enviado para o compartilhamento.');
+        return;
+      }catch(e){
+        if(e&&e.name==='AbortError')return; // pessoa cancelou
+        console.warn('Compartilhar falhou, usando alternativa:',e);
+      }
+    }
+    // Alternativa (computador ou navegador sem compartilhamento): baixa o PDF e abre o WhatsApp com a mensagem
+    _baixarBlob(d.blob,d.nome);
+    toast('📥 PDF baixado. No WhatsApp, anexe o arquivo baixado.');
+    setTimeout(()=>{try{window.open('https://wa.me/?text='+encodeURIComponent(d.texto),'_blank');}catch(e){}},900);
+  }catch(e){
+    console.error('Erro ao enviar PDF:',e);
+    toast('❌ Não foi possível compartilhar. Use "Só abrir / baixar o PDF".');
+  }
+}
+function _baixarBlob(blob,nome){
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download=nome;a.style.display='none';
+  document.body.appendChild(a);a.click();
+  setTimeout(()=>{a.remove();URL.revokeObjectURL(url);},4000);
+}
+async function abrirPdfEnvio(){
+  const d=_envioPdf;
+  if(!d)return;
+  if(_dentroDeAppNativo()){await _salvarEAbrirPdfNativo(d.pdf,d.nome);return;}
+  _baixarBlob(d.blob,d.nome);
+  try{window.open(URL.createObjectURL(d.blob),'_blank');}catch(e){}
+}
+window.enviarPdfWhatsApp=enviarPdfWhatsApp;
 
 let _acaoBloqueioFn=null;
 function mostrarBloqueio(titulo,msg,btnLabel,fn){
