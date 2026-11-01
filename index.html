@@ -3704,10 +3704,12 @@ function salvarContratante(){
 // VEÍCULOS
 // ═══════════════════════════════════════════
 function renderVeiculos(){
+  // A mesma lista aparece na tela "Veículos" e no cartão "Veículos" das Configurações
   const lista=DB.get('veiculos');
-  const div=document.getElementById('lista-veiculos');
-  if(!lista.length){div.innerHTML='<div class="empty-state"><div class="es-icon">🏍️</div><div>Nenhum veículo cadastrado</div></div>';return;}
-  div.innerHTML=lista.map(v=>{
+  const alvos=['lista-veiculos','lista-veiculos-config'].map(id=>document.getElementById(id)).filter(Boolean);
+  if(!alvos.length)return;
+  if(!lista.length){alvos.forEach(d=>{d.innerHTML='<div class="empty-state"><div class="es-icon">🏍️</div><div>Nenhum veículo cadastrado</div></div>';});return;}
+  const html=lista.map(v=>{
     const limite=v.limiteKmOleo||1000;
     const acum=v.kmDesdeTroca||0;
     const vencido=acum>=limite;
@@ -3733,6 +3735,7 @@ function renderVeiculos(){
       </div>
     </div>`;
   }).join('');
+  alvos.forEach(d=>{d.innerHTML=html;});
 }
 function abrirModalVeiculo(){
   ['mv2-id','mv2-placa','mv2-nome'].forEach(id=>document.getElementById(id).value='');
@@ -4362,6 +4365,7 @@ function renderConfig(){
   carregarHoraExtra();
   renderEquipConfig();
   renderEquipVeiculoConfig();
+  try{renderVeiculos();}catch(e){}
   renderGerentes();
 }
 async function salvarCredenciaisAdmin(){
