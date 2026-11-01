@@ -3853,7 +3853,7 @@ function verDia(ds){
         <button class="btn btn-red btn-sm" onclick="removerEscala('${_ej(e.id)}')">🗑️</button>
       </div>`;
       const sb=e.status==='substituicao'?'<span class="badge badge-amber">🔄 Substituição</span>':e.status==='pendente'?'<span class="badge badge-purple">⏳ Pendente</span>':'<span class="badge badge-blue">📅 Agendado</span>';
-      const vn=e.status==='substituicao'?`${_e(e.substituto)} <span style="color:var(--muted);font-size:11px;">(subst. ${_e(e.vigilanteNome)})</span>`:e.vigilanteNome;
+      const vn=e.status==='substituicao'?`${_e(e.substituto)} <span style="color:var(--muted);font-size:11px;">(subst. ${_e(e.vigilanteNome)})</span>`:_e(e.vigilanteNome);
       return`<div class="list-item" style="flex-direction:column;align-items:flex-start;gap:8px;">
         <div class="flex items-center justify-between w-full"><div class="li-title">${vn}</div>${sb}</div>
         <div class="li-sub">📍 ${_e(e.localNome)} · ⏰ ${_e(e.entrada)}–${_e(e.saida)}</div>
@@ -6426,7 +6426,20 @@ function _limparHtml(h){
   }catch(e){return'';}
 }
 window._limparHtml=_limparHtml;
-function gerarPDF(plantaoId){
+async function gerarPDF(plantaoId){
+  // Modelo único: o mesmo layout do relatório enviado pelo WhatsApp
+  if(window.jspdf){
+    const pl=_acharPlantao(plantaoId);
+    if(!pl){toast('❌ Plantão não encontrado');return;}
+    try{
+      toast('📄 Gerando PDF...');
+      const r=_montarPdfPremium(pl);
+      return await _entregarPdfPremium(r.pdf,r.nomeArquivo,true);
+    }catch(e){console.error('PDF unificado falhou, usando modelo simples:',e);}
+  }
+  return gerarPDFSimples(plantaoId);
+}
+function gerarPDFSimples(plantaoId){
   if(_dentroDeAppNativo()){
     toast('📄 Gerar PDF não está disponível dentro do aplicativo. O relatório completo já fica disponível na tela, em "Meus Relatórios".');
     return;
@@ -6738,262 +6751,348 @@ async function gerarRelatorioPremiumCompleto(){
 }
 // Monta o PDF completo (com fotos) e devolve {pdf,nomeArquivo}. Síncrono de propósito:
 // lê as fotos que estão na memória antes de qualquer limpeza.
-function _montarPdfPremium(p){
-  {
-    const{jsPDF}=window.jspdf;
-    const pdf=new jsPDF('p','mm','a4');
-    const pWidth=pdf.internal.pageSize.getWidth();
-    const pHeight=pdf.internal.pageSize.getHeight();
-    let y=15;
-
-    function desenharCabecalho(){
-      pdf.setFillColor(15,15,15);
-      pdf.rect(10,y,pWidth-20,24,'F');
-      pdf.setDrawColor(212,175,55);
-      pdf.rect(10,y,pWidth-20,24,'D');
-      pdf.setFillColor(212,175,55);
-      pdf.triangle(18,y+7,26,y+7,22,y+18,'F');
-      pdf.setFont("Helvetica","bold");pdf.setFontSize(11);pdf.setTextColor(255,255,255);
-      pdf.text("GUARDIAO - RONDA MASTER",32,y+9);
-      pdf.setFont("Helvetica","normal");pdf.setFontSize(7.5);pdf.setTextColor(212,175,55);
-      pdf.text(`${_semEmoji(p.vigilanteNome)||'—'} · ${_semEmoji(p.contratanteNome||p.localNome)||'—'} · ${fmtData(p.inicio)}`,32,y+16);
-      y+=30;
-    }
-    function espacoOuNovaPagina(minimo){
-      if(y>pHeight-minimo){pdf.addPage();y=15;desenharCabecalho();}
-    }
-    desenharCabecalho();
-
-    // Bloco de informações do plantão
-    pdf.setFillColor(245,245,245);
-    pdf.rect(10,y,pWidth-20,36,'F');
-    pdf.setDrawColor(200,200,200);
-    pdf.rect(10,y,pWidth-20,36,'D');
-    pdf.setFont("Helvetica","bold");pdf.setFontSize(8.5);pdf.setTextColor(0,0,0);
-    pdf.text(`Vigilante: ${_semEmoji(p.vigilanteNome)||'—'}`,14,y+8);
-    pdf.text(`Local / Contratante: ${_semEmoji(p.contratanteNome||p.localNome)||'—'}`,14,y+16);
-    pdf.text(`Data: ${fmtData(p.inicio)}`,14,y+24);
-    pdf.text(`Entrada: ${fmtH(p.inicio)}`,14,y+32);
-    pdf.text(`Saída: ${p.fim?fmtH(p.fim):'Em andamento'}`,115,y+8);
-    pdf.text(`Rondas: ${(p.rondas||[]).length}`,115,y+16);
-    pdf.text(`Ocorrências: ${(p.ocorrencias||[]).length}`,115,y+24);
-    if(p.gpsEntrada||p.gpsSaida){
-      const _gd=g=>!g?'-':(g.distancia!==undefined?g.distancia+'m (+-'+(g.precisao||0)+'m)':(g.liberado?'liberado':'s/ controle'));
-      pdf.setFontSize(7.5);pdf.text(`GPS: entrada ${_gd(p.gpsEntrada)} / saida ${_gd(p.gpsSaida)}`,115,y+32);pdf.setFontSize(8.5);
-    }
-    y+=44;
-
-    // RONDAS (texto)
-    const rondas=p.rondas||[];
-    espacoOuNovaPagina(20);
-    pdf.setFont("Helvetica","bold");pdf.setFontSize(10);pdf.setTextColor(0,0,0);
-    pdf.text("RONDAS REALIZADAS",10,y);
-    pdf.line(10,y+2,pWidth-10,y+2);
-    y+=8;
-    if(!rondas.length){
-      pdf.setFont("Helvetica","italic");pdf.setFontSize(8.5);pdf.setTextColor(120,120,120);
-      pdf.text("Nenhuma ronda registrada até agora.",12,y+3);
-      y+=10;
-    }else{
-      for(const r of rondas){
-        espacoOuNovaPagina(r.pontosValidados&&r.pontosValidados.length?20:14);
-        pdf.setFont("Helvetica","normal");pdf.setFontSize(8.5);pdf.setTextColor(30,30,30);
-        pdf.text(`Ronda #${r.num}${r.rotaNome?' - '+_semEmoji(r.rotaNome):''} — ${r.hora||fmtH(r.inicio)} - ${r.horaFim||fmtH(r.fim)}`,12,y+4);
-        y+=8;
-        if(r.pontosValidados&&r.pontosValidados.length){
-          pdf.setFont("Helvetica","italic");pdf.setFontSize(7.5);pdf.setTextColor(90,90,90);
-          const txtPontos=r.pontosValidados.map(pt=>(pt.validado?'[OK] ':'[--] ')+_semEmoji(pt.nome)).join('   ');
-          const linhas=pdf.splitTextToSize(txtPontos,pWidth-24);
-          pdf.text(linhas,14,y+2);
-          y+=linhas.length*3.5+4;
-        }
-      }
-    }
-    y+=4;
-
-    // OCORRÊNCIAS (texto)
-    const ocorrencias=p.ocorrencias||[];
-    espacoOuNovaPagina(20);
-    pdf.setFont("Helvetica","bold");pdf.setFontSize(10);pdf.setTextColor(0,0,0);
-    pdf.text("OCORRÊNCIAS REGISTRADAS",10,y);
-    pdf.line(10,y+2,pWidth-10,y+2);
-    y+=8;
-    if(!ocorrencias.length){
-      pdf.setFont("Helvetica","italic");pdf.setFontSize(8.5);pdf.setTextColor(120,120,120);
-      pdf.text("Nenhuma ocorrência registrada até agora.",12,y+3);
-      y+=10;
-    }else{
-      const corSeveridade={Baixa:[46,204,113],'Média':[241,196,15],Alta:[230,126,34],'Emergência':[231,76,60]};
-      for(const oc of ocorrencias){
-        const alturaBase=20;
-        espacoOuNovaPagina(alturaBase+6);
-        const cor=corSeveridade[oc.classificacao]||[150,150,150];
-        pdf.setFillColor(252,250,248);pdf.rect(10,y,pWidth-20,alturaBase,'F');
-        pdf.setFillColor(...cor);pdf.rect(10,y,3,alturaBase,'F');
-        pdf.setFont("Helvetica","bold");pdf.setFontSize(8.5);pdf.setTextColor(0,0,0);
-        pdf.text(`${oc.classificacao.toUpperCase()} — ${_semEmoji(oc.responsavel)} — ${fmtH(oc.criadoEm)}`,16,y+6);
-        pdf.setFont("Helvetica","normal");pdf.setFontSize(8);pdf.setTextColor(40,40,40);
-        const desc=pdf.splitTextToSize(_semEmoji(oc.descricao),pWidth-34);
-        pdf.text(desc,16,y+12);
-        y+=alturaBase+4;
-      }
-    }
-    y+=4;
-
-    // CHECKLIST DO VEÍCULO
-    const ck=p.checklist||{};
-    espacoOuNovaPagina(20);
-    pdf.setFont("Helvetica","bold");pdf.setFontSize(10);pdf.setTextColor(0,0,0);
-    pdf.text("CHECKLIST DO VEÍCULO",10,y);
-    pdf.line(10,y+2,pWidth-10,y+2);
-    y+=8;
-    if(!ck.veiculo){
-      pdf.setFont("Helvetica","italic");pdf.setFontSize(8.5);pdf.setTextColor(120,120,120);
-      pdf.text("Checklist não preenchido.",12,y+3);
-      y+=10;
-    }else{
-      pdf.setFont("Helvetica","normal");pdf.setFontSize(8.5);pdf.setTextColor(30,30,30);
-      pdf.text(`Veículo: ${_semEmoji(ck.veiculo)}${ck.placa?' - '+ck.placa:''}`,12,y+4);
-      pdf.text(`KM: ${ck.kmEntrada||'-'} a ${ck.kmSaida||'-'}`,110,y+4);
-      y+=7;
-      const _reservaJsPdf=(ck.gasolina||'').toLowerCase().includes('reserva');
-      const equips=DB.get('equipamentos');
-      const itensVeic=DB.get('itens_veiculo');
-      const todosItens=[...itensVeic,...equips];
-      const _itensProbJsPdf=ck.equipamentos?todosItens.filter(item=>(ck.equipamentos[item.id]||'ok')!=='ok').map(item=>item.nome):[];
-      if(_reservaJsPdf||_itensProbJsPdf.length){
-        espacoOuNovaPagina(12);
-        pdf.setFont("Helvetica","bold");pdf.setFontSize(8);pdf.setTextColor(220,38,38);
-        let avisoTxt='ATENCAO NO VEICULO:';
-        if(_reservaJsPdf)avisoTxt+=' combustivel na reserva.';
-        if(_itensProbJsPdf.length)avisoTxt+=' Problema em: '+_itensProbJsPdf.map(n=>_semEmoji(n)).join(', ')+'.';
-        const avisoQuebrado=pdf.splitTextToSize(avisoTxt,pWidth-24);
-        pdf.text(avisoQuebrado,12,y+4);
-        y+=avisoQuebrado.length*4+4;
-      }
-      if(_reservaJsPdf){pdf.setTextColor(220,38,38);pdf.setFont("Helvetica","bold");}else{pdf.setTextColor(30,30,30);pdf.setFont("Helvetica","normal");}
-      pdf.setFontSize(8.5);
-      pdf.text(`Combustível: ${_semEmoji(ck.gasolina)||'-'}   Óleo: ${_semEmoji(ck.oleo)||'-'}`,12,y+4);
-      pdf.setTextColor(30,30,30);pdf.setFont("Helvetica","normal");
-      y+=9;
-      if(ck.equipamentos&&todosItens.length){
-        const linhasItens=todosItens.map(item=>{
-          const v=ck.equipamentos[item.id]||'ok';
-          return(v==='ok'?'[OK] ':'[PROBLEMA] ')+_semEmoji(item.nome);
-        }).join('   ');
-        const linhasQuebradas=pdf.splitTextToSize(linhasItens,pWidth-24);
-        espacoOuNovaPagina(linhasQuebradas.length*4+6);
-        pdf.setFontSize(7.5);pdf.setTextColor(60,60,60);
-        pdf.text(linhasQuebradas,12,y+2);
-        y+=linhasQuebradas.length*3.8+6;
-      }
-    }
-    y+=4;
-
-    // PORTARIA (visitantes e entregas)
-    const portariaLista=p.portaria||[];
-    const visitantesPdf=portariaLista.filter(x=>x.tipo==='visitante');
-    const entregasPdf=portariaLista.filter(x=>x.tipo==='entrega');
-    espacoOuNovaPagina(20);
-    pdf.setFont("Helvetica","bold");pdf.setFontSize(10);pdf.setTextColor(0,0,0);
-    pdf.text("PORTARIA — VISITANTES E ENTREGAS",10,y);
-    pdf.line(10,y+2,pWidth-10,y+2);
-    y+=8;
-    if(!visitantesPdf.length&&!entregasPdf.length){
-      pdf.setFont("Helvetica","italic");pdf.setFontSize(8.5);pdf.setTextColor(120,120,120);
-      pdf.text("Nenhum registro de portaria.",12,y+3);
-      y+=10;
-    }else{
-      pdf.setFont("Helvetica","normal");pdf.setFontSize(8);pdf.setTextColor(30,30,30);
-      for(const v of visitantesPdf){
-        espacoOuNovaPagina(12);
-        const notas=[];
-        if(v.pernoite)notas.push('PERNOITE');
-        if(v.obs)notas.push(v.obs);
-        const linha=`Visitante: ${_semEmoji(v.visitante)} - ${v.placa||'-'} - ${_semEmoji(v.destino)} - Entrada ${v.hora}${v.horaSaida?' - Saída '+v.horaSaida:' - sem saída'}${notas.length?' - '+_semEmoji(notas.join('; ')):''}`;
-        const linhasQ=pdf.splitTextToSize(linha,pWidth-24);
-        pdf.text(linhasQ,12,y+3);
-        y+=linhasQ.length*3.8+3;
-      }
-      for(const e of entregasPdf){
-        espacoOuNovaPagina(12);
-        const linha=`Entrega: ${_semEmoji(e.empresa)} - ${_semEmoji(e.entregador)} - ${e.placa||'-'} - ${_semEmoji(e.destino)} - ${e.hora}${e.obs?' - '+_semEmoji(e.obs):''}`;
-        const linhasQ=pdf.splitTextToSize(linha,pWidth-24);
-        pdf.text(linhasQ,12,y+3);
-        y+=linhasQ.length*3.8+3;
-      }
-    }
-    y+=4;
-
-    // GRADE DE FOTOS
-    const colunas=2,gap=5;
-    const cel=(pWidth-20-(colunas-1)*gap)/colunas;
-    function desenharSecaoFotos(titulo,fotos){
-      if(!fotos.length)return;
-      espacoOuNovaPagina(16);
-      pdf.setFont("Helvetica","bold");pdf.setFontSize(10);pdf.setTextColor(0,0,0);
-      pdf.text(titulo,10,y+4);
-      y+=9;
-      let col=0;
-      for(const foto of fotos){
-        if(y>pHeight-cel-10){pdf.addPage();y=15;desenharCabecalho();col=0;}
-        const x=10+col*(cel+gap);
-        try{pdf.addImage(foto.full,'JPEG',x,y,cel,cel);}catch(e){}
-        pdf.setDrawColor(220,220,220);
-        pdf.rect(x,y,cel,cel,'D');
-        col++;
-        if(col>=colunas){col=0;y+=cel+gap;}
-      }
-      if(col!==0)y+=cel+gap;
-      y+=6;
-    }
-
-    const totalFotos=_totalFotosRonda()+fotosPorTipo.ocorrencia.length;
-    if(totalFotos){
-      // Uma seção separada pra cada ronda que teve foto anexada, na ordem certa
-      const numerosRonda=Object.keys(fotosPorTipo.ronda).map(Number).sort((a,b)=>a-b);
-      for(const num of numerosRonda){
-        const fotosDaRonda=fotosPorTipo.ronda[num];
-        if(fotosDaRonda&&fotosDaRonda.length){
-          desenharSecaoFotos(`RONDA #${num} — FOTOS (${fotosDaRonda.length})`,fotosDaRonda);
-        }
-      }
-
-      const obsFotos=(document.getElementById('obs-fotos-ocorrencia')?.value||'').trim();
-      if(fotosPorTipo.ocorrencia.length||obsFotos){
-        espacoOuNovaPagina(16);
-        pdf.setFont("Helvetica","bold");pdf.setFontSize(10);pdf.setTextColor(0,0,0);
-        pdf.text(`FOTOS DE OCORRÊNCIA (${fotosPorTipo.ocorrencia.length})`,10,y+4);
-        y+=9;
-        if(obsFotos){
-          pdf.setFont("Helvetica","italic");pdf.setFontSize(8.5);pdf.setTextColor(60,60,60);
-          const obsLinhas=pdf.splitTextToSize('Observação: '+obsFotos,pWidth-20);
-          pdf.text(obsLinhas,12,y+3);
-          y+=obsLinhas.length*4+6;
-        }
-        let col=0;
-        for(const foto of fotosPorTipo.ocorrencia){
-          if(y>pHeight-cel-10){pdf.addPage();y=15;desenharCabecalho();col=0;}
-          const x=10+col*(cel+gap);
-          try{pdf.addImage(foto.full,'JPEG',x,y,cel,cel);}catch(e){}
-          pdf.setDrawColor(220,220,220);
-          pdf.rect(x,y,cel,cel,'D');
-          col++;
-          if(col>=colunas){col=0;y+=cel+gap;}
-        }
-        if(col!==0)y+=cel+gap;
-      }
-    }
-
-    pdf.setFont("Helvetica","normal");pdf.setFontSize(7);pdf.setTextColor(150,150,150);
-    pdf.text("Relatório gerado localmente pelo Guardião - Ronda Master.",10,pHeight-8);
-    pdf.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`,pWidth-65,pHeight-8);
-
-    const nomeArquivo=`Relatorio_${(p.contratanteNome||p.localNome||'Guardiao').replace(/\s+/g,'_')}_${fmtData(p.inicio).replace(/\//g,'-')}.pdf`;
-    return{pdf,nomeArquivo};
-  }
+const _LOGO_PDF='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAAqYklEQVR42o2defRtSVXfP7uqzrnDb3ozDTS0hihoR4lBjAkhkTgs41JjBpOV5I8kGLOMiYlJXEqco0txsUBDQGJWHJbExA4LgSC2QJRBoAWBpmmGbpuG7vTcr9/rN/ze+w33nKrKH1V1bp26dR55b/3Wb7j3nmHXrj1893fvI89//ld4EcF7T/qntQbAe4+IICLk/7z3aK1RSo3eByAiKKWGv3nvcc4Nr+Vf+T9r7XC89Hr+2fzvzrnR+ay1w+/OueH86X3pM/k9pvel68/Pk46X7qF8b+04zrnRMdJr6brKc6R/przpdKEigtY6O5lHRKGUiu8F5/zw2bRw6bPpooBBIOvPykhg6T25UMsbT//y35MwkrCUUqNFTIqUC6FUrLSA6XM1YZfnzBcnvVYqY/pcqdjpfodjp4vLD6S1Hmlh+LsBBHwQvPegJN0soxsvV1trPQgj3WSpSaVAaguWjltqYLrufBFLwde+8mPlQs0VKhdsfszy7/lna5qe3p/LQURQpTakr6DBHlGCUholGkHhvYq/GyD8DLKhdeUuyoWRL2xp/vLdkF9LfvO5kPLXyhtPx8lNYFrYpmmG33Oh5Ga0pvW5WcoXKTd7+cKka0iv5WYRwNQ0JnwAwjXIxo1750GBiAJxiCjSYdJ2LgVd+ol8B5Q3WAq81L7a52u+Jml4Moc1hSh3UrlryoUpzUt6T36uG32+/NmUmpl+VkoQgtmx1iIKtFaAwnuHKI82Cuc2HWpYkE0NL31MrqnGGKy1Iw1Mgsu1qTRhpdMv/UMuuNwm932PMWZjkUpzmDvSfCFLH5Efv7bApRkdjrkW+NimBQfrwecHyLYlHueCwJSMt7pzdmQOck2dimhy4de0srwhvEdrtSG42iLl508LWy5aGbWl6yqVp/avfK22M2qfEZHghPNoQetg6wWN9wIy1jwkaL8ShbVR4DhAol+QjRsrnVe6YOccxhiMMSMtTUFAGUqKCH3fIx60UgiCeItWa+1KDjx3zFOOP9fY0T1mgiyde+2+UtiaL24ZHZWfST+bcpsiAl6iIMOva83yiHhE6UFjnXMIgoo7RFCIVtUbrZm73N7XTE5ahPSzFsXBaoWetThvcV5otUHbHluYiylTlBY1N4fpuzFmI45PC18u0FSklV9DGcbmTlpEgg8YOwfwOETM4FjHtlVw1iOAig5Nq+TYwDqHRm3Y7Xzlk+3Nk54yesqFppWmdz04h57P+a6v+1q+Thuayxd55OoV3vrEkzwmGt0Hi1manjKUzTW3Zn5Kjc0XLH2/0fWWJqwMGnJLYMoD4UFER+H7GGYOIoymBpQeCzmYp+C8p2685tDK3CEPQQdBOgceZvMlr/jGl/Ltd/4xfOJOOOhge8G3Ni0/NN/hnuUJWtvTRx+RO8jSaZZxe/49f60M01PYmh+7FHItAix9wZBo5rZ3yE69iwuw6XhEBUGXwq8lNmViVC5KaSbKLxHBx88crnq+9TnP5Nvf/06Of/89rI726Y8OOX78As95+DFe/tCDrA6u4RFUYRqSRpZJWCmMdF1TSWMJt5Q7u4zMavddnk/V3qBEkRZrbaPXEETwBZvxci3K8Yy3XR6ylTdRQhTBv4A2mlnb8JILj+Hvvht/UqNsFJbReK35ysNjtp66wLF3+HRzhRBKIZZCST6g5qtulAHnvqR2j6XSjb6XaX2y5cEaeZx3Iej0DlGSLYRUBT7O/kBQo8ik1KoEU5TmJzcPzoNyK3bv+xziQDoQCzjA+fA3pTm+dp2jw8NREFBeY/mvdIr5+0ttLpO9XPBTzngT0lGj45l8lUvwTQkoJVHjQ8CZcoFasjEGpEJE5J2vJmJ5dJCDYfmxrLWIB+Xh+uGKa1euhWvpAesQK3gEvOeSCBddx2x1RN8YROmqAGrOMrflOYRShow1u19DV8vFqCWLmbKqamo/FpQeIImaLSzRzpQo2d5ibY9k70mRRw07KbVPKQUC4jzHCF8QBVbwPXibf0Z42MIVwPchHL2RzS6FUwrZWjuCmXOFybPpGjRRA/VKnCyHrlW6OGPMKHnIk6Oa9y5Pkl+AVhoPODzO+cEpposoo5AyUhlh60rhnMV7x33xMrSzqOS+REA8nxVYaYWJ/iu/rjK/SILId2AZut6oHlKDtEvQMDexU5mw9z74gPzE+QqXDqkW29dsINFRa6UifrSGpacAujwvGGkUIRJqjOF+09D7IHqfQRJ4xWclOOt0jlxZVqvVaIf2fb8RLua7s1Y/SPhR13UbYXJp2kYRZWaacuh8MLW5DcsTiHKlSiEnyCA3ITnM4AnGW2lBZfa0VnjJtSftxHVM7nDeszCG/2tmPIFCofGE8xrgmsA9wNzMQGQIFpIpqYWJ5a4td+EUqFeiqbkPKaHnMpoqP6OUCiYobc+kAbmmllhObn7y0l2J4we8fWz/knaX6GSOpVTBOxHmSvHUbM7dOvgF78H5kJF/XoQHUWy3LUorBPDeVZHQGh6TJ1hlhTCPxkqMqjRDtUirlgWPFC9f6VSkyLGX0tuXGWK+5ZOAtdYQK2bljU/Zw1x7yvN4AaMUbtZytxdQgnPg4uV/wnkuGUOrDUo3EcdyG7F4GQbXIrIS6y8XsMyWc6iiDDLKhc4XbYDBc0eVn7CMVqbwkRIsq2W2eVSRx8F5flCGhBtFICXMm4Y7tcYpjRGPwgOaD+IRE6p0LiKIebhc26G1em8tIqvVL2rFlZoTL2GKWsSlpgoItewv14SyypS/Xgp2s9bgqlh/no+sw9nwrbeOnXbGvfMlX0ChRTA4ngbu9GBMgxiFqGCCauF1GY+X2lmGmbVMt1y8WsxffrYWQWXXs2kicprHuEbsRray1Kg81KwlP7Wa643Kgwn/c95hvWduGq4utvhIKpVa4U+BBwTmxoASdIH/lza6ZlbyRS8Ts7w+MWVCy3LmlF/M/eFgDcpKfQ03KQsjyXyUmpzDy7W8IV1sHgbWarsbSZKLZgWPns34iBiIzvhjHq5pw6JphspcrlQ1rdxIhrJgoPa52rUmhUymumaev5iPS1FcNakos9WpLZs7lVqmnEcPo6pbcaxaiW98buh8z7Jp+JRpeXq14qRSfBCPaRvapkU3psrdyQVdQgZTNfH851Q/nioc1QrwUwnbRkGqFmaWUUJJuygLEqlalEO9UxdYcnLK+LgMDUeYkXNsGc0jW9t8ysOTCHcJIfzMMvmS7JVfU43GUipYWcMY+aQJ2KT8fFmBS5ahvFcztWqls6r5glqpMS1MfsL8b6WAnXd4l0C/aO6sxQ1mIGS7IqEC1wp0Ows+dVmz6jyPiuJUO0O0DOXT9N0PEVGWOVdqszXNrHF7SoS0DF9LM11j1ZV1ajOVDNUAsxonJrf9OYpZYwzkGj2YnVDPp+9tYDqYAPwpbxExWOdwCM46lAhHvcOI4b1O85njA47aWUBeY+VOaUWjNW6IyaPA2PRRNUihtO1lsaZETWvMuHKnlD5pFKq+6EUv9uXBbkSMKkPKqVyh1II6vcOhVDhmZx2rVURPvQMfyF5GK/a2Zmxtz5kvZxjvmM1bVpf3ufj4Ra5qg25mKNPQdZ6jrqe3PavuCGdBK48xGq00RqvozIWu70YMjnT/vXNIAT+X5dKyJjBVnK/JopSdcUX1qPQJtd+nzE9OdLV2bW9tbwMmFDNjRLDWc3zc4b3FKEVrNDef2+bZzzrDLTef5JZn7fCMm7Y5fWaL0zuwu7A02tGwQvlDHA13fPB+Dq8e4JTBOkPnFSs353glXD6yXLjUc/FKxxMXDzj/9BWuXT/k+LDHe4dW0JiwKC7eT9f1eBdINqrQ+CnNr9EXpyiNtTzLTEHONUZvvoXL9LuMOMJrffQBCq8Uq95xdP0Qg+PMqS1uft7NfNWtN/OC55/jObdsc8uzZmxvK7QcQncZVvuwehKOr8PRNXxvcdbhumO8h4c+cxeHV/dZzFpEhXM2pmHHNJxsF/zZc0uaW04gzRaH/iYuHrQ89tSKh57sefDxfc4/fZXrRx04y2zu0FoCPimRk1aEpCVZqyzsl8zwmmkrIRGTb7Ec38ltefo51QnyA5WputZB+5umQZRwdLSiW62Ya+G5z3kGL/zqF/L1f/HPcOut57jpphlm0YG9BEdXYP9JVuevYrsOsRasw7se5TroPR7BY1AoHA4922K2BC9Bi7UKPsJ3HXKwArmE8FCoK2vh5HzBub0tXnzTKexf2OPy6rk8dBHufeiQzz18lfMXr4bFaBvaRtP1tlpsmaoVl2a57/sNdLQkipk8LEyrlCDXmnaXCUWeyIUFE2Ztw7WDA4zAlzzrHC9+0fN46Td8BS/8mmeze6oBDuDoPN3hFVbXj6HrwPao3qKdIqizB3F471Au1KN7Z1FeUN6Bc4j4wFFSIZqSCJMKwZkr1USWh8fiuXbk4OAKwiWUt8xazVdv7fDCF53k8EVneOjKKT794IpPf+5pzj99HSOK2dyAX9fKS0tSM0u10msZsAwkgPyNScB93284nJItVmLeoxBMCV//ohfw3X/7r/KXXvJVbJ+0wAXoLtEdHEHfI65DHGhlQDlwPT7WGsUHzfd2BS4y3nDh5r0H71BaI0qw1qFFRSZHRBdFQcxPhmvKoG1Ug5eWlbOsrl6jv3yJuXmQL9/a5iteeIpvvvUE9z+5y8fv2ef+x4/prRtwkVrjRQ01KDPkWra9wYwrw82yhFcyyjbzAgnadrTPj/3wP+KWF5zFuUfojg8R34HvUF6DeIQV3oXiOs6CjV/O4q0FF6KhUPFN5KywCD7i/YGb6kPxx4f3odZ8omDIJbUvrMuEQ6EiBAWN1jiluHrY4fYfxftH+Lqz29xkZvzEJ/fZOXkaFXdRWuhRjqAUvoBbykpYiX2NasKDRzamyrevhZUbWWeKFpRweLTi8qXHsfYirutDaVIFxh304I6jkBPzDTwqCNBbvLND4iTegbWIcygfLNNQiUyMC5+qeX5QdB+5TD7WpdNro4zfCy52/DgbhKubBtMaDo6OuPjUBS5duUK/WoXr8RW6vfehMFTY91xpy1A2B/8UE1zKKYLsFD2bCJqJCKvjLjhFLQRYPhTVhR5xPZLMjE+ZsR/s7CD5JFznA83QuVjlSooR3ut8FLD3kbdK2BmRT2S9pnc+azRZ1ye8X2fcQzEl3rd1Dt1onLVc3d/HWovRJrx3uMQ1dbJkSGxwm4rOmYH8kKKbMtHIna21digplqzfUVNaJET11sZyZBfstQQKu3cuCt4FZ+k9uKDduGh+vEdwyLATLKLzcDA0iDgXFieY57hDVSxV9h6vUuk+CNVFmr2nrM0K3kd2t3d4HM4rdGSHe+/oVitWq9WaPS4B9vbOIUoNPNRa/lRiZyXupnIHaq3dwGvylqMS6yj9hcSeAZeRu4KW20Ald37o+Sh5mqGQP6rBRGZetPEUjXVx6zvvsmPYMbWl1lnjBLyKfAQVeiCGs2XNGVmW7AkO3WZ8ziEYyZzqVMVsCj0duiRr5KKBOmdMtTe2XMl0C7HrI5oLCe0bvkdZhyY4UrE2RkHBVHg84l1wtrjEugq9CN5DH3nnouMiOhQBNnDRfzgUvfP0zmNR2DyRKkyA9y76D7DO47zFuz5AIzEL896hxQ+9DwC269Z5T+KKy/r1qRrEVH+YSGgCu2G1qOYLarsAwNu1FocesS44VWxwvt4G22x7xK+/GITjgB7lw6L4GNN7F5OwqPkQENTUr2CjxhKjsKQMSjzOlXXZ6MA96ChFiYriveAHhXTZzmDYcbbvEWPCJ2qcqFpVr+jGyeVqaqW0sqCSO5U8Qy65L3g/QALhzz2CjRw5gqCjUPEuJE8uRD7i+mDLvQ8IqXeEDeNDXO98iJziyy7+IMmmKVkvmoQ90buAPxFzExfjUa2i8IkO0we7rxId3iffYAd2t/MePWJ9UyUi1Jgdtb64ERg31UlYW4wSas5tnNtgT/Q432NSqBlDyhDV+LUJcjbYbxcWJCPXIQjOyxANhet12CG6CJkw0R+IhNjfi4ou2Mc6sQSHGeKoNW/I+6GQLxL6H8StU4gU8tY4PzX8a6ohZaraZsoMt2yiSw6s7/vBIed8xzJ8tdZhbXC+RNvufYr9u5CQ2T4uhEXoUNh4synsDBEQOLwkR56ZBJcStJj15qgtCj8UYCTlYEPomvob/NDhHwVHXHUv0bT4EBllKzBA1hEpSP5xakEmkdJoBwcsqLTxeWWrRs2uoXoqC8c8AcdJIWAIzkP8nwxw+LhaRxveBV/hHUqCs3aEyCbRHL21Q0IUGsQZ2NHp7w4fnWJBKItkLUTQUbAi66qbj61XISmMteshY67TFGtFmVSeHbJkCJlySYtPTngqhCoh2Bs2G6cTjHgwyVl2QfMJmaztLNZ2GAmRBi6ao+AWYowaIxHr1vvfhfzAx4KJkNd0Q7KXd/UPxZZUXIp8UZ/ykBjHWG/BC0apoUA0UPETzFEoWon7lAWstGbee0SHZC5p/YglIrKGo2ttl2UCMcWidqMoJoVnYQeISx024J3DLFuM96wuX0ViC1I4p0I5GQSXcoZgj4MgBBXZcC7G8tGYeD/A+GRZ6nAvESoBiaFw6oMTGg2t6XBWDyMXUheQI9txlQ76kuVXsj9G+UiMolR2z6NErKzbTjEWpprfwucjJJHgBXrwGWNC4Kd+/n289/2P0p47hdJC3/UhmUraJx6XFix6Y1EydOAjfoh2Bg+ZQknJFCgujErZSOzeT4GC87C9VKw64cP37eLMLvh+zO0XNRyXidi+xnv1UdgbRK4iWx7AOGPMxoia5Gxv1F9Vy/jUIAQ/mBKS9rcN77vjC3zT3/1Nfuan38u1Fcx2W3znQqXL9njXBxMjoGKbETFJG/kPIWaxkQfqNbg1616QGBJH2xaxp84CGpaLhs88BD932z7v+uySrd2T4dyZvVeMd1Xtvmt0Skk+xq8duQo9wSN2yDCqoLTtKaxMePpUs9sG7mEtPifqio/aF225g61liwN+6pc+wMu+6zbe8e5HaXe3aFoJNdk0+oY1ncQ7u2HuJKOoR8A6UlBkZEZCEuex8fJ3lsKV68Ib333AL7zpCg9csOwsoVFqROgNs5AyEK9S782pODUGBBXIZkNpa/yXfIX6rMmhxpkZJRlKobQZiia4bv1Z5/DdAbYPNnA+b/nEfRf5jn/2Nv7h97+Lzz3aMTu7hfI9tu9DFGQ7VDJhgNIGpXTcyR6RGPfjQdnod1ykpscwQKD3YBqP1vD+uzpeeds+7/7UEVZSjhZgaQAd8waj14KXLGyszQwKTeqhEaUGTZdMvNx3jFgRtWxOiYzsmUqIYIX3o7WmtxabIqEYWivvsG6FaIXSIWQ02rBcGLqu47ffeT/v+8gjvOL7vobv+zvPYtZ4VvurZGfiVo0TXEQhEhOw7Lq1ioCCD3iO9wFoa4xjOTPc/1DP2+444NOP9UM2rESwPo1ciLmQErQP8zIkK84jTM67G+VNURHzotUUg2JETUxIaI1GTRpWEVPw3PGsk7PUTBchY1zGdFtFTW3o+rDgbdsym8+ZzRcsl0ueuNzxb175x3zT9/wRH7j7Ou2ZBUZ7+s5nkZJEDEgN4aqIIJq4MAolOgJzsGiFw5XiTe894tVv2efTj3VBwFoQpTGmQeuGvlvRGBV5Qyo6ejfY/xAey+SsomRi9cQQw5rZGkqSZZ23xDCGildlrNe4rXXMIZIYLoqNztMCrePsXov3MJu39L1Ha4O1PUYrVl3PBz55gW98+Xv53u9+Hj/6j7+UZ59bcHT5cG1TRfCWYSaFSGBiOOtCQzEwbwWLcMdnO97xJ0c8ud+HsTtGo1iPxFku5hxeusrO7glmjXBdaVLcabTGxzBUMsUrzW/OKJyaAFZT6pETrsGoG2heBQcpR1z6iM0E3EXAhkJ7COUU9nCf1776b/JNX/+lXHj6gOVywWw2Yzab0c4WLOZztre3wbS84X/dz0tffge3/f6TzLYXaHF4m7om3WAOZR3z4DxszRWPXhD+6/8+5Nf+8BpP7od5QkopTJwV17Qti8WMw4Njbv3KF/D9f//LuHrxAZRpgl8ZIboZfDHBBqxVFKeIvNU21RqRNK96aa2zCGPcvjRupsjt5jr29XSIWOiEc7uW//Er38mLn3+C/QPLYj7DmIbZbE4zW9C2MxazOcutOQ88ccA/+ImP8/d+5C6udFtocdjeDYlWYNsR67maudHc/hHLq968z10Pr1AiaBXMU2MamqbFNIbFfEa36rnp5pv5uR94CfPz76XrLRLR0RQBaR2KLwNJeGKs5RQQN0VfyUN+NcWEGB2kYIWV0dLoy7mIj/kYv6d5DqFk2V895NzeEW/+b9/Jrc8yXL2+YjmfYYyhbRratqWdz2mbObu7W2hlePufHHLFnsSIXeczsX4cyokh8/YifPyBYw57R6MDYVcZE7Q+fs3bGV3Xc+r0OV75g3+N9onbuX54TGuaDFoRtCpNrK+O5awlplMtWDVyl6p1AZY9Xj5693LmzcYkkMhQC6QqwAXup/Kx4OcsojXd9Z5nnrW88bXfzJecthwcW+bzlqYJjRZhIeY0zYLZrOXZz9hjZ+5C4SXWcEOEFJIwpaPDU57dZUrCFMZo2qZhNpvRGEPbNljbs7Nzilf+0Ldw8sq7OLh+nbZtUskgLmZQFq3UCAuawv7LhsSpiV0pX8jnEw1QRE7bztvsRyHWF5m/43xYKO8ijwePc32Aln16v0UZTbd/xJfctOJ/vvavc2ax4tphR9totNGDtrazNtjrWUtjVEzKsthf/ChzbVSIZDyCGbS+RWtD087w3tPOd/nZf/8tnN1/N5eevoxuWryzwVxpjdZqPadIq1GNusb7n+qDqzV719jnqsZwrnUYJrubH7Rs7U9ZqPcJ103Vrw78KmAthCKMNoajax3Pu0XxG7/wEnY55KjztG2YdKKbhsY0aNOwvTWnkUBdT3RF5zxKbJhbE6spWmAeanxorTCmQelwHAG8WfDT//bbeG7/Hp568klms0VAQLWKDR6hNJmqa4MZqXRBTtn0GnaWI6hlz7KqDSGq0SpuNF5gbRvdAA0E298jCUbwGULqLa4/RivP6sIV/vwLhP/+mr/CUo447oWmCTh60zQY07A9VxjpY7YqwwgzSSZwKM6AMeH8WgWCsdEaL57DzvKj3/c3+LLmQ5x/9FFmy+11SVJkXbGjjPYYivA36uosE66yvjI1gUuNwKFEs8vMT+kfbhRqDaKQdd1XvEfF/xLHiQWKmw7bvm04vHiNF32V5g0/+TVweJmu97SNHmL9xVaLbtXg5NdkqBgmEvj+SgmzJtbFVBOF61mt4BX/8jv42pMf5fzDDzBb7qEkDJ5VEc4QcevRCqnLX1JfjR/lAbVZoFOskalEbAhoyimBNpsbUXr2knxatqomzibDoL2i4TlRQrxFpB/Ki6bRHD15iW94ccPrXnEruj+AOLXROVguZihCb0CCPEN9IG3vMMPaKFjM1FAQ0kpjO8cPvPxlvPTm+3jsgfuYL3Zx3o56yBIdfwNiiFiKH8BB2UjCarIqg5kbOW01sv+Azoan5tPUN8eayURbTuRBROh4TXxiDSfHwvhQuRWNbmYcnr/Gt//lOX/uOZanL1+LOQRstRrt+wA3KBWqWzE5VCLDTrHAspU42ctxtDri5uec5WVffpXH7ruTZrGHuB4TG7qVVsVUSEYMDy8yoLP5bZQ8qtpw1hoXqIaIqpJeskE1mUitbcEIGyUlap2N+YxDqWK1K+yORP2TAUkV0bjOYhrP1StXB4h7OTNxYGyGtcQarqRlFEE8zNp1jcA5z3LecHDlAlrPAgYUw0tReeukL9PU4e/D4NqJsQo1sK02E2Kq31rVhmeUHTO5mcpT8DJa8qxZZ0OzhA9ON8DENrIMBEnWxIf8IBRDPGrR8swzS7rjQ45XR/TWsj3X8bkF63quX1vmiJZZtIJFI8Prtvec3JkzNw4buacpfCV9lrHjTU6dda43pksWws4h6bLhr1YrLumYquwqn0o0pDBNZcNecl4y1NV1AMC8GzpaiJobCh8qDoFVY6UDzu61QEffdfTWYkxgzPnRKH3QSscaRHyiB56mWTPneuvYXRoMq1heDIsf+wRHOUQS8XriV1wMvy7w12j7NxrrMDU3dcSOrpXbcmpK6cnTnIepKYBrdlvg/7tsYSAUuoPWpe8+Yv3xhvqes3t6oJHb3oKO7LlYZQmRECNBaR34oDpNeI9x6c7SYLvriNZhoQZ0M4XGqmg7kmEH932oT+e0lFr4faM+sC827s1M2fipkewl9DoeWenxGPrecvXKJVC7w/5dx9Jrs6HweOXwNjZfKAVacepEGLrU9T1aYGepcf1xLMiE6pOzyY84nAuhr0LTGBXhinDqk9sgfhV9DOvnGgx8nc1pYKmqde3Q0/eg2Bw2Xisz1mYP5YtRnSG9SS3ZhKVrsX8ttg00QTjuLA8/eBGMic0TIXHyvYXejWaJDrwPHT1qb9ndbQJ13IWw+MTCoVrPahUZFD6dz0buZ6A+ilh25jKwIDzCzpYOKKdOnKAyavMDG9r7NYVGcFzadwNNMu/wL/GyMhOuDTqceraNqrXq1+aC1toya4CTt+Gi7733CXCC8n3Ah2yWmns3tBoltnOIYoKpOblnmBmFdZ7ZTPP63/oTPv7Jq5w7NaPr/NDR3jmHEcE7RaM91zvFuz9xFDsmLcYo9nYMXXcccwq7GfFkIbgIeBUWS5Rw7yOrwZx5X6eflza9BCpTvlROiB8WIB8nVmuzrGl+rX6ca0Q7m/Ohjz7E6vIKpRXO+ozJ4Iepit6voxCXqO0W9paaZeNZ2Z5Zo/nMA/t82w9/hj+4c8W5Uwu6zuEtGK3pnGdrabl2JLz+d67zR589jN3vwmLesDvvcX1fTaR8PhAkJzGK47BzfOah1cC+SMNEquPUsikBpR+dmhAzGt5dmxw7Jdza/OQxTu7Z3V7wiXue4o8/+gRqpnGRCZHAufVNuJg9q1QdAge7i5b5TOO60Am5t7vD+as9f+vH7+bX3nGBvZ1AwO2sZbnwPH5e85o373PXQ0doFQfHepjPGrZbR29j3SyO5a+ZhgQ7i4e2hfsftXz+8RVNu35KVG3abhJq3hKbZ8R55FjrHVZpOGtt/Hoe45at92Uz8mhAk4KVVfz2Wz+FNPM1FL1uNorF7hAx+RSmEoKnrblhZ1tjrQclKG3Y3d6ic4rv/aV7+cnfeIKdxYzdueZj93l+9rev8sCFHq0EJEDaznm25i1z0wf+p+TJ+Hge0gCnRMrivBXe88kjeudojK6G6TXi8tR8uSluLRCa9Eq8Op8PUXrvssmg9AOpV+v06V3e8nv38e/++dfyZc/VrK6tMBLDycT5TBPWI63RiafrPXPj2d3WWOcwKsDTHmE2B7USXvPmR3nqcsdu2/HLt18NsxN1wIQCgmpYdT3by5ZW96wcaD2GS9JQ8sEkDOMx4ZHzjvd98jAw82K+UuN8lpMFpqaz1/oEBh+ba3dtOkitgbu0b+UT8ECYzxouX3e86nV3IPMm9GBZFyKhmNEmF7A+Fljb0bbC2b15dlOB96NNQ9POmS9mvPEPzvP62y/hh8crKtomVNXS3NKdnTlG7HoEsl8/jnEcxYXj99axnGvedscRl673tI1aE7NugHrWnmE2NYSwVGJVA4nyYsvUAOxa/WB8YsWZs3v81ls/y7vf+SDzE4thKJOLPP6B9JQiDNuBcyjlObtrBr56cIIqlhVb2tmS5dbWUO0ypqWdzTHD7w1OFCd25ii7Ct0y3g/Z9/raJRKyoLMwn8MnP295x0f2ozkzkY23Gd2UAq49Y+BGw/8GH1GuYt/3G6BRnuXlKGmtRroOW8M8Ht/M+Nc/8yEuXvQ0C41XMaywqRE7ZsipehZLCqf2mgg/rDvzG2No2jYyHGbMZwvmkdbSmCB8pUxkcWhO783w/pg4QSKGuW7dPW9DV2Vvg3fqO8Ubfu8qh51HmwalzDDjqNakXrZv1WD7L/bEP1XL8KZme9Z8Q/nzOBlRnD6xy58+cIV/9RMfQC0X+N4N8yEk1Qx8FA4S+wI8Z/ba0RyIQC0aBl4PNePZbBZrvyZMxtIKpQKsfmqvwbnVcFwX+UmJCOoIjSGdc+zMNL9++xH3PXo0OF6t1zNDcyvwxUZRlhZkqrduVA+oCbBsuy+nIeZJWtm25OM0W20aTp3Z47bfu49Xv/5u2r0ltg+d9D7iRd6FNhfn7JAZn97TAy7jsyEZEiesN5Fu0rbt4HjXGalGq4bTu3O646O4xhFBdR5n14lV5zw7C+GdH1/xto9eHYrySfi1gX21cQ7lcNepGvDIRyQnXJt5TIUDWj5vqyzM59srnVibhnk7Z2dnmx/9pY/yf97/CPOTDX3Xxww4opd5A5t1PPNsCxIItlJcvE7Hjs+fKdtolQjNzLC39Li+C3zR7HodoXbd98JyBp97TPgvt1+J/QQKbYIfycfS15SzBtnUlLa0/zb1uiUTVJv0XRbfS0ii9AG18Y6pKK51w9ZyB9EtL/+xO3jw4SPamaO3NtYPbKAbRhKs62FvoTFxtpyoSBNRCtEBgs5NQz4KWMc5Qq1RLOc+Mulk1KXjY1+ZMZ6jTvGf3nqF68c9WlRc1Ha0AFP13TLuz5W1xpzYyCFyXtAUYld7VPeN6Hc1mqPWGtGavRM7PHK+45/+hw9z7Bq0Eqxbd76kkLDrLSeWwqLxA+N6GKJXmL6NDh2lYjJlWBpH13cDeyKC5eAFK575XPOGtx/whSePQ4F+YEyrwI4riAk3emDz1Oj62tOlRoOcyuJCjXpXW9mSD7MxNavAjozWaNVy9uxJ3veJi/zIa++lPTEHuwpcH5d6D0Ih5cROw+5S0Vs/6jyMBxztgnIgtrXCcrlkrleR0Dseq7PywqmdGW/+wIr3fPoaxoQHkZqmQWszJHWl0MpZPxuDN5SqAprV+REDMFnBN2pPfx51gzD99LuphE5rTdMYtG44efIkr7vtPn71TQ+xODWjP7ZDLuCsi0yIhhM7DZ21o67CsnE6CX/9EM6wa7ZmikXTraks8XPWBbDvw/c63vgHl+OTWHU0PSYupK5qbimDqYaNKb9a8oZGE7PK56SUjzEpM+CEotbm5JfYUC6oRBdcLrf5wVfdxQfvvM7WiTY6+cDN6XvLYiac2GuIE2jG02sje6PeHCfY3nH6xBKjelx8LK/z0HnHslU8fAF+8S0XsBBzBz08Vnc0Wr4CuZf5zhShrWxJmvKVaqpoUJbVph7pV5bhxk9TWkclA4MtLsT21pIj1/BPfvxOHj7vWcxVcMrOY52naYVTu+1AxNp4potfd86MFloJ1nv29jSK4zCWjDCWxmjFygm/+JZLXL7eY4xG6ST8JHipPmyoNnF9CmKYyqVK0G6gpdRAtRyCtpVGvdpTKErtHy4gvS9prTHopuXUiR0+/8Qx3/uzd9ErgxAycWyYTHJqJ8IRsom7pMa4kRBig50Sze5Wi+sOorUKM4gWrfDLb9/nT4dkS0WzE7Le2tOVpipZtSev1qa/l0FMOUVd1SfebtIQyyQsX5ipvECy7skU92pjYheixjQNJ0/t8a6PPc2P/8rn2d3bxvZxVqgIJ3fMOEe4wSjlYTRHJAifXGq6wy5Q5p1jb6H4nfcf8J67r0W+qMTMWQ+s6GDONqfG1xDNG13TVD5V5lQDLyhfoRLpLJ1xDduYInVtsAcy758yVqMUu3vbvPq2B/n1332CM2fmdDa0x57ZVutuy8oDMcte3ZxyvLWAw+NDjp2wtVB87HOW33zftWHMZGNajGmzBdhM6mqzUfP7vNEItxv5hBGknW/tkfZOPAe4tGe13VNq/eDca49MbAOotlju8IOvvYcP33PI3m7D8XHH6R0ZTyes8HDG7VTxcScIJ3c1Ij1t63j0guc//+5+oK3E8NVoE83POvJJTj1/jOPUqLFSwfL35ON8ph6jNfiIcuvUcO0bgU61BoV8ckqijquKv1jnB5rt5ZyD3vA9P38PF694WiOc2G5jMd1vYFBlg4jPxlcagW3TYyQUdF739qs8td+F+F6FSEzHiKeWbFWb6SZkMCWXmq/In9MweppqjccyddAR27lCPBqZqVQrLWJ3bczwyBFjTPhdG06d3OWeh4/4F6+5D63gzAkJBfaMaV3jL5Xz/+fzhnkb5gz96juP+fTDxxgTHG7bzjCmHT0ns/ZYk9ojVKaIt7kMpx7NUprlETWxxmOceopeyZ6oonxlZp23+cQ2IzUci9ig16KU5vSZE9z+0Uv8x19/hFueMWduAmafJjKWuPuYoRGCpu1ly02nhN/9UMfv33kNoxVKmSHWz0G28pFc5TPTvpgtn2LJ1dpTy+MNzLgpIlGuDeXQ1tpDjWtIYT4820XKt8vrsHHCldIK7UJPwN7eHq960+OcOz3j3EnDQ093LOZtdeuPUEgJk9Ceebrhc4/2/MYfXgthqQo2v5Zo1QT5//t4kqnnR04N8au99/8B3HvC2iwe50EAAAAASUVORK5CYII=';
+// Reduz tudo (tamanhos de letra, caixas, espaços) por um fator, para caber mais na página
+function _escalarPdf(pdf,S){
+  if(S===1)return;
+  const o={};
+  ['text','rect','roundedRect','circle','line','addImage','setLineWidth','setFontSize','splitTextToSize','getTextWidth'].forEach(k=>{o[k]=pdf[k].bind(pdf);});
+  pdf.setFontSize=sz=>o.setFontSize(sz*S);
+  pdf.setLineWidth=w=>o.setLineWidth(w*S);
+  pdf.text=(t,x,y,op)=>o.text(t,x*S,y*S,op);
+  pdf.rect=(x,y,w,h,st)=>o.rect(x*S,y*S,w*S,h*S,st);
+  pdf.roundedRect=(x,y,w,h,rx,ry,st)=>o.roundedRect(x*S,y*S,w*S,h*S,rx*S,ry*S,st);
+  pdf.circle=(x,y,r,st)=>o.circle(x*S,y*S,r*S,st);
+  pdf.line=(x1,y1,x2,y2)=>o.line(x1*S,y1*S,x2*S,y2*S);
+  pdf.addImage=(d,f,x,y,w,h)=>o.addImage(d,f,x*S,y*S,w*S,h*S);
+  pdf.splitTextToSize=(t,w)=>o.splitTextToSize(t,w*S);
+  pdf.getTextWidth=t=>o.getTextWidth(t)/S;
 }
-async function _entregarPdfPremium(pdf,nomeArquivo){
+// Tenta fazer toda a parte de informações caber em UMA página (fotos ficam nas páginas seguintes)
+function _montarPdfPremium(p,opts){
+  const tentativas=[1,0.94,0.88,0.83,0.78];
+  let primeiro=null;
+  for(const S of tentativas){
+    const r=_montarPdfPremiumEsc(p,opts,S);
+    if(!primeiro)primeiro=r;
+    if(r.paginasInfo<=1)return r;
+  }
+  return primeiro; // não coube em uma página: mantém o tamanho normal de letra
+}
+function _montarPdfPremiumEsc(p,opts,S){
+  opts=opts||{};
+  const{jsPDF}=window.jspdf;
+  const pdf=new jsPDF('p','mm','a4');
+  _escalarPdf(pdf,S);
+  const W=210/S,H=297/S;
+  let paginasInfo=1,temFotos=false;
+  const M=10,CW=W-2*M,RODAPE=11;
+  const DOUR=[212,175,55],PRETO=[13,13,13];
+  const VERDE=[46,139,87],LAR=[224,123,0],VERM=[200,40,40],AZUL=[30,100,190],ROXO=[90,60,170];
+  const T=s=>_semEmoji(s==null?'':String(s)).trim();
+  const usarMem=(opts.fotos!==undefined)?opts.fotos:!!(typeof plantaoAtivo!=='undefined'&&plantaoAtivo&&plantaoAtivo.id===p.id);
+  const fotosR=usarMem?fotosPorTipo.ronda:{};
+  const fotosO=usarMem?fotosPorTipo.ocorrencia:[];
+  const rondas=p.rondas||[],ocs=p.ocorrencias||[],ck=p.checklist||{},port=p.portaria||[];
+  const vis=port.filter(x=>x.tipo==='visitante'),ent=port.filter(x=>x.tipo==='entrega');
+  let y=0;
+
+  function cabecalhoGrande(){
+    pdf.setFillColor(...PRETO);pdf.rect(0,0,W,21,'F');
+    pdf.setFillColor(...DOUR);pdf.rect(0,21,W,1,'F');
+    try{pdf.addImage(_LOGO_PDF,'PNG',M,3.5,14,14);}catch(e){}
+    pdf.setTextColor(255,255,255);pdf.setFont('Helvetica','bold');pdf.setFontSize(14);
+    pdf.text('RELATÓRIO DE PLANTÃO',M+18,10.5);
+    pdf.setFont('Helvetica','normal');pdf.setFontSize(7.5);pdf.setTextColor(...DOUR);
+    pdf.text('GUARDIÃO · RONDA MASTER',M+18,15.5);
+    pdf.setTextColor(210,210,210);pdf.setFontSize(8);pdf.text(T(p.contratanteNome||p.localNome),W-M,9.5,{align:'right'});
+    pdf.setFont('Helvetica','bold');pdf.setTextColor(255,255,255);pdf.setFontSize(9.5);pdf.text(fmtData(p.inicio),W-M,15.5,{align:'right'});
+    y=26;
+  }
+  function cabecalhoPequeno(){
+    pdf.setFillColor(...PRETO);pdf.rect(0,0,W,10,'F');
+    pdf.setFillColor(...DOUR);pdf.rect(0,10,W,.7,'F');
+    try{pdf.addImage(_LOGO_PDF,'PNG',M,1.6,6.8,6.8);}catch(e){}
+    pdf.setFont('Helvetica','bold');pdf.setFontSize(8.5);pdf.setTextColor(255,255,255);pdf.text('RELATÓRIO DE PLANTÃO',M+9,6);
+    pdf.setFont('Helvetica','normal');pdf.setFontSize(7.5);pdf.setTextColor(...DOUR);pdf.text(T(p.vigilanteNome)+' · '+fmtData(p.inicio),W-M,6,{align:'right'});
+    y=14;
+  }
+  function precisa(h){if(y+h>H-RODAPE){pdf.addPage();cabecalhoPequeno();}}
+  function secao(titulo,minimo,extra){
+    precisa(7.5+(minimo||8));
+    pdf.setFillColor(...PRETO);pdf.roundedRect(M,y,CW,5.4,1,1,'F');
+    pdf.setFont('Helvetica','bold');pdf.setFontSize(8);pdf.setTextColor(...DOUR);pdf.text(titulo,M+3,y+3.8);
+    if(extra){pdf.setFont('Helvetica','normal');pdf.setFontSize(7);pdf.setTextColor(215,215,215);pdf.text(extra,W-M-3,y+3.8,{align:'right'});}
+    y+=7;
+  }
+  function vazio(txt){pdf.setFont('Helvetica','italic');pdf.setFontSize(8);pdf.setTextColor(130,130,130);pdf.text(txt,M+2,y+2.5);y+=5.5;}
+  function rotulo(x,r,v,w,cor,yy){
+    pdf.setFont('Helvetica','normal');pdf.setFontSize(6);pdf.setTextColor(130,130,130);pdf.text(r,x,yy+3.4);
+    pdf.setFont('Helvetica','bold');pdf.setFontSize(8.3);pdf.setTextColor(...(cor||[20,20,20]));
+    pdf.text(pdf.splitTextToSize(T(v)||'—',w)[0],x,yy+8.3);
+  }
+  const minutos=(h1,h2)=>{if(!h1||!h2||h1.indexOf(':')<0||h2.indexOf(':')<0)return null;const a=h1.split(':').map(Number),b=h2.split(':').map(Number);let m=(b[0]*60+b[1])-(a[0]*60+a[1]);if(m<0)m+=1440;return m;};
+  const fmtDur=m=>m>=60?Math.floor(m/60)+'h'+String(m%60).padStart(2,'0'):m+'min';
+
+  // ===== CABEÇALHO EM DESTAQUE =====
+  cabecalhoGrande();
+  {
+    const sp=(typeof statusPlantao==='function')?statusPlantao(p):{label:'normal'};
+    const dur=(p.inicio&&p.fim)?Math.max(0,Math.round((new Date(p.fim)-new Date(p.inicio))/60000)):null;
+    const durTxt=dur===null?'Em andamento':(dur>=60?Math.floor(dur/60)+'h '+String(dur%60).padStart(2,'0')+'min':dur+'min');
+    pdf.setFillColor(250,246,230);pdf.setDrawColor(...DOUR);pdf.setLineWidth(.35);pdf.roundedRect(M,y,CW,21,1.8,1.8,'FD');
+    pdf.setFont('Helvetica','normal');pdf.setFontSize(6);pdf.setTextColor(130,130,130);
+    pdf.text('VIGIA',M+4,y+4.6);pdf.text('LOCAL',M+4,y+12.6);
+    pdf.setFont('Helvetica','bold');pdf.setFontSize(11);pdf.setTextColor(...PRETO);
+    pdf.text(pdf.splitTextToSize(T(p.vigilanteNome)||'—',CW*.44)[0],M+4,y+9.4);
+    pdf.setFontSize(9);pdf.text(pdf.splitTextToSize(T(p.contratanteNome||p.localNome)||'—',CW*.44)[0],M+4,y+17.4);
+    const bw=(CW*.54-7)/2,bx0=M+CW*.46;
+    [['ENTRADA',fmtH(p.inicio),fmtData(p.inicio)],['SAÍDA',p.fim?fmtH(p.fim):'em andamento',p.fim?fmtData(p.fim):'']].forEach((q,i)=>{
+      const x=bx0+i*(bw+3);
+      pdf.setFillColor(...PRETO);pdf.roundedRect(x,y+3.5,bw,14,1.5,1.5,'F');
+      pdf.setFont('Helvetica','bold');pdf.setFontSize(6.5);pdf.setTextColor(...DOUR);pdf.text(q[0],x+3,y+8);
+      pdf.setFontSize(q[1].length>6?9:15);pdf.setTextColor(255,255,255);pdf.text(q[1],x+3,y+14.6);
+      pdf.setFont('Helvetica','normal');pdf.setFontSize(7);pdf.setTextColor(200,200,200);pdf.text(q[2],x+bw-3,y+14.6,{align:'right'});
+    });
+    y+=24;
+    let st=null,fill=[230,247,236],borda=[27,138,58],cor=[20,100,45];
+    if(p.statusEncerramento==='pendente'){st='AGUARDANDO APROVAÇÃO DO ENCERRAMENTO';fill=[255,243,224];borda=LAR;cor=[150,80,0];}
+    else if(sp.label==='antes'||p.saidaAntecipada){
+      st='SAÍDA ANTECIPADA'+(p.motivoSaida?' — Motivo: '+p.motivoSaida:'');
+      if(p.horaPrevistaSaida)st+='  ·  Previsto: '+p.horaPrevistaSaida;
+      if(p.solicitadoEncerramentoEm)st+='  ·  Pediu às '+fmtH(p.solicitadoEncerramentoEm);
+      if(p.aprovadoEm)st+='  ·  Autorizado às '+fmtH(p.aprovadoEm)+(p.aprovadoPor?' por '+p.aprovadoPor:'');
+      fill=[253,232,232];borda=VERM;cor=[150,20,20];
+    }else if(sp.label==='depois'){st='HORA EXTRA REGISTRADA'+(p.horaPrevistaSaida?'  ·  Previsto: '+p.horaPrevistaSaida:'');fill=[231,239,253];borda=AZUL;cor=AZUL;}
+    else if(p.fim){st='ENCERRADO NO HORÁRIO PREVISTO'+(p.horaPrevistaSaida?' ('+p.horaPrevistaSaida+')':'');}
+    if(st){
+      pdf.setFont('Helvetica','bold');pdf.setFontSize(8);
+      const lin=pdf.splitTextToSize(T(st),CW-8),hh=lin.length*3.8+3.6;
+      pdf.setFillColor(...fill);pdf.setDrawColor(...borda);pdf.setLineWidth(.35);pdf.roundedRect(M,y,CW,hh,1.3,1.3,'FD');
+      pdf.setTextColor(...cor);pdf.text(lin,M+4,y+4.6);y+=hh+2.5;
+    }
+    const cards=[[durTxt,'DURAÇÃO',DOUR],[String(rondas.length),'RONDAS',DOUR],[String(ocs.length),'OCORRÊNCIAS',ocs.length?LAR:DOUR],[String(vis.length),'VISITANTES',DOUR],[String(ent.length),'ENTREGAS',DOUR]];
+    const g=2.5,cw=(CW-4*g)/5;
+    cards.forEach((c,i)=>{
+      const x=M+i*(cw+g);
+      pdf.setFillColor(250,250,250);pdf.setDrawColor(221,221,221);pdf.setLineWidth(.2);pdf.roundedRect(x,y,cw,11,1.3,1.3,'FD');
+      pdf.setFillColor(...c[2]);pdf.rect(x,y+1,1,9,'F');
+      pdf.setFont('Helvetica','bold');pdf.setFontSize(c[0].length>9?8.5:11);pdf.setTextColor(...PRETO);pdf.text(c[0],x+3.5,y+5.8);
+      pdf.setFont('Helvetica','normal');pdf.setFontSize(5.8);pdf.setTextColor(120,120,120);pdf.text(c[1],x+3.5,y+9.2);
+    });
+    y+=14;
+  }
+
+  // ===== RONDAS (grade compacta) =====
+  secao('RONDAS REALIZADAS',10);
+  if(!rondas.length)vazio('Nenhuma ronda registrada.');
+  else{
+    const NC=3,g=2.5,cw=(CW-(NC-1)*g)/NC,ch=9;let col=0;
+    rondas.forEach(r=>{
+      if(col===0)precisa(ch+2);
+      const x=M+col*(cw+g);
+      const pv=r.pontosValidados||[],ok=pv.filter(q=>q.validado).length,falt=pv.filter(q=>!q.validado).map(q=>q.nome);
+      const cor=falt.length?LAR:VERDE;
+      pdf.setFillColor(252,252,252);pdf.setDrawColor(221,221,221);pdf.setLineWidth(.2);pdf.roundedRect(x,y,cw,ch,1.2,1.2,'FD');
+      pdf.setFillColor(...cor);pdf.rect(x,y+.7,1.4,ch-1.4,'F');
+      const ini=r.hora||fmtH(r.inicio),fim=r.horaFim||fmtH(r.fim);
+      pdf.setFont('Helvetica','bold');pdf.setFontSize(8);pdf.setTextColor(...PRETO);
+      pdf.text('Ronda '+(r.num!=null?r.num:'?')+'  ·  '+ini+' – '+fim,x+4,y+3.9);
+      let d='';if(r.inicio&&r.fim)d=Math.max(0,Math.round((new Date(r.fim)-new Date(r.inicio))/60000))+' min';
+      let l2=[d,pv.length?(ok+'/'+pv.length+' pontos'+(falt.length?' · faltou: '+falt.join(', '):'')):''].filter(Boolean).join('  ·  ');
+      pdf.setFont('Helvetica','normal');pdf.setFontSize(6.8);pdf.setTextColor(...cor);
+      pdf.text(pdf.splitTextToSize(T(l2)||'—',cw-6)[0],x+4,y+7.4);
+      col++;if(col>=NC){col=0;y+=ch+2;}
+    });
+    if(col!==0)y+=ch+2;
+  }
+  y+=1.5;
+
+  // ===== OCORRÊNCIAS =====
+  secao('OCORRÊNCIAS REGISTRADAS',10);
+  if(!ocs.length)vazio('Nenhuma ocorrência registrada.');
+  else{
+    const cores={Baixa:[46,139,87],'Média':[214,170,0],Alta:[224,123,0],'Emergência':[192,57,43]};
+    ocs.forEach(oc=>{
+      pdf.setFont('Helvetica','normal');pdf.setFontSize(8);
+      const desc=pdf.splitTextToSize(T(oc.descricao),CW-10),h=6.6+desc.length*3.5+1;
+      precisa(h+2);
+      const cor=cores[oc.classificacao]||[130,130,130];
+      pdf.setFillColor(252,250,247);pdf.setDrawColor(229,229,229);pdf.setLineWidth(.2);pdf.roundedRect(M,y,CW,h,1.2,1.2,'FD');
+      pdf.setFillColor(...cor);pdf.rect(M,y+.6,1.5,h-1.2,'F');
+      const tag=T(oc.classificacao||'—').toUpperCase();
+      pdf.setFont('Helvetica','bold');pdf.setFontSize(6.5);const tw=pdf.getTextWidth(tag)+4;
+      pdf.setFillColor(...cor);pdf.roundedRect(M+4,y+1.3,tw,3.8,1.9,1.9,'F');pdf.setTextColor(255,255,255);pdf.text(tag,M+6,y+4);
+      pdf.setTextColor(60,60,60);pdf.setFontSize(7.5);
+      pdf.text(fmtH(oc.criadoEm)+' · '+fmtData(oc.criadoEm)+(oc.responsavel?' · '+T(oc.responsavel):''),M+4+tw+2,y+4);
+      pdf.setFont('Helvetica','normal');pdf.setFontSize(8);pdf.setTextColor(40,40,40);pdf.text(desc,M+4,y+8.6);
+      y+=h+1.8;
+    });
+  }
+  y+=1.5;
+
+  // ===== MOTO / VEÍCULO =====
+  secao('MOTO / VEÍCULO',22);
+  if(!ck.veiculo)vazio('Checklist da moto não preenchido.');
+  else{
+    let veic=null;try{veic=DB.get('veiculos').find(x=>x.id===ck.veiculoId)||DB.get('veiculos').find(x=>_placaNorm(x.placa)===_placaNorm(ck.placa));}catch(e){}
+    const km=calcularKmRodados(ck);
+    const reserva=(ck.gasolina||'').toLowerCase().includes('reserva');
+    let todos=[];try{todos=[...DB.get('itens_veiculo'),...DB.get('equipamentos')];}catch(e){}
+    const probs=ck.equipamentos?todos.filter(it=>(ck.equipamentos[it.id]||'ok')!=='ok'):[];
+    if(reserva||probs.length){
+      const msg='ATENÇÃO: '+(reserva?'combustível na reserva. ':'')+(probs.length?'Problema em: '+probs.map(i=>T(i.nome)).join(', ')+'.':'');
+      pdf.setFont('Helvetica','bold');pdf.setFontSize(8);
+      const lin=pdf.splitTextToSize(T(msg),CW-8),hh=lin.length*3.8+3.6;precisa(hh+2);
+      pdf.setFillColor(253,232,232);pdf.setDrawColor(...VERM);pdf.setLineWidth(.35);pdf.roundedRect(M,y,CW,hh,1.3,1.3,'FD');
+      pdf.setTextColor(150,20,20);pdf.text(lin,M+4,y+4.6);y+=hh+2;
+    }
+    precisa(25);
+    pdf.setFillColor(252,252,252);pdf.setDrawColor(221,221,221);pdf.setLineWidth(.2);pdf.roundedRect(M,y,CW,24,1.5,1.5,'FD');
+    rotulo(M+4,'MODELO',ck.veiculo||(veic&&veic.nome),50,null,y);
+    rotulo(M+58,'PLACA',ck.placa||(veic&&veic.placa),28,null,y);
+    rotulo(M+90,'KM ENTRADA',ck.kmEntrada,26,null,y);
+    rotulo(M+120,'KM SAÍDA',ck.kmSaida,26,null,y);
+    rotulo(M+150,'KM ANDADO',km===null?'—':km+' km',34,[200,140,0],y);
+    pdf.setDrawColor(235,235,235);pdf.line(M+4,y+11.6,M+CW-4,y+11.6);
+    rotulo(M+4,'COMBUSTÍVEL',ck.gasolina,36,reserva?VERM:null,y+11.6);
+    rotulo(M+44,'NÍVEL DO ÓLEO',ck.oleo,36,null,y+11.6);
+    if(veic&&typeof veic.limiteKmOleo==='number'){
+      const lim=veic.limiteKmOleo,desde=typeof veic.kmDesdeTroca==='number'?veic.kmDesdeTroca:0,falta=lim-desde;
+      const pct=Math.max(0,Math.min(1,desde/lim)),cor=falta<=0?VERM:(falta<=lim*.15?LAR:VERDE);
+      const bx=M+84,bw=CW-88;
+      pdf.setFont('Helvetica','normal');pdf.setFontSize(6);pdf.setTextColor(130,130,130);pdf.text('TROCA DE ÓLEO',bx,y+15);
+      pdf.setFont('Helvetica','bold');pdf.setFontSize(7.8);pdf.setTextColor(...cor);
+      pdf.text(falta<=0?'VENCIDA ('+Math.abs(Math.round(falta))+' km acima)':'Faltam '+Math.round(falta)+' km',bx+bw,y+15,{align:'right'});
+      pdf.setFillColor(232,232,232);pdf.roundedRect(bx,y+16.4,bw,2.6,1.3,1.3,'F');
+      if(pct>0){pdf.setFillColor(...cor);pdf.roundedRect(bx,y+16.4,Math.max(2.6,bw*pct),2.6,1.3,1.3,'F');}
+      pdf.setFont('Helvetica','normal');pdf.setFontSize(6.2);pdf.setTextColor(110,110,110);
+      pdf.text('Rodou '+Math.round(desde)+' km desde a troca · limite '+Math.round(lim)+' km'+(typeof veic.kmUltimaTroca==='number'?' · última em '+Math.round(veic.kmUltimaTroca):''),bx,y+22);
+    }
+    y+=26.5;
+    if(ck.equipamentos&&todos.length){
+      pdf.setFont('Helvetica','bold');pdf.setFontSize(7);pdf.setTextColor(...PRETO);precisa(12);pdf.text('EQUIPAMENTOS E ITENS CONFERIDOS',M+1,y+2.5);y+=4;
+      const NC=4,g=2,cw=(CW-(NC-1)*g)/NC;let col=0;
+      todos.forEach(it=>{
+        const ok=(ck.equipamentos[it.id]||'ok')==='ok';
+        if(col===0)precisa(7);
+        const x=M+col*(cw+g);
+        pdf.setFillColor(...(ok?[236,248,240]:[253,232,232]));pdf.setDrawColor(...(ok?[170,215,185]:[220,120,120]));pdf.setLineWidth(.2);pdf.roundedRect(x,y,cw,5.2,1,1,'FD');
+        pdf.setFont('Helvetica','bold');pdf.setFontSize(5.8);pdf.setTextColor(...(ok?VERDE:VERM));pdf.text(ok?'OK':'PROBLEMA',x+1.8,y+3.5);
+        pdf.setFont('Helvetica','normal');pdf.setFontSize(7.3);pdf.setTextColor(30,30,30);
+        pdf.text(pdf.splitTextToSize(T(it.nome),cw-(ok?8:15))[0],x+(ok?7:14),y+3.6);
+        col++;if(col>=NC){col=0;y+=6.4;}
+      });
+      if(col!==0)y+=6.4;
+    }
+    const obsC=Array.isArray(ck.obs)?ck.obs:[];
+    if(obsC.length){
+      pdf.setFont('Helvetica','bold');pdf.setFontSize(7);pdf.setTextColor(...PRETO);precisa(10);pdf.text('OBSERVAÇÕES SOBRE A MOTO / EQUIPAMENTOS',M+1,y+2.5);y+=4;
+      obsC.forEach((o,i)=>{
+        pdf.setFont('Helvetica','normal');pdf.setFontSize(8);
+        const lin=pdf.splitTextToSize(T(o.texto),CW-30),hh=Math.max(5.6,lin.length*3.6+2.4);precisa(hh+1.5);
+        pdf.setFillColor(255,251,235);pdf.setDrawColor(229,215,170);pdf.setLineWidth(.2);pdf.roundedRect(M,y,CW,hh,1,1,'FD');
+        pdf.setFillColor(...LAR);pdf.rect(M,y+.5,1.4,hh-1,'F');
+        pdf.setTextColor(40,40,40);pdf.text(lin,M+4,y+3.8);
+        pdf.setFontSize(6.5);pdf.setTextColor(130,130,130);pdf.text('#'+(i+1)+' · '+(o.data||'')+' '+(o.hora||''),W-M-3,y+3.8,{align:'right'});
+        y+=hh+1.5;
+      });
+    }
+  }
+  y+=1.5;
+
+  // ===== VISITANTES =====
+  secao('VISITANTES ('+vis.length+')',14);
+  if(!vis.length)vazio('Nenhum visitante registrado.');
+  vis.forEach((v,i)=>{
+    const sai=!!v.horaSaida;
+    const obsTxt=[v.pernoite?'Vai passar a noite (pernoite).':'',v.obs||''].filter(Boolean).join(' ');
+    pdf.setFont('Helvetica','italic');pdf.setFontSize(7.8);
+    const obsL=obsTxt?pdf.splitTextToSize('Obs.: '+T(obsTxt),CW-12):[];
+    const h=11.5+(obsL.length?obsL.length*3.5+2:0);
+    precisa(h+2);
+    pdf.setFillColor(252,252,252);pdf.setDrawColor(221,221,221);pdf.setLineWidth(.2);pdf.roundedRect(M,y,CW,h,1.3,1.3,'FD');
+    pdf.setFillColor(...(sai?VERDE:LAR));pdf.rect(M,y+.7,1.6,h-1.4,'F');
+    pdf.setFillColor(...PRETO);pdf.circle(M+7,y+5.75,2.7,'F');
+    pdf.setFont('Helvetica','bold');pdf.setFontSize(7.5);pdf.setTextColor(...DOUR);pdf.text(String(i+1),M+7,y+6.7,{align:'center'});
+    pdf.setFontSize(9.5);pdf.setTextColor(...PRETO);pdf.text(pdf.splitTextToSize(T(v.visitante)||'—',44)[0],M+12,y+6.5);
+    const dur=minutos(v.hora,v.horaSaida);
+    rotulo(M+62,'ENTROU',v.hora,16,null,y-0.5);
+    rotulo(M+82,'SAIU',sai?v.horaSaida+(dur!==null?' ('+fmtDur(dur)+')':''):'não saiu',32,sai?null:LAR,y-0.5);
+    rotulo(M+118,'VISITOU',v.destino,38,null,y-0.5);
+    rotulo(M+158,'PLACA',v.placa,28,null,y-0.5);
+    if(v.pernoite){pdf.setFont('Helvetica','bold');pdf.setFontSize(5.8);const tw=pdf.getTextWidth('PERNOITE')+3;pdf.setFillColor(...ROXO);pdf.roundedRect(M+12,y+8,tw,3,1.5,1.5,'F');pdf.setTextColor(255,255,255);pdf.text('PERNOITE',M+13.5,y+10.2);}
+    if(obsL.length){
+      pdf.setDrawColor(230,230,230);pdf.line(M+4,y+11.4,W-M-3,y+11.4);
+      pdf.setFont('Helvetica','italic');pdf.setFontSize(7.8);pdf.setTextColor(70,70,70);pdf.text(obsL,M+4,y+15);
+    }
+    y+=h+1.8;
+  });
+  y+=1.5;
+
+  // ===== ENTREGAS =====
+  if(ent.length){
+    const porEmp={};ent.forEach(e=>{const k=T(e.empresa||'Sem empresa')||'Sem empresa';porEmp[k]=(porEmp[k]||0)+1;});
+    secao('ENTREGAS ('+ent.length+')',14,Object.keys(porEmp).map(k=>k+': '+porEmp[k]).join('  ·  '));
+    ent.forEach((e,i)=>{
+      pdf.setFont('Helvetica','italic');pdf.setFontSize(7.8);
+      const obsL=e.obs?pdf.splitTextToSize('Obs.: '+T(e.obs),CW-12):[];
+      const h=11.5+(obsL.length?obsL.length*3.5+2:0);
+      precisa(h+2);
+      pdf.setFillColor(252,252,252);pdf.setDrawColor(221,221,221);pdf.setLineWidth(.2);pdf.roundedRect(M,y,CW,h,1.3,1.3,'FD');
+      pdf.setFillColor(...AZUL);pdf.rect(M,y+.7,1.6,h-1.4,'F');
+      pdf.setFillColor(...PRETO);pdf.circle(M+7,y+5.75,2.7,'F');
+      pdf.setFont('Helvetica','bold');pdf.setFontSize(7.5);pdf.setTextColor(...DOUR);pdf.text(String(i+1),M+7,y+6.7,{align:'center'});
+      pdf.setFontSize(9.5);pdf.setTextColor(...PRETO);pdf.text(pdf.splitTextToSize(T(e.empresa)||'Entrega',44)[0],M+12,y+6.5);
+      rotulo(M+62,'HORA',e.hora,16,null,y-0.5);
+      rotulo(M+82,'ENTREGADOR',e.entregador,32,null,y-0.5);
+      rotulo(M+118,'ENTREGOU EM',e.destino,38,null,y-0.5);
+      rotulo(M+158,'PLACA',e.placa,28,null,y-0.5);
+      if(obsL.length){
+        pdf.setDrawColor(230,230,230);pdf.line(M+4,y+11.4,W-M-3,y+11.4);
+        pdf.setFont('Helvetica','italic');pdf.setFontSize(7.8);pdf.setTextColor(70,70,70);pdf.text(obsL,M+4,y+15);
+      }
+      y+=h+1.8;
+    });
+  }
+
+  // ===== FOTOS =====
+  const grupos=[];
+  Object.keys(fotosR).map(Number).sort((a,b)=>a-b).forEach(n=>(fotosR[n]||[]).forEach(f=>grupos.push([f,'Ronda '+n])));
+  fotosO.forEach(f=>grupos.push([f,'Ocorrência']));
+  if(grupos.length){
+    temFotos=true;paginasInfo=pdf.getNumberOfPages();
+    pdf.addPage();cabecalhoPequeno();
+    secao('FOTOS DO PLANTÃO ('+grupos.length+')',30);
+    const obsF=((typeof document!=='undefined'&&document.getElementById('obs-fotos-ocorrencia'))?document.getElementById('obs-fotos-ocorrencia').value:'').trim();
+    if(obsF){pdf.setFont('Helvetica','italic');pdf.setFontSize(8);pdf.setTextColor(60,60,60);const l=pdf.splitTextToSize('Observação: '+T(obsF),CW-4);pdf.text(l,M+2,y+3);y+=l.length*3.8+3;}
+    const g=3,NC=4,cwf=(CW-(NC-1)*g)/NC,chf=cwf*0.78;let col=0;
+    grupos.forEach(([f,leg])=>{
+      if(col===0)precisa(chf+g);
+      const x=M+col*(cwf+g);
+      pdf.setFillColor(238,238,238);pdf.rect(x,y,cwf,chf,'F');
+      try{const pr=pdf.getImageProperties(f.full),k=Math.min(cwf/pr.width,chf/pr.height),iw=pr.width*k,ih=pr.height*k;pdf.addImage(f.full,'JPEG',x+(cwf-iw)/2,y+(chf-ih)/2,iw,ih);}catch(e){}
+      pdf.setFillColor(40,40,40);pdf.rect(x,y+chf-4,cwf,4,'F');
+      pdf.setFont('Helvetica','bold');pdf.setFontSize(6.2);pdf.setTextColor(255,255,255);pdf.text(leg,x+1.5,y+chf-1.2);
+      col++;if(col>=NC){col=0;y+=chf+g;}
+    });
+  }
+
+  // ===== RODAPÉ =====
+  const n=pdf.getNumberOfPages(),ger=new Date().toLocaleString('pt-BR');
+  for(let i=1;i<=n;i++){
+    pdf.setPage(i);
+    pdf.setDrawColor(...DOUR);pdf.setLineWidth(.3);pdf.line(M,H-8,W-M,H-8);
+    pdf.setFont('Helvetica','normal');pdf.setFontSize(6.8);pdf.setTextColor(130,130,130);
+    pdf.text('Guardião · Ronda Master',M,H-4.6);
+    pdf.text('Gerado em '+ger,W/2,H-4.6,{align:'center'});
+    pdf.text('Página '+i+' de '+n,W-M,H-4.6,{align:'right'});
+  }
+  if(!temFotos)paginasInfo=pdf.getNumberOfPages();
+  const nomeArquivo=`Relatorio_${(p.contratanteNome||p.localNome||'Guardiao').replace(/\s+/g,'_')}_${fmtData(p.inicio).replace(/\//g,'-')}.pdf`;
+  return{pdf,nomeArquivo,paginasInfo};
+}
+async function _entregarPdfPremium(pdf,nomeArquivo,manterFotos){
   try{
     let abriu=false;
     let detalheDiagnostico='';
@@ -7019,9 +7118,11 @@ async function _entregarPdfPremium(pdf,nomeArquivo){
     }
 
     // Como pedido: depois de gerar, as fotos e a observação são descartadas
-    limparFotosPremium();
-    const obsEl=document.getElementById('obs-fotos-ocorrencia');
-    if(obsEl)obsEl.value='';
+    if(!manterFotos){
+      limparFotosPremium();
+      const obsEl=document.getElementById('obs-fotos-ocorrencia');
+      if(obsEl)obsEl.value='';
+    }
 
     if(abriu){
       toast('✅ Relatório gerado! Escolha um app pra visualizar o PDF.');
