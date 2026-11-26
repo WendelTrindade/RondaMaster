@@ -4221,16 +4221,20 @@ async function _giFotoDeCanvas(canvasSrc,opt){
     empresa:_GI_EMPRESA,posto:posto,modelo:{nome:mod.nome,cor:mod.cor},campos:(ctx.campos||[]).filter(c=>c.v),
     nota:opt.nota||ctx.nota||'',origem:opt.origem||'camera'
   };
+  await new Promise(r=>setTimeout(r,0));
   const c=_giCarimbar(canvasSrc,meta);
+  await new Promise(r=>setTimeout(r,0));
   const full=c.toDataURL('image/jpeg',0.82);
+  const _cw=c.width,_ch=c.height;
   meta.hash=await _giSha(_giBytes(full));
   const t=document.createElement('canvas');const k=320/Math.max(c.width,c.height);
   t.width=Math.round(c.width*Math.min(1,k));t.height=Math.round(c.height*Math.min(1,k));
   t.getContext('2d').drawImage(c,0,0,t.width,t.height);
   const thumb=t.toDataURL('image/jpeg',0.55);
+  try{t.width=t.height=0;c.width=c.height=0;if(canvasSrc&&canvasSrc.tagName==='CANVAS')canvasSrc.width=canvasSrc.height=0;}catch(e){}
   meta.fid='f'+Date.now()+Math.random().toString(36).slice(2,6);
   _giRegistrar(meta);
-  try{const blob=new Blob([_giBytes(full)],{type:'image/jpeg'});_giBdGravar(Object.assign({},meta,{id:meta.fid,thumb:thumb,w:c.width,h:c.height,size:blob.size}),blob).catch(()=>{});}catch(e){}
+  try{const blob=new Blob([_giBytes(full)],{type:'image/jpeg'});_giBdGravar(Object.assign({},meta,{id:meta.fid,thumb:thumb,w:_cw,h:_ch,size:blob.size}),blob).catch(()=>{});}catch(e){}
   return{thumb,full,fid:meta.fid,origem:meta.origem,dataOriginal:opt.dataOriginal||null,hora:new Date(meta.ts).toISOString(),gi:{code:meta.code,hash:meta.hash,verif:meta.verif}};
 }
 function _giEscalar(src,W,H,max){
@@ -4327,16 +4331,47 @@ async function _giAbrirCamera(opt){
   try{_rastLigarGps();}catch(e){}
   _giRelogio.sincronizar();_giSincModelos();
   _giPrevia();clearInterval(_giCam.timer);_giCam.timer=setInterval(_giPrevia,1000);
+  _giCam.tentativas=0;clearInterval(_giCam.timerVida);_giCam.timerVida=setInterval(_giVigiaCamera,2500);
   await _giAbrirStream();
 }
+// Vigia da câmera: se a imagem congelar (tela verde/travada), fecha e abre a câmera de novo sozinho
+function _giVigiaCamera(){
+  try{
+    if(document.getElementById('gi-cam').classList.contains('hidden')||document.hidden||_giCam.ocupado)return;
+    const v=document.getElementById('gi-video');if(!v||!_giCam.stream)return;
+    const t=v.currentTime;
+    const parou=(t===_giCam.ultT)||v.readyState<2||(_giCam.mudoEm&&Date.now()-_giCam.mudoEm>3000);
+    _giCam.ultT=t;
+    if(parou){_giCam.parado=(_giCam.parado||0)+1;}else{_giCam.parado=0;_giCam.tentativas=0;}
+    if(_giCam.parado>=2)_giReabrirStream('congelou');
+  }catch(e){}
+}
+async function _giReabrirStream(motivo){
+  if(_giCam.reabrindo)return;
+  if((_giCam.tentativas||0)>=3){
+    const sc=document.getElementById('gi-semcam');if(sc)sc.classList.remove('hidden');
+    clearInterval(_giCam.timerVida);_giCam.timerVida=null;return;
+  }
+  _giCam.reabrindo=true;_giCam.tentativas=(_giCam.tentativas||0)+1;_giCam.parado=0;
+  try{toast('🔄 Reiniciando a câmera...');}catch(e){}
+  try{const v=document.getElementById('gi-video');if(v){v.pause();v.srcObject=null;}}catch(e){}
+  _giPararStream();
+  await new Promise(r=>setTimeout(r,400));
+  try{await _giAbrirStream();}catch(e){}
+  _giCam.reabrindo=false;
+}
+document.addEventListener('visibilitychange',()=>{try{if(!document.hidden&&!document.getElementById('gi-cam').classList.contains('hidden')){_giCam.tentativas=0;_giReabrirStream('voltou');}}catch(e){}});
 async function _giAbrirStream(){
   _giPararStream();
   const sc=document.getElementById('gi-semcam');if(sc)sc.classList.add('hidden');
   try{
     if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)throw new Error('sem suporte');
-    _giCam.stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:_giCam.lado},width:{ideal:1920},height:{ideal:1080}}});
+    const _alta=_giQual()==='alta';
+    _giCam.stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:_giCam.lado},width:{ideal:_alta?1920:1280},height:{ideal:_alta?1080:720},frameRate:{ideal:24,max:30}}});
     const v=document.getElementById('gi-video');v.srcObject=_giCam.stream;await v.play().catch(()=>{});
     _giCam.track=_giCam.stream.getVideoTracks()[0];
+    _giCam.vistoEm=Date.now();_giCam.ultT=-1;_giCam.parado=0;
+    try{_giCam.track.onended=()=>{if(_giCam.timerVida)_giReabrirStream('caiu');};_giCam.track.onmute=()=>{_giCam.mudoEm=Date.now();};_giCam.track.onunmute=()=>{_giCam.mudoEm=0;};}catch(e){}
     const cap=_giCam.track.getCapabilities?_giCam.track.getCapabilities():{};
     document.getElementById('gi-lanterna').classList.toggle('hidden',!cap.torch);
   }catch(e){if(sc)sc.classList.remove('hidden');}
@@ -4346,7 +4381,8 @@ function _giPararStream(){
   _giCam.stream=null;_giCam.track=null;_giCam.lanterna=false;
 }
 function _giFecharCamera(){
-  _giPararStream();clearInterval(_giCam.timer);
+  _giPararStream();clearInterval(_giCam.timer);clearInterval(_giCam.timerVida);_giCam.timerVida=null;
+  try{const v=document.getElementById('gi-video');if(v){v.pause();v.srcObject=null;}}catch(e){}
   document.getElementById('gi-cam').classList.add('hidden');
   document.getElementById('gi-dados').classList.add('hidden');
   const f=_giCam.n;_giCam.onFoto=null;
