@@ -1,0 +1,22 @@
+rules_version = '2';
+// ============================================================
+// Guardião · Ronda Master — regras do Firestore (PRONTAS, ainda NÃO publicadas)
+// Como usar (quando estiver no computador):
+//   Firebase Console > Firestore Database > Regras > colar este texto > Publicar.
+//
+// ETAPA 1 (pode publicar já, não quebra o app):
+//   só permite a coleção "rondamaster" e bloqueia todo o resto do banco.
+// ETAPA 2 (só depois de ligar o login anônimo no Firebase e eu atualizar o app):
+//   troque "if true" por "if request.auth != null" nas duas linhas marcadas.
+// ============================================================
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /rondamaster/{docId} {
+      allow read: if true;                       // ETAPA 2: if request.auth != null;
+      allow write: if request.resource.size < 900000;   // ETAPA 2: request.auth != null && request.resource.size < 900000;
+    }
+    match /{outro=**} {
+      allow read, write: if false;
+    }
+  }
+}
