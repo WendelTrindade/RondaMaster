@@ -10,7 +10,7 @@
 // antiga guardada no cache.
 // ═══════════════════════════════════════════════════════════════
 
-const CACHE_VERSAO = 'v6.2.6'; // <-- Sobe esse número a cada nova versão do sistema
+const CACHE_VERSAO = 'v6.2.7'; // <-- Sobe esse número a cada nova versão do sistema
 const CACHE_NOME = 'guardiao-ronda-master-' + CACHE_VERSAO;
 
 // Se a internet demorar mais que isso para responder, usa a cópia guardada
